@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-readiness"
+version = "0.1.0.dev0"
+description = "Benchmark how agent-ready a code repository is for LLM coding agents."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "agent-readiness contributors" }]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-snapshot>=0.9",
+    "ruff>=0.5",
+]
+
+[project.scripts]
+agent-readiness = "agent_readiness.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_readiness"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

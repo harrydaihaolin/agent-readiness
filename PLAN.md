@@ -86,50 +86,65 @@ agent-readiness init                    # write a default .agent-readiness.toml
 - **Sandbox runner** (opt-in, off by default): runs detected build/test commands
   in a subprocess with timeout; captures duration and exit code only.
 
-## 5. Tech stack (recommendation)
+## 5. Tech stack (decided)
 
 - **Python 3.11+** with `typer` (CLI), `rich` (terminal), `pydantic` (models),
-  `tree-sitter` (multi-language AST), `radon`/`lizard` (complexity),
-  `gitpython` or shelling out to git, `jinja2` (HTML report).
-- Why Python: best ecosystem for static-analysis libs, easy to ship as a
-  single CLI via `pipx`, and the audience (devs running this on their repo)
-  almost all have Python available.
-- Alt: Rust for speed and a single static binary, but slower to iterate at
-  v0 — defer.
+  `jinja2` (HTML report later). Shell out to `git` rather than pulling in
+  GitPython.
+- v0.1 is language-agnostic, so **no `tree-sitter` / `lizard` yet** — those
+  arrive when category D/E checks need real ASTs. Saves a heavy dep at v0.
+- Ship via `pipx install agent-readiness`; fallback `python -m agent_readiness`.
 
-## 6. Phased roadmap
+## 6. Phased roadmap (revised after decisions)
 
-**v0.1 — Skeleton (1 sitting)**
-- Project scaffold (`pyproject.toml`, `typer` entry point, package layout)
-- `RepoContext` with file walk + language detection
-- Three checks across category A: README, AGENTS.md, entry-point detection
-- Terminal renderer with overall + per-category score
-- Snapshot tests against fixture repos
+Decisions baked in: Python CLI, language-agnostic v0.1, `--run` in v0.
 
-**v0.2 — Core checks (covers A, B, F partially)**
-- Manifest + lockfile detection (Python, JS/TS, Go, Rust)
-- Test command detection
-- Secrets regex scan
-- `.gitignore` quality
-- JSON renderer
+**v0.1 — Walking skeleton with real signal**
+Project scaffold (`pyproject.toml`, package layout, `agent-readiness --version`,
+`typer` entry point), `RepoContext` (file walk with vendored/generated
+exclusion, git log summary), and the following language-agnostic checks:
+- `readme.present` and `readme.has_run_instructions` (regex for "install" /
+  "run" / "test" / fenced code blocks)
+- `agent_docs.present` (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`,
+  `.github/copilot-instructions.md`)
+- `manifest.detected` (which ecosystem + lockfile present?)
+- `gitignore.present` and a coarse "covers common junk" check
+- `repo_shape.top_level_count` and `repo_shape.large_files`
+- `secrets.basic_scan` (regex pass for AWS keys, generic API keys, private
+  key headers)
+- `git.has_history` (commit count, recency)
 
-**v0.3 — Context-window economics (C)**
-- File size distribution, token estimation
-- Large-file flagging
-- Generated/vendored exclusion rules
+Terminal renderer (rich) and JSON renderer both ship in v0.1. Snapshot tests
+against 3 fixture repos in `tests/fixtures/`: `good/`, `bare/`, `messy/`.
 
-**v0.4 — Feedback-loop & complexity (D, E)**
-- Type-checker / linter detection
-- Cyclomatic complexity via lizard
-- Per-commit churn from git log
+**v0.2 — `--run` (sandbox runner)**
+- Detect a test command in priority order:
+  Makefile `test` target → `package.json` scripts.test → `pyproject.toml`
+  `[tool.pytest.ini_options]` → `Cargo.toml` → `go.mod` → `Gemfile` →
+  fall back to "no test command found".
+- Execute under `subprocess` with a timeout (default 300s) and a hard kill;
+  capture exit code, duration, last 80 lines of output.
+- Loud opt-in banner: `--run` prints what it's about to execute and waits
+  for `y` unless `--yes`.
+- Two new checks: `run.test_command_detected` and `run.tests_pass`
+  (only scored when `--run` is on).
 
-**v0.5 — Sandbox runner (opt-in)**
-- `--run` flag actually executes detected build/test
-- Times feedback loop, surfaces failures
+**v0.3 — Context-window economics**
+File size distribution, token estimation (chars/4 heuristic, swap to
+tiktoken later), large-file flagging, "tokens to grok this repo" budget
+(README + manifest + top-N entry points).
 
-**v0.6 — HTML report + baseline diff**
-- `--report` and `--baseline`
-- Trend tracking
+**v0.4 — Feedback-loop & complexity**
+Detect type-checker / linter configs by filename. Add `lizard` for
+cross-language cyclomatic complexity. Per-commit churn from git log.
+
+**v0.5 — HTML report + baseline diff**
+`--report report.html` (jinja2) and `--baseline base.json` for trend
+tracking.
+
+**v0.6 — Per-language depth**
+Tree-sitter integration for Python and TS first; better function/class
+size measurement, import-graph fan-in/fan-out.
 
 ## 7. Risks / open questions
 
