@@ -97,4 +97,9 @@ def _ensure_loaded() -> None:
         manifest,
         git_history,
         repo_shape,
+        entry_points,
+        env_parity,
+        ci_check,
+        setup_steps,
+        naming,
     )
