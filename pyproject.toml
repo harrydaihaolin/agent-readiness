@@ -10,6 +10,16 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "agent-readiness contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Quality Assurance",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+keywords = ["ai", "agents", "code-quality", "developer-experience", "benchmark"]
 dependencies = [
     "click>=8.1",
     "rich>=13.7",
@@ -18,9 +28,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "pytest-snapshot>=0.9",
-    "ruff>=0.5",
+    "ruff>=0.4",
 ]
+report = ["jinja2>=3.1"]
+complexity = ["lizard>=1.17"]
+full = ["jinja2>=3.1", "lizard>=1.17"]
 
 [project.scripts]
 agent-readiness = "agent_readiness.cli:cli"
