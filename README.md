@@ -48,11 +48,11 @@ SonarQube taxonomy. Other tools do that well.
 
 **Run untrusted code in Docker, always.** Any check that executes code
 from the target repo runs inside a sandboxed container. See
-[`SANDBOX.md`](./SANDBOX.md).
+[`docs/SANDBOX.md`](./docs/SANDBOX.md).
 
 ## What gets measured
 
-See [`RUBRIC.md`](./RUBRIC.md) for the full definition. Short version:
+See [`docs/RUBRIC.md`](./docs/RUBRIC.md) for the full definition. Short version:
 
 | Pillar | What it captures |
 |---|---|
@@ -79,9 +79,31 @@ No findings. Looking good.
 
 Score updated after each iteration as part of the development workflow.
 
+## Usage
+
+```
+# Static scan (no Docker needed)
+agent-readiness scan .
+agent-readiness scan . --json
+agent-readiness scan . --fail-below 70        # exit 1 if score < 70 (CI gate)
+agent-readiness scan . --only feedback        # filter to one pillar
+agent-readiness scan . --baseline prev.json   # diff against a previous run
+agent-readiness scan . --report report.html   # HTML report (requires jinja2)
+agent-readiness scan . --badge badge.svg      # score badge SVG
+agent-readiness scan . --sarif findings.sarif # SARIF for GitHub code scanning
+
+# Runtime scan (executes tests inside Docker)
+agent-readiness scan . --run
+
+# Other commands
+agent-readiness list-checks
+agent-readiness explain manifest.detected
+agent-readiness init                          # write .agent-readiness.toml
+```
+
 ## Status
 
-Pre-alpha. Phase 1 (v0.1) ships five high-signal language-agnostic
-benchmarks: `readme.has_run_instructions`, `agent_docs.present`,
-`test_command.discoverable`, `headless.no_setup_prompts`,
-`secrets.basic_scan`. See [`PLAN.md`](./PLAN.md) for the full roadmap.
+All phases implemented (v0.1–v0.9). 22 checks across 4 pillars, Docker
+sandbox, HTML + SARIF renderers, CLI surface, plugin API. See
+[`docs/PLAN.md`](./docs/PLAN.md) for the full roadmap and
+[`CHANGELOG.md`](./CHANGELOG.md) for per-phase release notes.
