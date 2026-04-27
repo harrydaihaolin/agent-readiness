@@ -40,8 +40,14 @@ def check_naming_search_precision(ctx: RepoContext) -> CheckResult:
     ambiguous: list[str] = []
     for f in ctx._files:
         stem = f.stem.lower()
-        if stem in _AMBIGUOUS_STEMS:
-            ambiguous.append(str(f))
+        if stem not in _AMBIGUOUS_STEMS:
+            continue
+        # Only flag shallow files (depth ≤ 2). Files deep in a package structure
+        # (e.g. src/myapp/config.py) are less of a navigation problem than
+        # a top-level standalone utils.py or helpers.py.
+        if len(f.parts) > 2:
+            continue
+        ambiguous.append(str(f))
 
     n = len(ambiguous)
     if n == 0:

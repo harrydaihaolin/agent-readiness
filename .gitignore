@@ -9,3 +9,4 @@ venv/
 dist/
 build/
 .coverage
+node_modules/
