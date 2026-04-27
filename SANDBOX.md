@@ -48,10 +48,75 @@ CLI scores the same way next year.
 Override via `--image <ref>` or `[sandbox] image = "..."` in
 `.agent-readiness.toml`.
 
-A nice future extension (parked for v0.5+): if the repo has a
-`.devcontainer/devcontainer.json`, prefer that — it's the closest thing
-to "the canonical run env for this repo" — but only when the user opts
-in via `--devcontainer`, since building a devcontainer image is slow.
+## Devcontainer support (v0.2)
+
+If the repo has `.devcontainer/devcontainer.json` or `.devcontainer.json`
+at root, that **takes precedence** over the ecosystem-default image. It's
+the closest thing to "the canonical run environment for this repo" —
+honouring it gives us better predictive value for how an agent will
+actually behave on the team's setup.
+
+Resolution flow:
+
+1. Parse the devcontainer file as JSONC (comments + trailing commas
+   permitted). Reject silently and fall back to ecosystem default if
+   parsing fails — surface a Flow finding `devcontainer.unparseable`.
+2. If `dockerComposeFile` is present → **hard fail** the runtime
+   portion (see "Docker-native repos" below). The repo wants
+   docker-socket access we don't grant in v0.
+3. If `image:` is present → use that image directly under our normal
+   sandbox rules.
+4. If `dockerFile:` (or `build:`) is present:
+    - **If the `devcontainer` CLI is on PATH** (`@devcontainers/cli`),
+      shell out to it (`devcontainer up`, `devcontainer exec`). It
+      handles `features`, `postCreateCommand`, etc. Use this path by
+      default when available.
+    - **If not**, do a plain `docker build` of the referenced
+      Dockerfile and use the resulting image. Skip `features`,
+      `postCreateCommand`, and other lifecycle hooks, and surface a
+      Flow finding `devcontainer.partial_support` so the user knows
+      they're getting a degraded run. Recommend installing the
+      devcontainer CLI in the message.
+5. `containerEnv` from devcontainer.json is allowlisted into the
+   container. `mounts`, `forwardPorts`, `runArgs` are **ignored** in
+   v0 — we control the host-level container config; honoring
+   arbitrary `runArgs` would defeat the sandbox.
+
+The two-phase model still applies: lifecycle hooks like
+`postCreateCommand` run in the **setup** phase (network on); the
+detected test command runs in the **test** phase (network off, unless
+overridden).
+
+Building a devcontainer image is slow (often minutes). The CLI prints a
+clear progress banner, caches the built image by content hash, and
+respects `--timeout-build` (default 600s) separately from the per-phase
+timeout.
+
+## Docker-native repos (hard fail)
+
+Some repos *are* their own sandbox — they expect tests to run via
+`docker compose up`, build a stack of services, and need access to the
+host docker socket to do it. Sandboxing that safely is out of scope for
+v0; pretending we can would produce misleading numbers.
+
+Detection signals (any one is sufficient):
+- `dockerComposeFile` in `devcontainer.json`
+- A `docker-compose.yml` / `compose.yml` at root *and* a detected test
+  command that invokes `docker compose` / `docker-compose`
+- Detected test command (Makefile target, npm script, etc.) shells out
+  to `docker run` / `docker build` / `docker compose`
+
+Behaviour when detected and `--run` is passed:
+- Exit 2 with: "This repo's tests rely on Docker (compose / docker-in-docker).
+  agent-readiness v0 doesn't sandbox this safely. Re-run without `--run`
+  for static analysis only."
+- A Flow finding `flow.docker_native_unsupported` is emitted regardless
+  (i.e., even on a static scan), so the static report still flags this
+  as "you won't be able to use `--run` here yet."
+
+We do **not** ship a `--privileged` opt-in or a `--mount-docker-socket`
+flag in v0. Same logic as `--no-sandbox`: easy to relax later, hard to
+tighten once shipped.
 
 ## Container configuration
 
@@ -96,6 +161,9 @@ scored 0 with a finding pointing at the setup failure.
 | `docker` binary not found | 2 | "Docker is required for `--run`. Install: https://docs.docker.com/get-docker/" |
 | Docker daemon not reachable | 2 | "Docker is installed but the daemon isn't reachable. Start Docker Desktop or `systemctl start docker`." |
 | Image pull fails | 2 | "Could not pull `<image>`. Check your network or `docker pull <image>` directly." |
+| Docker-native repo detected with `--run` | 2 | "This repo's tests rely on Docker (compose / docker-in-docker). agent-readiness v0 doesn't sandbox this safely. Re-run without `--run` for static analysis." |
+| Devcontainer parses, but uses `dockerComposeFile` | 2 | Same as above — surfaced as docker-native. |
+| Devcontainer present but `devcontainer` CLI missing | (run continues) | Finding: `devcontainer.partial_support`, severity warn. Build proceeds without features/lifecycle hooks. |
 | Container OOM-killed | (run completes) | Finding: `setup.oom` or `test_command.oom`, severity error. |
 | Wall-clock timeout | (run completes) | Finding: `…timed_out`, severity error, with the budget that was hit. |
 | Repo writes to mounted source | (run completes) | Finding: `sandbox.repo_writes_attempted`, surfaces what tried to write. |
@@ -120,4 +188,5 @@ scored 0 with a finding pointing at the setup failure.
   document it as supported in v0).
 - Podman, Lima, Finch, or rootless alternatives. We'd take a PR; we
   won't drive it.
-- Honoring `.devcontainer/devcontainer.json`. Parked for v0.5+.
+- A `--privileged` or `--mount-docker-socket` opt-in for docker-native
+  repos. Detected and refused, not enabled.

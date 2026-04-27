@@ -105,18 +105,41 @@ against 3 fixture repos in `tests/fixtures/`: `good/`, `bare/`, `messy/`.
 **v0.2 — `--run` with Docker-enforced sandbox**
 See [`SANDBOX.md`](./SANDBOX.md) for the full design. v0.2 implements:
 - Docker availability preflight; hard fail if `docker version` fails.
-- Ecosystem detection → pinned-digest base image lookup, with `--image`
-  override.
-- Test command detection in priority order: Makefile `test` target →
-  `package.json` scripts.test → pytest config in `pyproject.toml` →
+- **Docker-native repo detection.** If the repo's tests need
+  `docker compose` / docker-socket access (signals: `dockerComposeFile`
+  in devcontainer, compose file referenced from test command, `docker`
+  invocations in the test target), `--run` exits 2 with a clear
+  message and a Flow finding `flow.docker_native_unsupported` is
+  emitted on every scan (static or full).
+- **Devcontainer-first image resolution.** If
+  `.devcontainer/devcontainer.json` (or `.devcontainer.json`) exists:
+  - `image:` → use directly under sandbox rules.
+  - `dockerFile:` / `build:` → shell out to the `devcontainer` CLI
+    when available (handles features + lifecycle hooks); otherwise
+    plain `docker build` with a `devcontainer.partial_support`
+    finding.
+  - `dockerComposeFile:` → docker-native, hard fail (see above).
+  - Honor `containerEnv`; ignore `mounts` / `runArgs` /
+    `forwardPorts` (we control the sandbox surface).
+- **Ecosystem-default image** (pinned digest) when no devcontainer:
+  Python / Node / Go / Rust / Ruby; universal devcontainer image as
+  polyglot fallback. Override via `--image`.
+- **Test command detection** in priority order: Makefile `test` →
+  `package.json` `scripts.test` → pytest config in `pyproject.toml` →
   `Cargo.toml` → `go.mod` → `Gemfile` → "not found".
-- Two-phase execution: setup (network on) then test (network off),
-  each with capture of exit code, duration, and last 80 lines of output.
-- Wall-clock timeout enforced by us, not just Docker. Repo mounted
-  read-only at `/repo`; rootfs read-only with a tmpfs `/tmp`.
-- New checks (only scored when `--run` is on):
+- **Two-phase execution.** Setup (network on, runs install +
+  `postCreateCommand`-style hooks) then test (network off). Each
+  phase captures exit code, duration, and last 80 lines of output.
+- **Wall-clock timeout** enforced by us, not just Docker. Repo
+  mounted read-only at `/repo`; rootfs read-only with tmpfs `/tmp`.
+- **New checks** (only scored when `--run` is on):
   `setup.runs`, `setup.duration`,
   `test_command.runs`, `test_command.duration`, `test_command.passes`.
+- **Static-only findings** related to `--run` (always emitted,
+  regardless of `--run`):
+  `devcontainer.present`, `devcontainer.unparseable`,
+  `flow.docker_native_unsupported`,
+  `test_command.discoverable`.
 
 **v0.3 — Context-window economics**
 File size distribution, token estimation (chars/4 heuristic, swap to
