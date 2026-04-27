@@ -94,4 +94,6 @@ def _ensure_loaded() -> None:
         test_command,
         headless,
         secrets,
+        manifest,
+        git_history,
     )

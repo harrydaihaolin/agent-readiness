@@ -5,17 +5,19 @@ module. There is no host-execution fallback in v0.
 
 This module defines the interface and types. The Docker plumbing
 (`DockerSandbox.run`, image resolution, devcontainer build, etc.) is
-filled in during v0.2. Static checks should not import this module —
-it's only loaded when `--run` is enabled.
+filled in during v0.2.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from uuid import uuid4
 
 
 class Phase(str, Enum):
@@ -118,6 +120,21 @@ def preflight() -> None:
         )
 
 
+def _read_devcontainer_json(repo_path: Path) -> dict | None:
+    """Parse devcontainer.json from .devcontainer/ or root."""
+    candidates = [
+        repo_path / ".devcontainer" / "devcontainer.json",
+        repo_path / ".devcontainer.json",
+    ]
+    for p in candidates:
+        if p.is_file():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+    return None
+
+
 def detect_docker_native(repo_path: Path) -> str | None:
     """Return a human-readable reason if this repo is docker-native, else None.
 
@@ -125,37 +142,113 @@ def detect_docker_native(repo_path: Path) -> str | None:
     Detection is intentionally conservative — we'd rather refuse to
     score than score wrong.
 
-    v0.2 will check:
+    Checks:
       - devcontainer.json `dockerComposeFile`
-      - root `docker-compose.yml` / `compose.yml` referenced from the
-        detected test command
-      - test command shells out to `docker run` / `docker build` /
-        `docker compose`
+      - root `docker-compose.yml` / `compose.yml`
+      - Makefile test target that mentions docker
     """
-    raise NotImplementedError("detect_docker_native lands in v0.2")
+    dc = _read_devcontainer_json(repo_path)
+    if dc and "dockerComposeFile" in dc:
+        return "devcontainer.json uses dockerComposeFile (docker-native repo)"
+
+    for compose_name in ("docker-compose.yml", "docker-compose.yaml", "compose.yml"):
+        if (repo_path / compose_name).is_file():
+            makefile = repo_path / "Makefile"
+            if makefile.is_file():
+                try:
+                    text = makefile.read_text(encoding="utf-8", errors="replace")
+                    if "docker" in text.lower():
+                        return (
+                            f"Repo has {compose_name} and Makefile references docker — "
+                            "likely a docker-native workflow"
+                        )
+                except OSError:
+                    pass
+
+    return None
 
 
 def resolve_image(repo_path: Path, config: SandboxConfig) -> ResolvedImage:
     """Pick the image to run in.
 
-    Priority (v0.2):
+    Priority:
       1. `config.image` (user override) → ImageSource.USER_OVERRIDE
       2. devcontainer.json `image:` → DEVCONTAINER_IMAGE
-      3. devcontainer.json `dockerFile:` (built) → DEVCONTAINER_BUILT
+      3. devcontainer.json `build:` or `dockerFile:` → DEVCONTAINER_BUILT
       4. ecosystem-default by manifest → ECOSYSTEM_DEFAULT
       5. universal fallback → UNIVERSAL_FALLBACK
-
-    `dockerComposeFile` triggers docker-native detection upstream and
-    never reaches this function.
     """
-    raise NotImplementedError("resolve_image lands in v0.2")
+    # 1. User override
+    if config.image:
+        return ResolvedImage(
+            reference=config.image,
+            source=ImageSource.USER_OVERRIDE,
+            notes=["Using user-provided image override."],
+        )
+
+    # 2 & 3. devcontainer.json
+    dc = _read_devcontainer_json(repo_path)
+    if dc:
+        if "image" in dc:
+            return ResolvedImage(
+                reference=dc["image"],
+                source=ImageSource.DEVCONTAINER_IMAGE,
+                notes=["Using image from devcontainer.json."],
+            )
+        if "build" in dc or "dockerFile" in dc:
+            # Try devcontainer CLI first, else plain docker build
+            if shutil.which("devcontainer"):
+                notes = ["Building from devcontainer.json using devcontainer CLI."]
+            else:
+                notes = [
+                    "devcontainer CLI not found; using plain docker build. "
+                    "Install @devcontainers/cli for full support."
+                ]
+            # Determine build context
+            docker_file = dc.get("dockerFile") or (
+                dc.get("build", {}).get("dockerfile") if isinstance(dc.get("build"), dict) else None
+            )
+            if docker_file:
+                dockerfile_path = repo_path / ".devcontainer" / docker_file
+                if not dockerfile_path.is_file():
+                    dockerfile_path = repo_path / docker_file
+            else:
+                dockerfile_path = repo_path / ".devcontainer" / "Dockerfile"
+
+            image_tag = f"agent-readiness-devcontainer:{uuid4().hex[:8]}"
+            return ResolvedImage(
+                reference=image_tag,
+                source=ImageSource.DEVCONTAINER_BUILT,
+                notes=notes,
+            )
+
+    # 4. Ecosystem defaults (highest-priority manifest wins)
+    ecosystem_defaults = [
+        ("pyproject.toml", "python:3.12-slim"),
+        ("setup.py", "python:3.12-slim"),
+        ("package.json", "node:20-slim"),
+        ("Cargo.toml", "rust:1.77-slim"),
+        ("go.mod", "golang:1.22-alpine"),
+        ("Gemfile", "ruby:3.3-slim"),
+    ]
+    for manifest, image in ecosystem_defaults:
+        if (repo_path / manifest).is_file():
+            return ResolvedImage(
+                reference=image,
+                source=ImageSource.ECOSYSTEM_DEFAULT,
+                notes=[f"Using ecosystem default for {manifest}: {image}"],
+            )
+
+    # 5. Universal fallback
+    return ResolvedImage(
+        reference="ghcr.io/devcontainers/base:ubuntu",
+        source=ImageSource.UNIVERSAL_FALLBACK,
+        notes=["No manifest or devcontainer.json found; using universal fallback image."],
+    )
 
 
 class DockerSandbox:
-    """Run commands inside ephemeral Docker containers per SANDBOX.md.
-
-    v0.2 work — interface stub only.
-    """
+    """Run commands inside ephemeral Docker containers per SANDBOX.md."""
 
     def __init__(self, repo_path: Path, config: SandboxConfig,
                  image: ResolvedImage) -> None:
@@ -166,13 +259,76 @@ class DockerSandbox:
     def run(self, phase: Phase, command: list[str]) -> SandboxRun:
         """Run *command* inside the configured container for *phase*.
 
-        Not yet implemented. v0.2 will:
-          1. `docker run --rm --read-only --tmpfs /tmp ...` with mounts,
-             memory/cpu/pids limits, and `--network=none` when
-             `phase == TEST` (unless overridden in config).
-          2. Enforce wall-clock timeout via subprocess timeout + a
-             follow-up `docker kill` if the container outlives it.
-          3. Detect OOM via `docker inspect` (`State.OOMKilled`).
-          4. Return a SandboxRun with output tails.
+        Uses a unique container name so concurrent runs don't collide.
+        Enforces timeout via subprocess.TimeoutExpired + docker kill.
+        Returns a SandboxRun with stdout/stderr tails (last 80 lines).
         """
-        raise NotImplementedError("DockerSandbox.run lands in v0.2")
+        name = f"agent-readiness-{phase.value}-{uuid4().hex[:8]}"
+        cmd = [
+            "docker", "run", "--rm",
+            "--name", name,
+            "--read-only",
+            "--tmpfs", "/tmp:size=256m",
+            "--memory", self.config.memory,
+            "--cpus", str(self.config.cpus),
+            "--pids-limit", str(self.config.pids_limit),
+            "--workdir", "/repo",
+            "--mount", f"type=bind,source={self.repo_path},target=/repo,readonly",
+            "--env", "CI=true",
+        ]
+
+        # Add network none for TEST phase when configured
+        if phase is Phase.TEST and not self.config.network_for_test:
+            cmd.append("--network=none")
+
+        cmd.append(self.image.reference)
+        cmd.extend(command)
+
+        start = time.monotonic()
+        timed_out = False
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=self.config.timeout_s,
+            )
+            exit_code = proc.returncode
+            stdout = proc.stdout
+            stderr = proc.stderr
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            exit_code = -1
+            stdout = ""
+            stderr = f"Timed out after {self.config.timeout_s}s"
+            # Kill the container by name
+            subprocess.run(
+                ["docker", "kill", name],
+                capture_output=True, check=False,
+            )
+        duration_s = time.monotonic() - start
+
+        # Check OOM via docker inspect (best-effort)
+        oom_killed = False
+        if not timed_out:
+            inspect_result = subprocess.run(
+                ["docker", "inspect", "--format", "{{.State.OOMKilled}}", name],
+                capture_output=True, text=True, check=False,
+            )
+            oom_killed = inspect_result.stdout.strip().lower() == "true"
+
+        def _tail(text: str, n: int = 80) -> str:
+            lines = text.splitlines()
+            return "\n".join(lines[-n:]) if len(lines) > n else text
+
+        return SandboxRun(
+            phase=phase,
+            command=command,
+            exit_code=exit_code,
+            duration_s=round(duration_s, 2),
+            stdout_tail=_tail(stdout),
+            stderr_tail=_tail(stderr),
+            timed_out=timed_out,
+            oom_killed=oom_killed,
+            image=self.image.reference,
+        )

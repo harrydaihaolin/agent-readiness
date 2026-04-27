@@ -90,7 +90,12 @@ class RepoContext:
 
     @cached_property
     def is_git_repo(self) -> bool:
-        return (self.root / ".git").exists()
+        """True if this directory is inside a git repository (checks parents too)."""
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            cwd=self.root, capture_output=True, text=True, check=False,
+        )
+        return result.returncode == 0
 
     @cached_property
     def commit_count(self) -> int:
