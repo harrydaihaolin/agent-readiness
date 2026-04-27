@@ -108,3 +108,31 @@ class RepoContext:
         if result.returncode != 0:
             return 0
         return int(result.stdout.strip() or 0)
+
+    @cached_property
+    def orientation_tokens(self) -> int:
+        """Estimated tokens for an agent to orient in this repo (chars/4 heuristic)."""
+        total_chars = 0
+        # README(s)
+        for name in ("README.md", "README.rst", "README.txt", "README"):
+            f = self.has_file(name)
+            if f:
+                total_chars += len(self.read_text(f) or "")
+                break
+        # Primary manifest
+        for m in ("pyproject.toml", "package.json", "Cargo.toml", "go.mod", "Gemfile"):
+            if (self.root / m).is_file():
+                total_chars += len(self.read_text(m) or "")
+                break
+        # Top-level source files (up to 5, by size descending)
+        top_src = sorted(
+            [
+                f for f in self._files
+                if len(f.parts) <= 2 and f.suffix in (".py", ".ts", ".js", ".go", ".rs")
+            ],
+            key=lambda p: (self.root / p).stat().st_size,
+            reverse=True,
+        )[:5]
+        for f in top_src:
+            total_chars += len(self.read_text(f) or "")
+        return total_chars // 4

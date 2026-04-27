@@ -96,4 +96,5 @@ def _ensure_loaded() -> None:
         secrets,
         manifest,
         git_history,
+        repo_shape,
     )
