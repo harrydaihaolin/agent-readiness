@@ -18,9 +18,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "pytest-snapshot>=0.9",
-    "ruff>=0.5",
+    "ruff>=0.4",
 ]
+report = ["jinja2>=3.1"]
+complexity = ["lizard>=1.17"]
+full = ["jinja2>=3.1", "lizard>=1.17"]
 
 [project.scripts]
 agent-readiness = "agent_readiness.cli:cli"

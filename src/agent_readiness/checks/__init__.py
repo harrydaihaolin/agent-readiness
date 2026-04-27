@@ -105,4 +105,5 @@ def _ensure_loaded() -> None:
         typecheck,
         lint_check,
         gitignore,
+        churn,
     )
