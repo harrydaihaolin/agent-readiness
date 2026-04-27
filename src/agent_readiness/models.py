@@ -8,13 +8,16 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
-class Category(str, Enum):
-    ONBOARDING = "onboarding"          # A: navigation, README, AGENTS.md
-    REPRODUCIBILITY = "reproducibility"  # B: build / run / test
-    CONTEXT = "context"                 # C: context-window economics
-    FEEDBACK = "feedback"               # D: types, lint, test feedback loop
-    LOCALITY = "locality"               # E: complexity, churn, coupling
-    HYGIENE = "hygiene"                 # F: secrets, gitignore, license
+class Pillar(str, Enum):
+    """The DevEx-for-agents pillars from RUBRIC.md.
+
+    Every check belongs to exactly one pillar (Safety acts as a cap, not a
+    pillar weight, but is modeled the same way for uniformity).
+    """
+    COGNITIVE_LOAD = "cognitive_load"   # what the agent must absorb
+    FEEDBACK = "feedback"                # signal speed and clarity post-change
+    FLOW = "flow"                        # friction outside the task itself
+    SAFETY = "safety"                    # cap on overall score, not weighted in
 
 
 class Severity(str, Enum):
@@ -26,12 +29,12 @@ class Severity(str, Enum):
 class Finding(BaseModel):
     """A single observation from a check.
 
-    Findings are additive evidence; the scorer aggregates them per category.
+    Findings are additive evidence; the scorer aggregates them per pillar.
     """
     check_id: str
-    category: Category
+    pillar: Pillar
     severity: Severity = Severity.INFO
-    score_delta: float = 0.0  # how much this finding moves the category score
+    score_delta: float = 0.0  # how much this finding moves the pillar score
     message: str
     file: Path | None = None
     line: int | None = None
@@ -41,14 +44,14 @@ class Finding(BaseModel):
 class CheckResult(BaseModel):
     """The output of running one check."""
     check_id: str
-    category: Category
+    pillar: Pillar
     score: float = Field(ge=0.0, le=100.0)  # check's contribution, 0–100
-    weight: float = 1.0                      # weight within its category
+    weight: float = 1.0                      # weight within its pillar
     findings: list[Finding] = Field(default_factory=list)
 
 
-class CategoryScore(BaseModel):
-    category: Category
+class PillarScore(BaseModel):
+    pillar: Pillar
     score: float = Field(ge=0.0, le=100.0)
     check_results: list[CheckResult] = Field(default_factory=list)
 
@@ -57,4 +60,4 @@ class Report(BaseModel):
     """Top-level report returned by a scan."""
     repo_path: Path
     overall_score: float = Field(ge=0.0, le=100.0)
-    category_scores: list[CategoryScore] = Field(default_factory=list)
+    pillar_scores: list[PillarScore] = Field(default_factory=list)

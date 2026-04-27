@@ -1,61 +1,43 @@
 # Plan: agent-readiness CLI
 
-## 1. North star
+## 1. What we benchmark
 
-Given a repo path, output a score (and actionable report) for **how easily an
-LLM coding agent can do useful work in this repo**. The output should make
-maintainers go "oh, that's why our agent runs always go off the rails."
+See [`RUBRIC.md`](./RUBRIC.md) — the authoritative definition of agent
+operability and our three-pillar scoring framework (cognitive load,
+feedback loops, flow), plus a safety-and-trust cap. Every check below
+maps to a pillar in the rubric; if it doesn't, it doesn't ship.
 
-The metric we care about is *agent productivity*, not generic code quality.
-A 100k-line monorepo with great `make`/`test`/AGENTS.md scaffolding can score
-higher than a tiny, tidy library with no run instructions and a flaky test
-suite.
+Product framing: a **DevEx benchmark for AI coding agents**. Lighthouse
+for agent productivity. Audience: engineering leaders rolling out coding
+agents who want to know why agents struggle on their codebase and what
+to fix first.
 
-## 2. Dimensions to measure
+## 2. Checks → pillars mapping
 
-Grouped into six categories. Each category produces a 0–100 sub-score; overall
-score is a weighted average.
+| Check id | Pillar | What it predicts |
+|---|---|---|
+| `readme.present` | Cognitive load | Agent can orient itself in the repo |
+| `readme.has_run_instructions` | Cognitive load | Agent can find how to install / run |
+| `agent_docs.present` | Cognitive load | Repo speaks to agents directly (CLAUDE.md, AGENTS.md, .cursorrules) |
+| `repo_shape.top_level_count` | Cognitive load | Top-level isn't a dumping ground |
+| `repo_shape.large_files` | Cognitive load | No mega-files that blow the context window |
+| `entry_points.detected` | Cognitive load | Agent knows where execution starts |
+| `manifest.detected` | Feedback loops | Recognised ecosystem (pyproject / package.json / etc.) |
+| `manifest.lockfile_present` | Feedback loops | Reproducible installs |
+| `test_command.discoverable` | Feedback loops | Agent can find how to run tests |
+| `test_command.runs` (with `--run`) | Feedback loops | Tests actually execute |
+| `test_command.duration` (with `--run`) | Feedback loops | Feedback latency |
+| `typecheck.configured` | Feedback loops | Static signal pre-test |
+| `lint.configured` | Feedback loops | Static signal pre-test |
+| `ci.configured` | Feedback loops | Local-vs-CI parity exists |
+| `env.example_parity` | Flow / reliability | Agent can fill in env from the example |
+| `setup.command_count` | Flow / reliability | Steps from clone to green test |
+| `git.has_history` | Flow / reliability | Real repo, not a snapshot |
+| `gitignore.covers_junk` | Safety & trust | Agent won't accidentally commit build output |
+| `secrets.basic_scan` | Safety & trust | No real-looking secrets in the tree |
 
-### A. Onboarding & navigation (weight: high)
-- README present, non-trivial, mentions purpose + how to run
-- Agent-targeted docs: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`
-- Entry points discoverable (main, bin/, cmd/, src/index.*)
-- Directory tree depth & breadth sane (not 12 levels of `src/main/java/com/...`)
-- Top-level file count not overwhelming
-
-### B. Build / run / test reproducibility (weight: high)
-- Recognised manifest (package.json, pyproject.toml, Cargo.toml, go.mod, etc.)
-- Lockfile present
-- A "run tests" command discoverable (Makefile target, npm script, `pytest`, `cargo test`)
-- *(Optional, opt-in)* sandbox execution: actually try `make test` / `pnpm test` and time it
-- `.env.example` if `.env` is referenced anywhere
-- No hard-coded absolute paths
-
-### C. Context-window economics (weight: medium)
-- Distribution of file sizes; flag files >2k LOC or >50k tokens (rough char→token estimate)
-- Largest function/class size (via lightweight AST per language)
-- "Read budget to understand the repo": estimate tokens for README + manifest + top N files
-- Generated/vendored code identified and excluded (node_modules, dist/, .min.js)
-
-### D. Feedback-loop quality (weight: medium)
-- Type-checker config (tsconfig, mypy, pyright, etc.)
-- Linter/formatter config (eslint, ruff, prettier, gofmt)
-- Test count and rough test/source ratio
-- Test framework detected
-- *(Optional)* time-to-first-test-result when sandbox run is enabled
-- CI config present (.github/workflows, etc.) — agents can mimic CI locally
-
-### E. Change locality (weight: medium)
-- Cyclomatic complexity hot-spots (radon/lizard)
-- Duplication estimate (token-based)
-- Average files-changed-per-commit over last N commits (proxy for coupling)
-- Module fan-in/fan-out where cheap to compute (Python imports, JS imports)
-
-### F. Safety & hygiene (weight: low–medium)
-- Secrets scan (basic regex pass; flag, don't fix)
-- `.gitignore` covers common junk (`.env`, build artifacts)
-- Dependency audit if cheap (`npm audit --json`, `pip-audit`)
-- License file present
+(Cognitive-load checks like `naming.search_precision`, `repo_shape.directory_depth`,
+and feedback checks like `tests.determinism_proxy` arrive in v0.2+.)
 
 ## 3. CLI surface
 
