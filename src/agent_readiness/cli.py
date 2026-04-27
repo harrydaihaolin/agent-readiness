@@ -10,7 +10,7 @@ import click
 from agent_readiness import __version__
 from agent_readiness.checks import _ensure_loaded, all_checks, get_check
 from agent_readiness.context import RepoContext
-from agent_readiness.renderers import json_renderer, terminal
+from agent_readiness.renderers import terminal
 from agent_readiness.sandbox import SandboxUnavailableError, preflight
 from agent_readiness.scorer import score as score_results
 
@@ -128,9 +128,7 @@ def scan(
 
     # Filter by --only if provided
     if only_checks:
-        from agent_readiness.models import Pillar
         tokens = {t.strip().lower() for t in only_checks.split(",")}
-        pillar_names = {p.value.lower() for p in Pillar}
         filtered = []
         for spec in specs:
             if spec.check_id in tokens:

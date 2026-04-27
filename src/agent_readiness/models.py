@@ -94,18 +94,28 @@ class PillarScore:
 
 @dataclass
 class Report:
-    """Top-level report returned by a scan. JSON-serialised under --json."""
+    """Top-level report returned by a scan. JSON-serialised under --json.
+
+    Schema versioning:
+      schema=1 was established in v0.1 and is the stable contract.
+      schema=2 will be bumped on the next intentional breaking change.
+      Consumers should check `schema` before parsing.
+    """
     repo_path: Path
     overall_score: float                                    # 0..100, after safety cap
     pillar_scores: list[PillarScore] = field(default_factory=list)
     safety_cap_applied: float | None = None                 # populated when secrets etc. capped the score
     schema: int = 1                                         # JSON schema version, bump on breaking change
+    delta: float | None = None                              # overall score delta vs baseline (--baseline)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "schema": self.schema,
             "repo_path": str(self.repo_path),
             "overall_score": self.overall_score,
             "safety_cap_applied": self.safety_cap_applied,
             "pillars": [p.to_dict() for p in self.pillar_scores],
         }
+        if self.delta is not None:
+            d["delta"] = self.delta
+        return d
