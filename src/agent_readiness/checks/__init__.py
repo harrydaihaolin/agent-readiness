@@ -102,4 +102,7 @@ def _ensure_loaded() -> None:
         ci_check,
         setup_steps,
         naming,
+        typecheck,
+        lint_check,
+        gitignore,
     )
