@@ -1,26 +1,67 @@
 # Rubric: what `agent-readiness` measures
 
-## What we are benchmarking
+## North Star
 
-> **Agent operability**: how effectively an LLM-based coding agent can do
-> useful work in this repository — find the right code, make a correct
-> change, verify it, and iterate — without a human supervisor unsticking it.
+> **AI readiness**: how prepared a repository is for AI coding agents to
+> do useful work in it — find the right code, make a correct change,
+> verify it, and iterate — with minimal human supervision.
 
-We are **not** measuring code quality, test coverage, or architectural
-elegance for their own sake. A repo can be "clean" and still be a swamp for
-agents (no run instructions, 30-minute test suite, undocumented env vars).
-Conversely, a "messy" repo with a working `make test`, a README that
-explains how to run things, and a CLAUDE.md can be highly operable.
+That's the score. It is a measure of *potential*, not measured outcomes.
 
-The unit of value is **agent task success rate**. Every check we ship must
-plausibly correlate with that — not with an opinion about good taste.
+The thing we use to validate the score is **agent task success rate** on a
+benchmark of standardised tasks (see § Validation strategy). Score and
+validation are not the same number; we measure the first and use the
+second to check we're measuring the right thing.
+
+A repo can be "clean" by traditional code-quality standards and still be
+unready for agents — no run instructions, 30-minute test suite, GUI-only
+dev tools, undocumented env vars. Conversely, a "messy" repo with a
+working `make test`, a README that explains how to run things, and a
+CLAUDE.md can be highly ready.
+
+## A note on code quality
+
+Code quality matters here, but not for its own sake — only where it
+predicts agent success. Mega-files, ambiguous names, dead code, missing
+type annotations all have direct lines to agent failure modes (context
+overflow, noisy greps, wasted reading, missing static signals). Those
+get measured.
+
+What we **don't** do is reproduce a full static-analysis taxonomy.
+Linters, security scanners, complexity-reporters, dependency auditors —
+those products exist and are good at what they do. We integrate signal
+from them where useful (e.g., "lint passes" is a Feedback-pillar
+check); we don't try to be them.
+
+## Design principle: agents are headless
+
+This is not a check, it's the **lens through which every check is
+written**.
+
+We assume the agent has stdin / stdout / files / git / HTTP and
+nothing else. No browser, no dashboard, no clickable button, no chat
+window with a human. If a piece of important information about the
+repo's state — whether tests pass, what the error was, how to deploy,
+what's currently configured — is reachable *only* through a UI, that
+information is invisible to the agent. The repo loses points for
+those gaps wherever they appear, across all pillars:
+
+- A test runner that only renders results to an HTML report → Feedback.
+- A setup wizard with click-through prompts → Flow.
+- A dashboard-only API key configuration → Cognitive load (the agent
+  can't see what's set).
+
+This principle applies to **our own tool too**. `agent-readiness` is
+itself headless: no interactive prompts required for any operation,
+stable JSON output via `--json`, exit codes that mean things,
+machine-readable findings.
 
 ## The product framing
 
-`agent-readiness` is a **DevEx tool for AI agents**. The same way Lighthouse
-scores a webpage on Performance / Accessibility / SEO and gives you a
-prioritised punchlist, we score a repo on agent operability and tell you
-the highest-leverage things to fix.
+`agent-readiness` is a **benchmark for AI agent readiness**. The same
+way Lighthouse scores a webpage on Performance / Accessibility / SEO
+and hands you a prioritised punchlist, we score a repo on AI readiness
+and tell you the highest-leverage things to fix.
 
 Audience: engineering leaders and platform teams who have rolled out AI
 coding agents (Claude Code, Cursor, Copilot, Cline, etc.) and now ask
@@ -83,10 +124,17 @@ What we measure here:
 *How often does the agent get blocked by something outside the change it's trying to make?*
 
 This is the "yak shaving" pillar. Hidden prerequisites, missing creds,
-broken main, undocumented setup steps — every one of these stops the
-agent dead and usually requires a human to unblock.
+broken main, undocumented setup steps, GUI-only dev tools — every one
+of these stops the agent dead and usually requires a human to unblock.
 
 What we measure here:
+- **Headless walkability.** Every important state and action reachable
+  via stdin / stdout / files / git / HTTP. Setup runs non-interactively
+  (no prompts requiring a TTY). Test results stream to stdout, not just
+  to an HTML report or dashboard. Errors include file:line. Status
+  queries (build status, env config) have CLI equivalents. (See the
+  "Design principle: agents are headless" section above — this pillar
+  is where it gets concrete checks.)
 - **Steps from clone to first green test.** Counted from README and/or
   observed when `--run` is enabled. Anything more than ~3 commands is a
   red flag.
@@ -122,15 +170,29 @@ the pillars look fine.
 
 ## What we explicitly do **not** measure
 
-- **Aesthetic code style** (line length, naming conventions). Agents
-  largely don't care; auto-formatters handle this for humans.
-- **Test coverage percentage.** High coverage with bad tests is worse than
-  60 % with good ones. We may add coverage later, weighted by test
-  *quality* signals — not in v0.
-- **Architectural elegance.** SOLID, DDD, hexagonal — out of scope. Agents
-  succeed in plenty of "ugly" architectures with good feedback loops.
-- **Human documentation completeness.** Docstrings on every method don't
-  make a repo agent-friendly. Clear names and a working test suite do.
+These are out of scope for this tool. Other tools do them well; we
+don't try to compete.
+
+- **Aesthetic style** (line length, single-vs-double quotes, naming
+  conventions). Auto-formatters handle this for humans; agents don't
+  much care.
+- **Test coverage percentage as a target.** High coverage with bad
+  tests is worse than 60 % with good ones. We may add coverage later,
+  weighted by test *quality* signals — not in v0.
+- **Architectural elegance.** SOLID, DDD, hexagonal, layered — out of
+  scope. Agents succeed in plenty of "ugly" architectures with good
+  feedback loops.
+- **Full lint / SAST / SCA taxonomy.** SonarQube, Snyk, CodeClimate
+  exist. We integrate signal from them ("does the linter pass?",
+  "are there critical CVEs?") rather than reproduce their rule sets.
+- **Human-doc completeness.** Docstrings on every method don't make
+  a repo agent-friendly. Clear names, working tests, and a README
+  that explains how to run things do.
+
+The line we draw: a code-quality signal earns a place in the rubric
+when it has a plausible, name-able path to an agent failure mode. If
+we can't write the sentence "agents fail at X because of Y," Y
+doesn't ship.
 
 ## Execution model
 

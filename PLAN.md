@@ -80,29 +80,46 @@ agent-readiness init                    # write a default .agent-readiness.toml
   arrive when category D/E checks need real ASTs. Saves a heavy dep at v0.
 - Ship via `pipx install agent-readiness`; fallback `python -m agent_readiness`.
 
-## 6. Phased roadmap (revised after decisions)
+## 6. Phased roadmap
 
-Decisions baked in: Python CLI, language-agnostic v0.1, `--run` in v0.
+Decisions baked in: Python CLI, language-agnostic v0.1, `--run` lands in
+v0.2, Docker-enforced sandboxing, devcontainer-first image resolution,
+hard fail on docker-native repos, headless-first design lens.
 
-**v0.1 — Walking skeleton with real signal**
-Project scaffold (`pyproject.toml`, package layout, `agent-readiness --version`,
-`typer` entry point), `RepoContext` (file walk with vendored/generated
-exclusion, git log summary), and the following language-agnostic checks:
-- `readme.present` and `readme.has_run_instructions` (regex for "install" /
-  "run" / "test" / fenced code blocks)
-- `agent_docs.present` (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`,
-  `.github/copilot-instructions.md`)
-- `manifest.detected` (which ecosystem + lockfile present?)
-- `gitignore.present` and a coarse "covers common junk" check
-- `repo_shape.top_level_count` and `repo_shape.large_files`
-- `secrets.basic_scan` (regex pass for AWS keys, generic API keys, private
-  key headers)
-- `git.has_history` (commit count, recency)
+### Phase 1 — v0.1: walking skeleton, 5 benchmarks
 
-Terminal renderer (rich) and JSON renderer both ship in v0.1. Snapshot tests
-against 3 fixture repos in `tests/fixtures/`: `good/`, `bare/`, `messy/`.
+Goal: a working static scanner that produces a real, defensible score on
+real repos, end-to-end. Five benchmarks chosen for **high predictive
+signal × easy to target**: file/text/regex checks only, no AST work, no
+language-specific parsing. Each spans a pillar so the score actually
+moves between repos.
 
-**v0.2 — `--run` with Docker-enforced sandbox**
+| # | Check id | Pillar | What it measures |
+|---|---|---|---|
+| 1 | `readme.has_run_instructions` | Cognitive load | README explains how to install and run (regex for install/run/test verbs; fenced code blocks; presence of common command tokens). |
+| 2 | `agent_docs.present` | Cognitive load | At least one of `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md` exists at root. |
+| 3 | `test_command.discoverable` | Feedback | A test invocation is discoverable without running anything: Makefile `test` target / `package.json` `scripts.test` / pytest config / `Cargo.toml` / `go.mod` / `Gemfile` / `scripts/test*`. |
+| 4 | `headless.no_setup_prompts` | Flow | Repo's documented setup is non-interactive: README/scripts don't gate on a TTY-only step (heuristic: no "open the dashboard", "click", "log in to", "wizard" in setup-adjacent prose; `scripts/setup*` exists or install is one command). |
+| 5 | `secrets.basic_scan` | Safety (cap) | No real-looking secrets in tracked files (AWS access keys, GitHub PATs, private-key PEM headers, generic high-entropy strings near keywords like `api_key`/`secret`). |
+
+Plus the v0.1 infrastructure to make those five work and be extended:
+- `Check` protocol + registry (`@register` decorator).
+- `Scorer` rolling findings into pillar scores; safety as a cap.
+- Renderers: terminal (rich) and JSON. Both stable; JSON schema
+  versioned (`"schema": 1`) so consumers can pin.
+- Static-only `flow.docker_native_unsupported` finding emitted when a
+  Docker-native repo is detected (so users see it in v0.1 even though
+  `--run` isn't built yet).
+- Fixture repos: `tests/fixtures/good/`, `tests/fixtures/bare/`. Snapshot
+  tests confirm they score noticeably differently. (Two fixtures, not
+  three — `messy` adds little signal beyond `bare` at this scale.)
+
+Out of Phase 1 (deferred to v0.2+): `--run`, manifest detection beyond
+test-command discovery, repo-shape metrics (large files, top-level
+count), gitignore quality, complexity, churn, type-checker / linter
+detection, devcontainer support, HTML reports.
+
+### Phase 2 — v0.2: `--run` with Docker-enforced sandbox
 See [`SANDBOX.md`](./SANDBOX.md) for the full design. v0.2 implements:
 - Docker availability preflight; hard fail if `docker version` fails.
 - **Docker-native repo detection.** If the repo's tests need
@@ -141,40 +158,39 @@ See [`SANDBOX.md`](./SANDBOX.md) for the full design. v0.2 implements:
   `flow.docker_native_unsupported`,
   `test_command.discoverable`.
 
-**v0.3 — Context-window economics**
+### Phase 3 — v0.3: context-window economics
 File size distribution, token estimation (chars/4 heuristic, swap to
 tiktoken later), large-file flagging, "tokens to grok this repo" budget
-(README + manifest + top-N entry points).
+(README + manifest + top-N entry points). Repo-shape metrics
+(`repo_shape.top_level_count`, `repo_shape.large_files`,
+`repo_shape.directory_depth`).
 
-**v0.4 — Feedback-loop & complexity**
-Detect type-checker / linter configs by filename. Add `lizard` for
-cross-language cyclomatic complexity. Per-commit churn from git log.
+### Phase 4 — v0.4: feedback signals beyond test-command
+Detect type-checker / linter configs by filename. Add headless-walkability
+checks beyond setup: error-message-quality heuristic, status-command
+discoverability. `gitignore.covers_junk` lands here.
 
-**v0.5 — HTML report + baseline diff**
-`--report report.html` (jinja2) and `--baseline base.json` for trend
-tracking.
+### Phase 5 — v0.5: complexity, churn, baseline diff
+Cross-language cyclomatic complexity (lizard). Per-commit churn from git
+log. `agent-readiness scan --baseline base.json` for trend tracking.
 
-**v0.6 — Per-language depth**
-Tree-sitter integration for Python and TS first; better function/class
-size measurement, import-graph fan-in/fan-out.
+### Phase 6 — v0.6: HTML report + per-language depth
+`--report report.html` (jinja2). Tree-sitter integration for Python and
+TS first; better function/class size measurement, import-graph
+fan-in/fan-out.
 
 ## 7. Risks / open questions
 
-1. **Polyglot repos.** Heuristics per language explode. v0.1 should pick
-   *one* language well (Python or TS) and stub the rest.
-2. **Sandbox safety.** `--run` executes arbitrary repo code. Needs explicit
-   opt-in and ideally container isolation. Defer to v0.5.
-3. **Score gaming.** Once a number exists, people optimise it. Each check
-   needs a clear *why* in `explain` so the fix improves real ergonomics, not
-   the metric.
-4. **What counts as "agent ready" is itself an opinion.** We should
-   publish the rubric and weights and let users override via config.
-5. **Fixture repos for testing.** Need 4–5 small fixture repos (good, bad,
-   polyglot, monorepo, no-tests) checked into `tests/fixtures/`.
-
-## 8. Suggested first commits after this plan
-
-1. `pyproject.toml` + package skeleton + `agent-readiness --version`
-2. `RepoContext` + file walk
-3. First check: `readme_present` + terminal renderer
-4. Fixture repo + snapshot test
+1. **Polyglot repos.** Heuristics per language explode. Phase 1 stays
+   strictly language-agnostic; per-language depth lives in Phase 6.
+2. **Score gaming.** Once a number exists, people optimise it. Every
+   check ships with an `explain` entry tying it to a concrete agent
+   failure mode — that's the discipline.
+3. **What counts as "agent ready" is opinion.** We publish the rubric
+   and weights and let users override via `.agent-readiness.toml`.
+4. **Headless heuristics are fuzzy.** "No interactive setup" via README
+   regex will have false positives/negatives. Phase 1 ships the coarse
+   version; Phase 4 sharpens it.
+5. **Validation lag.** The benchmark study that validates the rubric
+   (see RUBRIC.md § Validation strategy) doesn't run until we have
+   v0.3-ish. Until then, the rubric is a hypothesis.
