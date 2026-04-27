@@ -1,89 +1,80 @@
-"""Command-line interface for agent-readiness."""
+"""Command-line interface for agent-readiness (click-based)."""
 
 from __future__ import annotations
 
+import json as _json
+import sys
 from pathlib import Path
-from typing import Annotated
 
-import typer
-from rich.console import Console
+import click
 
 from agent_readiness import __version__
 from agent_readiness.context import RepoContext
 from agent_readiness.sandbox import SandboxUnavailableError, preflight
 
-app = typer.Typer(
-    name="agent-readiness",
-    help="Benchmark how agent-ready a code repository is for LLM coding agents.",
-    no_args_is_help=True,
+
+@click.group(
+    context_settings={"help_option_names": ["-h", "--help"]},
+    help="Benchmark how AI-ready a code repository is for coding agents.",
 )
-console = Console()
-
-
-def _version_callback(value: bool) -> None:
-    if value:
-        console.print(f"agent-readiness {__version__}")
-        raise typer.Exit()
-
-
-@app.callback()
-def main(
-    version: Annotated[
-        bool,
-        typer.Option("--version", callback=_version_callback, is_eager=True,
-                     help="Show version and exit."),
-    ] = False,
-) -> None:
+@click.version_option(__version__, prog_name="agent-readiness")
+def cli() -> None:
     """agent-readiness CLI."""
 
 
-@app.command()
-def scan(
-    path: Annotated[Path, typer.Argument(help="Repo to scan.")] = Path("."),
-    json_output: Annotated[bool, typer.Option("--json", help="Emit JSON.")] = False,
-    run: Annotated[
-        bool,
-        typer.Option(
-            "--run",
-            help="Execute build/test inside a Docker sandbox. Requires Docker.",
-        ),
-    ] = False,
-) -> None:
-    """Scan a repository and print an agent-readiness report.
+@cli.command()
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path),
+                default=Path("."))
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit a stable JSON report (no rich formatting).")
+@click.option("--run", "run", is_flag=True,
+              help="Execute build/test inside a Docker sandbox. "
+                   "Requires Docker. Phase 2 — gated for now.")
+def scan(path: Path, json_output: bool, run: bool) -> None:
+    """Scan a repository and print an AI-readiness report.
 
-    By default, runs static checks only (no code from the target repo is
-    executed). Pass `--run` to additionally execute build/test commands
-    inside a Docker sandbox; this requires a working Docker daemon.
-    See SANDBOX.md for the execution model.
+    Phase 1: static checks only. `--run` is reserved for Phase 2 and
+    currently exits with a clear message after preflight.
     """
     if run:
         try:
             preflight()
         except SandboxUnavailableError as exc:
-            console.print(f"[bold red]error:[/bold red] {exc.message}")
-            raise typer.Exit(code=exc.exit_code) from exc
+            click.echo(f"error: {exc.message}", err=True)
+            sys.exit(exc.exit_code)
+        click.echo(
+            "Docker is available, but `--run` is gated to Phase 2. "
+            "Re-run without `--run` for the static report.",
+            err=True,
+        )
+        sys.exit(2)
 
+    # Phase 1 plumbing: load checks, build context, score, render.
+    # The actual check execution lands in the next commit; this branch
+    # just builds context and prints a placeholder so the migration is
+    # observable in isolation.
     ctx = RepoContext(root=path)
     if json_output:
-        import json
         payload = {
+            "schema": 1,
             "repo_path": str(ctx.root),
             "file_count": len(ctx.files),
             "is_git_repo": ctx.is_git_repo,
             "commit_count": ctx.commit_count,
-            "run_mode": "full" if run else "static",
+            "run_mode": "static",
+            "phase": 1,
+            "note": "checks not yet wired in this commit",
         }
-        console.print_json(json.dumps(payload))
+        click.echo(_json.dumps(payload, indent=2))
         return
 
-    console.rule("[bold]agent-readiness scan")
-    console.print(f"[dim]Repo:[/dim] {ctx.root}")
-    console.print(f"[dim]Files:[/dim] {len(ctx.files)}  "
-                  f"[dim]Git:[/dim] {'yes' if ctx.is_git_repo else 'no'}  "
-                  f"[dim]Commits:[/dim] {ctx.commit_count}  "
-                  f"[dim]Mode:[/dim] {'full (Docker)' if run else 'static'}")
-    console.print("[yellow]No checks registered yet — v0.1 in progress.[/yellow]")
+    click.echo(f"agent-readiness scan: {ctx.root}")
+    click.echo(f"  files: {len(ctx.files)}  "
+               f"git: {'yes' if ctx.is_git_repo else 'no'}  "
+               f"commits: {ctx.commit_count}")
+    click.echo("  (no checks registered yet — wiring lands in next commit)")
 
 
 if __name__ == "__main__":
-    app()
+    cli()

@@ -11,9 +11,8 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "agent-readiness contributors" }]
 dependencies = [
-    "typer>=0.12",
+    "click>=8.1",
     "rich>=13.7",
-    "pydantic>=2.7",
 ]
 
 [project.optional-dependencies]
@@ -24,7 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-agent-readiness = "agent_readiness.cli:app"
+agent-readiness = "agent_readiness.cli:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_readiness"]
