@@ -132,6 +132,23 @@ the pillars look fine.
 - **Human documentation completeness.** Docstrings on every method don't
   make a repo agent-friendly. Clear names and a working test suite do.
 
+## Execution model
+
+Static checks (file walk, manifest parse, regex scans, git log reads) run
+on the host. Any check that **executes code from the target repo** —
+running tests, install scripts, build commands — runs inside a Docker
+container under the rules in [`SANDBOX.md`](./SANDBOX.md).
+
+This forces a clean split in scoring:
+
+- A **static scan** (no `--run`) produces partial Feedback-pillar scores.
+  Runtime checks are reported as `not measured`, not as zero.
+- A **full scan** (`--run`) requires a working Docker daemon, fails loudly
+  if Docker is unavailable, and reports both static and runtime findings.
+
+We will publish reference numbers as **static / full** pairs. They are
+not interchangeable; the static score is a lower-bound estimate.
+
 ## Validation strategy (post-v0)
 
 A score is only as good as its predictive power. Once v0.1–0.3 ship, we

@@ -57,16 +57,19 @@ agent-readiness init                    # write a default .agent-readiness.toml
 ## 4. Architecture
 
 - **Plugin model.** Each check is a class/function: `(RepoContext) -> list[Finding]`.
-  `Finding` has `id`, `category`, `severity`, `score_delta`, `file?`, `line?`,
+  `Finding` has `id`, `pillar`, `severity`, `score_delta`, `file?`, `line?`,
   `message`, `fix_hint?`.
 - **RepoContext** is built once: file inventory, language detection,
   manifest parse, git log summary, cached AST per language. Checks read from
   this rather than re-walking the tree.
-- **Scorer** rolls findings into category scores and an overall score; weights
-  configurable.
+- **Scorer** rolls findings into pillar scores and an overall score; weights
+  configurable. Safety findings act as a cap, not a weight.
 - **Renderers**: terminal (rich), JSON, HTML, markdown.
-- **Sandbox runner** (opt-in, off by default): runs detected build/test commands
-  in a subprocess with timeout; captures duration and exit code only.
+- **Sandbox runner** (Docker-enforced; see [`SANDBOX.md`](./SANDBOX.md)). Any
+  check that executes code from the target repo runs inside a pinned-image
+  container with read-only repo mount, no host env, network split between
+  setup and test phases, wall-clock timeout, and resource limits. There is
+  no host-execution fallback in v0.
 
 ## 5. Tech stack (decided)
 
@@ -99,17 +102,21 @@ exclusion, git log summary), and the following language-agnostic checks:
 Terminal renderer (rich) and JSON renderer both ship in v0.1. Snapshot tests
 against 3 fixture repos in `tests/fixtures/`: `good/`, `bare/`, `messy/`.
 
-**v0.2 — `--run` (sandbox runner)**
-- Detect a test command in priority order:
-  Makefile `test` target → `package.json` scripts.test → `pyproject.toml`
-  `[tool.pytest.ini_options]` → `Cargo.toml` → `go.mod` → `Gemfile` →
-  fall back to "no test command found".
-- Execute under `subprocess` with a timeout (default 300s) and a hard kill;
-  capture exit code, duration, last 80 lines of output.
-- Loud opt-in banner: `--run` prints what it's about to execute and waits
-  for `y` unless `--yes`.
-- Two new checks: `run.test_command_detected` and `run.tests_pass`
-  (only scored when `--run` is on).
+**v0.2 — `--run` with Docker-enforced sandbox**
+See [`SANDBOX.md`](./SANDBOX.md) for the full design. v0.2 implements:
+- Docker availability preflight; hard fail if `docker version` fails.
+- Ecosystem detection → pinned-digest base image lookup, with `--image`
+  override.
+- Test command detection in priority order: Makefile `test` target →
+  `package.json` scripts.test → pytest config in `pyproject.toml` →
+  `Cargo.toml` → `go.mod` → `Gemfile` → "not found".
+- Two-phase execution: setup (network on) then test (network off),
+  each with capture of exit code, duration, and last 80 lines of output.
+- Wall-clock timeout enforced by us, not just Docker. Repo mounted
+  read-only at `/repo`; rootfs read-only with a tmpfs `/tmp`.
+- New checks (only scored when `--run` is on):
+  `setup.runs`, `setup.duration`,
+  `test_command.runs`, `test_command.duration`, `test_command.passes`.
 
 **v0.3 — Context-window economics**
 File size distribution, token estimation (chars/4 heuristic, swap to
