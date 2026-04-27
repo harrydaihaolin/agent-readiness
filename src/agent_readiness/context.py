@@ -51,6 +51,27 @@ class RepoContext:
         """All non-excluded files, paths relative to the repo root."""
         return list(self._files)
 
+    def read_text(self, rel_path: Path | str, max_bytes: int = 256_000) -> str | None:
+        """Read a file (relative to repo root) as UTF-8 text.
+
+        Returns None if the file doesn't exist or isn't decodable. Caps the
+        read at *max_bytes* to keep a single pathological file from blowing
+        memory. Checks should use this rather than open() so all reads
+        share one policy.
+        """
+        path = self.root / rel_path
+        if not path.is_file():
+            return None
+        try:
+            with path.open("rb") as f:
+                blob = f.read(max_bytes + 1)
+        except OSError:
+            return None
+        try:
+            return blob[:max_bytes].decode("utf-8", errors="replace")
+        except (UnicodeDecodeError, LookupError):
+            return None
+
     def has_file(self, *names: str, case_insensitive: bool = True) -> Path | None:
         """Return the first matching top-level file, or None.
 
