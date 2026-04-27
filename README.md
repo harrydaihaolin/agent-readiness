@@ -61,6 +61,24 @@ See [`RUBRIC.md`](./RUBRIC.md) for the full definition. Short version:
 | **Flow / reliability** | Headless walkability + how often friction outside the task blocks the agent. |
 | **Safety & trust** | Secrets, destructive scripts, gitignore hygiene. (Cap, not weight.) |
 
+## This repo's score
+
+Dogfooding: `agent-readiness scan .` run against this repository itself.
+
+```
+╭─────────────────────────────╮
+│  AI Readiness  100.0 / 100  │
+╰─────────────────────────────╯
+ Cognitive load      100.0  ████████████████████
+ Feedback loops      100.0  ████████████████████
+ Flow & reliability  100.0  ████████████████████
+ Safety              100.0  ████████████████████
+
+No findings. Looking good.
+```
+
+Score updated after each iteration as part of the development workflow.
+
 ## Status
 
 Pre-alpha. Phase 1 (v0.1) ships five high-signal language-agnostic
