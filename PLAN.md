@@ -36,8 +36,8 @@ to fix first.
 | `gitignore.covers_junk` | Safety & trust | Agent won't accidentally commit build output |
 | `secrets.basic_scan` | Safety & trust | No real-looking secrets in the tree |
 
-(Cognitive-load checks like `naming.search_precision`, `repo_shape.directory_depth`,
-and feedback checks like `tests.determinism_proxy` arrive in v0.2+.)
+(Cognitive-load checks `naming.search_precision` and `repo_shape.directory_depth`,
+and feedback check `tests.determinism_proxy`, land in v0.35+.)
 
 ## 3. CLI surface
 
@@ -157,6 +157,9 @@ See [`SANDBOX.md`](./SANDBOX.md) for the full design. v0.2 implements:
   `devcontainer.present`, `devcontainer.unparseable`,
   `flow.docker_native_unsupported`,
   `test_command.discoverable`.
+- **Three additional static checks** landed in v0.2 because the
+  manifest-parsing infrastructure is shared with image resolution:
+  `manifest.detected`, `manifest.lockfile_present`, `git.has_history`.
 
 ### Phase 3 — v0.3: context-window economics
 File size distribution, token estimation (chars/4 heuristic, swap to
@@ -165,19 +168,76 @@ tiktoken later), large-file flagging, "tokens to grok this repo" budget
 (`repo_shape.top_level_count`, `repo_shape.large_files`,
 `repo_shape.directory_depth`).
 
+### Phase 3.5 — v0.35: flow completeness (remaining static checks)
+Lands the rubric-table checks that have no phase home yet. All are
+static-only (file walk / regex / git read); no Docker required.
+
+| Check | Pillar | Signal |
+|---|---|---|
+| `entry_points.detected` | Cognitive load | `main.py`, `index.js`, `cmd/`, `bin/`, `src/index.*` discoverable |
+| `env.example_parity` | Flow | If any file reads `os.environ` / `process.env`, `.env.example` must exist with keys (no values) |
+| `ci.configured` | Feedback | `.github/workflows/`, `.circleci/`, `.travis.yml`, `Jenkinsfile` detected |
+| `setup.command_count` | Flow | Count setup steps in README; >3 distinct commands is a finding |
+| `naming.search_precision` | Cognitive load | Count of files matching ambiguous terms (`utils`, `helpers`, `manager`); high counts degrade grep precision |
+
+After v0.35 every check in the checks→pillars table above has a phase
+home and the rubric has no orphaned rows.
+
 ### Phase 4 — v0.4: feedback signals beyond test-command
-Detect type-checker / linter configs by filename. Add headless-walkability
-checks beyond setup: error-message-quality heuristic, status-command
-discoverability. `gitignore.covers_junk` lands here.
+Detect type-checker / linter configs by filename (`mypy.ini`, `.mypy.ini`,
+`pyrightconfig.json`, `tsconfig.json`, `.eslintrc*`, `ruff.toml`, etc.).
+Add headless-walkability checks beyond setup: error-message-quality
+heuristic (`assert` without messages, bare `except`, stringly-typed
+exceptions), status-command discoverability. `gitignore.covers_junk`
+lands here (build artefacts, IDE config, OS noise).
 
-### Phase 5 — v0.5: complexity, churn, baseline diff
-Cross-language cyclomatic complexity (lizard). Per-commit churn from git
-log. `agent-readiness scan --baseline base.json` for trend tracking.
+### Phase 5 — v0.5: complexity and churn
+Cross-language cyclomatic complexity via `lizard` (Python, JS/TS, Go,
+Java, C/C++). Per-commit churn from `git log --numstat` — files with
+high churn and high complexity are the agent failure hotspots. Findings
+surface the top-N hot files with churn × complexity scores.
 
-### Phase 6 — v0.6: HTML report + per-language depth
+### Phase 6 — v0.65: CLI surface and configurability
+Completes the full CLI surface described in § 3 above.
+- `agent-readiness init` — writes `.agent-readiness.toml` with
+  commented defaults for every configurable option.
+- `.agent-readiness.toml` reading — `RepoContext` picks up
+  `[ignore]` patterns; scorer picks up `[weights]` overrides.
+- `--weights weights.toml` — per-invocation pillar weight overrides.
+- `--only A,B` — filter to specific check IDs or pillar names;
+  headless-friendly for CI pipelines that only care about one pillar.
+- `--baseline base.json` — diff vs a previous `--json` run; output
+  includes delta per pillar and per check, and a `+/-` overall.
+
+### Phase 7 — v0.7: HTML report and per-language depth
 `--report report.html` (jinja2). Tree-sitter integration for Python and
 TS first; better function/class size measurement, import-graph
-fan-in/fan-out.
+fan-in/fan-out, per-language directory depth.
+
+### Phase 8 — v0.8: validation study and distribution
+The benchmark study described in RUBRIC.md § Validation strategy,
+now assigned a phase:
+- Assemble 10–20 repos spanning "obviously ready" to "obviously rough."
+- Run a fixed task suite (small refactor, add feature, fix seeded bug)
+  with one or two coding agents; measure task success rate.
+- Check that `agent-readiness` score correlates with success rate; cut
+  checks that don't move with outcomes, adjust weights.
+- **pipx / PyPI publish** — `pipx install agent-readiness` works end-to-end.
+- **GitHub Actions step** — `uses: <org>/agent-readiness-action@v1`
+  that runs `scan --json` and optionally fails below a threshold score.
+- **Score badge generation** — `--badge badge.svg` writes a shields-style
+  SVG for embedding in README.
+
+### Phase 9 — v1.0: plugin API and stable contract
+- **Custom-check plugin mechanism** — drop modules into
+  `.agent_readiness_checks/` or register via `entry_points`; tool
+  discovers and runs them alongside built-ins.
+- **SARIF export** — `--sarif findings.sarif` so findings integrate into
+  the GitHub code-scanning UI and PR annotations.
+- **`--fail-below N`** exit-code mode for CI gates (exits 1 if overall
+  score < N).
+- **Schema v2 declaration** — intentional breaking-change window; v1
+  consumers get a migration guide. After v1.0 the JSON schema is stable.
 
 ## 7. Risks / open questions
 
