@@ -176,7 +176,7 @@ static-only (file walk / regex / git read); no Docker required.
 |---|---|---|
 | `entry_points.detected` | Cognitive load | `main.py`, `index.js`, `cmd/`, `bin/`, `src/index.*` discoverable |
 | `env.example_parity` | Flow | If any file reads `os.environ` / `process.env`, `.env.example` must exist with keys (no values) |
-| `ci.configured` | Feedback | `.github/workflows/`, `.circleci/`, `.travis.yml`, `Jenkinsfile` detected |
+| `ci.configured` | Feedback | One of: GitHub Actions, CircleCI, Buildkite, Travis CI, Jenkins, GitLab CI, Azure Pipelines, Bitbucket Pipelines, AppVeyor, Drone CI, Woodpecker CI, Earthly |
 | `setup.command_count` | Flow | Count setup steps in README; >3 distinct commands is a finding |
 | `naming.search_precision` | Cognitive load | Count of files matching ambiguous terms (`utils`, `helpers`, `manager`); high counts degrade grep precision |
 

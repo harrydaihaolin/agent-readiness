@@ -5,6 +5,7 @@ Built once per scan; checks should pull from this rather than re-walking the tre
 
 from __future__ import annotations
 
+import json
 import subprocess
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -108,6 +109,84 @@ class RepoContext:
         if result.returncode != 0:
             return 0
         return int(result.stdout.strip() or 0)
+
+    @cached_property
+    def detected_languages(self) -> list[str]:
+        """Detect primary programming languages from manifests, then file extensions."""
+        languages: set[str] = set()
+
+        # Manifest-based detection (high confidence)
+        manifest_signals: tuple[tuple[str, str], ...] = (
+            ("pyproject.toml", "python"),
+            ("setup.py", "python"),
+            ("setup.cfg", "python"),
+            ("Cargo.toml", "rust"),
+            ("go.mod", "go"),
+            ("Gemfile", "ruby"),
+        )
+        for filename, lang in manifest_signals:
+            if (self.root / filename).is_file():
+                languages.add(lang)
+
+        # TypeScript takes priority over plain JavaScript
+        if (self.root / "package.json").is_file():
+            if (self.root / "tsconfig.json").is_file():
+                languages.add("typescript")
+            else:
+                languages.add("javascript")
+
+        # Extension-based fallback (only when manifest signals are absent)
+        if not languages:
+            ext_counts: dict[str, int] = {}
+            for f in self._files[:500]:
+                ext = f.suffix.lower()
+                if ext == ".py":
+                    ext_counts["python"] = ext_counts.get("python", 0) + 1
+                elif ext in (".ts", ".tsx"):
+                    ext_counts["typescript"] = ext_counts.get("typescript", 0) + 1
+                elif ext in (".js", ".jsx", ".mjs"):
+                    ext_counts["javascript"] = ext_counts.get("javascript", 0) + 1
+                elif ext == ".go":
+                    ext_counts["go"] = ext_counts.get("go", 0) + 1
+                elif ext == ".rs":
+                    ext_counts["rust"] = ext_counts.get("rust", 0) + 1
+                elif ext == ".rb":
+                    ext_counts["ruby"] = ext_counts.get("ruby", 0) + 1
+            if ext_counts:
+                languages.add(max(ext_counts, key=lambda k: ext_counts[k]))
+
+        return sorted(languages)
+
+    @cached_property
+    def monorepo_tools(self) -> list[str]:
+        """Detect monorepo tooling signals at the repo root."""
+        tools: list[str] = []
+
+        # npm/yarn workspaces — look for "workspaces" key in package.json
+        pkg_json = self.root / "package.json"
+        if pkg_json.is_file():
+            try:
+                data = json.loads(pkg_json.read_text(encoding="utf-8", errors="replace"))
+                if "workspaces" in data:
+                    tools.append("npm-workspaces")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        for filename, label in (
+            ("lerna.json", "lerna"),
+            ("pnpm-workspace.yaml", "pnpm"),
+            ("nx.json", "nx"),
+            ("rush.json", "rush"),
+            ("turbo.json", "turborepo"),
+        ):
+            if (self.root / filename).is_file():
+                tools.append(label)
+
+        return tools
+
+    @cached_property
+    def is_monorepo(self) -> bool:
+        return len(self.monorepo_tools) > 0
 
     @cached_property
     def orientation_tokens(self) -> int:

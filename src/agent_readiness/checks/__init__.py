@@ -106,4 +106,10 @@ def _ensure_loaded() -> None:
         lint_check,
         gitignore,
         churn,
+        # New checks ported from agent-ready
+        devcontainer,
+        repo_templates,
+        hooks,
+        security,
+        branch_rulesets,
     )

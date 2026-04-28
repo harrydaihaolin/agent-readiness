@@ -1,0 +1,10 @@
+# CODEOWNERS
+# Each line is a pattern followed by one or more owners.
+# Owners are notified for review when a matching file is changed.
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for all files
+# * @your-org/team-name
+
+# Docs
+# docs/ @your-org/docs-team

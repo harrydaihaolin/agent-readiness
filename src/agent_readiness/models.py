@@ -107,6 +107,8 @@ class Report:
     safety_cap_applied: float | None = None                 # populated when secrets etc. capped the score
     schema: int = 1                                         # JSON schema version, bump on breaking change
     delta: float | None = None                              # overall score delta vs baseline (--baseline)
+    languages: list[str] = field(default_factory=list)     # detected programming languages
+    monorepo_tools: list[str] = field(default_factory=list) # detected monorepo tooling
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -116,6 +118,12 @@ class Report:
             "safety_cap_applied": self.safety_cap_applied,
             "pillars": [p.to_dict() for p in self.pillar_scores],
         }
+        if self.languages or self.monorepo_tools:
+            d["context"] = {
+                "languages": self.languages,
+                "monorepo_tools": self.monorepo_tools,
+                "is_monorepo": len(self.monorepo_tools) > 0,
+            }
         if self.delta is not None:
             d["delta"] = self.delta
         return d
