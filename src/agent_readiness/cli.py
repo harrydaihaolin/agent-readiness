@@ -34,8 +34,9 @@ def cli() -> None:
               help="Force plain-text output even when rich is available.")
 @click.option("--run", "run", is_flag=True,
               help="Execute build/test inside a Docker sandbox. Requires Docker.")
-@click.option("--weights", "weights_file", type=click.Path(path_type=Path),
-              default=None, help="Path to a TOML file with custom pillar weights.")
+@click.option("--weights", "weights_file", type=click.STRING,
+              default=None,
+              help="TOML file path or named preset: strict, lax, default.")
 @click.option("--only", "only_checks", default=None,
               help="Comma-separated check IDs or pillar names to run.")
 @click.option("--baseline", "baseline_file", type=click.Path(path_type=Path),
@@ -56,7 +57,7 @@ def scan(
     json_output: bool,
     no_rich: bool,
     run: bool,
-    weights_file: Path | None,
+    weights_file: str | None,
     only_checks: str | None,
     baseline_file: Path | None,
     fail_below: int,
@@ -108,16 +109,13 @@ def scan(
             click.echo(f"Test phase failed (exit {test_run.exit_code})", err=True)
 
     # Load config from .agent-readiness.toml
-    from agent_readiness.config import extract_weights, load_config
+    from agent_readiness.config import extract_context_config, extract_weights, load_config, resolve_weights
     repo_config = load_config(path)
     weights = extract_weights(repo_config)
 
-    # Override with explicit weights file if provided
+    # Override with explicit --weights value (named preset or file path)
     if weights_file is not None:
-        import tomllib
-        with weights_file.open("rb") as f:
-            wf_data = tomllib.load(f)
-        override = extract_weights(wf_data)
+        override = resolve_weights(weights_file)
         if override:
             weights = override
 
@@ -127,7 +125,7 @@ def scan(
     load_entry_point_plugins()
 
     _ensure_loaded()
-    ctx = RepoContext(root=path)
+    ctx = RepoContext(root=path, context_config=extract_context_config(repo_config))
     specs = all_checks()
 
     # Filter by --only if provided
@@ -155,6 +153,7 @@ def scan(
     for cr, spec in zip(results, specs, strict=True):
         if cr.weight == 1.0 and spec.weight != 1.0:
             cr.weight = spec.weight
+        cr.explanation = spec.explanation
 
     report = score_results(ctx.root, results, weights=weights)
     report.languages = ctx.detected_languages
@@ -163,6 +162,7 @@ def scan(
     # Compute delta if baseline provided
     delta_overall: float | None = None
     delta_pillars: dict[str, float] | None = None
+    delta_checks: dict[str, float] | None = None
     if baseline_file is not None and baseline_file.is_file():
         import json
         try:
@@ -170,6 +170,14 @@ def scan(
             baseline_score = float(baseline_data.get("overall_score", 0))
             delta_overall = round(report.overall_score - baseline_score, 1)
             delta_pillars = {}
+            delta_checks = {}
+            # Build a lookup of check_id → baseline score
+            baseline_checks: dict[str, float] = {}
+            for bp in baseline_data.get("pillars", []):
+                for bc in bp.get("checks", []):
+                    cid = bc.get("check_id")
+                    if cid:
+                        baseline_checks[cid] = float(bc.get("score", 0))
             for ps in report.pillar_scores:
                 for bp in baseline_data.get("pillars", []):
                     if bp.get("pillar") == ps.pillar.value:
@@ -177,6 +185,11 @@ def scan(
                             ps.score - float(bp.get("score", 0)), 1
                         )
                         break
+                for cr in ps.check_results:
+                    if cr.check_id in baseline_checks:
+                        delta_checks[cr.check_id] = round(
+                            cr.score - baseline_checks[cr.check_id], 1
+                        )
         except (KeyError, ValueError, json.JSONDecodeError):
             pass
 
@@ -201,7 +214,11 @@ def scan(
     if json_output:
         d = report.to_dict()
         if delta_overall is not None:
-            d["delta"] = {"overall": delta_overall, "pillars": delta_pillars or {}}
+            d["delta"] = {
+                "overall": delta_overall,
+                "pillars": delta_pillars or {},
+                "checks": delta_checks or {},
+            }
         import json
         click.echo(json.dumps(d, indent=2, sort_keys=False))
     else:

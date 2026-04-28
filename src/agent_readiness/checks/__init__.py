@@ -112,4 +112,5 @@ def _ensure_loaded() -> None:
         hooks,
         security,
         branch_rulesets,
+        meta_consistency,
     )

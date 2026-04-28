@@ -58,6 +58,39 @@ class EnvParityCheck(unittest.TestCase):
         result = check_env_example_parity(ctx)
         self.assertEqual(result.score, 100.0)
 
+    def _scan_tmp_env(self, files: dict[str, str]):
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for rel, contents in files.items():
+                p = root / rel
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(contents)
+            ctx = RepoContext(root=root)
+            return check_env_example_parity(ctx)
+
+    def test_comment_only_reference_not_flagged(self):
+        """os.environ in a comment should not trigger env parity warning."""
+        result = self._scan_tmp_env({
+            "main.py": "# os.environ is used here\nprint('hello')\n",
+        })
+        self.assertEqual(result.score, 100.0,
+                         "commented-out os.environ should not count as env usage")
+
+    def test_real_usage_still_detected(self):
+        """Actual os.environ usage without .env.example → WARN."""
+        result = self._scan_tmp_env({
+            "main.py": 'import os\nkey = os.environ["SECRET"]\n',
+        })
+        self.assertEqual(result.score, 40.0)
+        self.assertEqual(result.findings[0].severity.value, "warn")
+
+    def test_js_comment_not_flagged(self):
+        result = self._scan_tmp_env({
+            "index.js": "// process.env.SECRET\nconsole.log('hello');\n",
+        })
+        self.assertEqual(result.score, 100.0)
+
 
 class CiConfiguredCheck(unittest.TestCase):
 
@@ -120,10 +153,42 @@ class CiConfiguredCheck(unittest.TestCase):
         """
         result = self._scan_tmp({
             "Earthfile": "VERSION 0.7\n",
-            ".github/workflows/ci.yml": "name: ci\non: [push]\n",
+            ".github/workflows/ci.yml": (
+                "name: ci\non: [push]\njobs:\n  test:\n    steps:\n"
+                "      - run: make test\n"
+            ),
         })
         self.assertEqual(result.score, 100.0)
         self.assertIn("GitHub Actions", result.findings[0].message)
+
+    def test_gha_no_test_step_scores_80(self):
+        """GHA workflow present but no recognisable test step → score 80, WARN."""
+        result = self._scan_tmp({
+            ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  build:\n    steps:\n      - run: echo hello\n",
+        })
+        self.assertEqual(result.score, 80.0)
+        self.assertEqual(result.findings[0].severity.value, "warn")
+        self.assertIn("test step", result.findings[0].message)
+
+    def test_gha_with_pytest_step_scores_100(self):
+        """GHA workflow with pytest step → full score."""
+        result = self._scan_tmp({
+            ".github/workflows/ci.yml": (
+                "name: ci\non: [push]\njobs:\n  test:\n    steps:\n"
+                "      - run: pytest\n"
+            ),
+        })
+        self.assertEqual(result.score, 100.0)
+        self.assertIn("GitHub Actions", result.findings[0].message)
+
+    def test_gha_with_npm_test_scores_100(self):
+        result = self._scan_tmp({
+            ".github/workflows/ci.yml": (
+                "name: ci\non: [push]\njobs:\n  test:\n    steps:\n"
+                "      - run: npm test\n"
+            ),
+        })
+        self.assertEqual(result.score, 100.0)
 
 
 class SetupCommandCountCheck(unittest.TestCase):

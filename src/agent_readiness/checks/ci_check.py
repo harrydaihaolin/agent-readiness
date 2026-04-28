@@ -16,6 +16,7 @@ exists" — the rubric question this check answers.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -28,6 +29,42 @@ def _has_yaml_in_dir(p: Path) -> bool:
     if not p.is_dir():
         return False
     return any(c.is_file() and c.suffix in (".yml", ".yaml") for c in p.iterdir())
+
+
+# Regex to find `run:` lines in GHA YAML containing known test commands.
+# We look for the value on the same line only (single-line `run:` stmts),
+# which covers the vast majority of real workflows without YAML parsing.
+_TEST_CMD_RE = re.compile(
+    r"run:\s*.*\b("
+    r"pytest|python -m unittest|npm test|npm run test|"
+    r"cargo test|go test|make test|gradle test|mvn test|"
+    r"\.\/gradlew test|pnpm test|yarn test"
+    r")\b",
+)
+
+
+def _gha_runs_tests(root: Path) -> bool | None:
+    """Return True if any GHA workflow contains a recognisable test step.
+
+    Returns None if the workflow directory cannot be read.
+    Returns False if workflows exist but none contains a test step.
+    Static, text-only — never parses YAML or executes anything.
+    """
+    wf_dir = root / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return None
+    found_any = False
+    for f in wf_dir.iterdir():
+        if not f.is_file() or f.suffix not in (".yml", ".yaml"):
+            continue
+        found_any = True
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if _TEST_CMD_RE.search(text):
+            return True
+    return False if found_any else None
 
 
 # (label, predicate). First match wins. Order is "trigger configs first,
@@ -63,6 +100,11 @@ _DETECTORS: tuple[tuple[str, Callable[[Path], bool]], ...] = (
     pass/fail. Without CI the agent has to run tests locally and parse
     output manually, which is slower and error-prone.
 
+    For GitHub Actions workflows, the check also verifies that at least
+    one workflow step contains a recognisable test command (pytest, npm
+    test, make test, etc.) so that the presence of a workflow file alone
+    is not enough to score 100 — the workflow must actually run tests.
+
     Detected: GitHub Actions, CircleCI, Buildkite, Travis CI, Jenkins,
     GitLab CI, Azure Pipelines, Bitbucket Pipelines, AppVeyor, Drone CI,
     Woodpecker CI, Earthly. Detection is filename-based; absence here
@@ -73,19 +115,40 @@ _DETECTORS: tuple[tuple[str, Callable[[Path], bool]], ...] = (
 )
 def check_ci_configured(ctx: RepoContext) -> CheckResult:
     for label, predicate in _DETECTORS:
-        if predicate(ctx.root):
-            return CheckResult(
-                check_id="ci.configured",
-                pillar=Pillar.FEEDBACK,
-                score=100.0,
-                weight=0.9,
-                findings=[Finding(
+        if not predicate(ctx.root):
+            continue
+        # For GitHub Actions, validate that a test step is present.
+        if label == "GitHub Actions":
+            has_tests = _gha_runs_tests(ctx.root)
+            if has_tests is False:
+                return CheckResult(
                     check_id="ci.configured",
                     pillar=Pillar.FEEDBACK,
-                    severity=Severity.INFO,
-                    message=f"CI configuration detected: {label}.",
-                )],
-            )
+                    score=80.0,
+                    weight=0.9,
+                    findings=[Finding(
+                        check_id="ci.configured",
+                        pillar=Pillar.FEEDBACK,
+                        severity=Severity.WARN,
+                        message="GitHub Actions workflow found but no recognisable test step detected.",
+                        fix_hint=(
+                            "Add a step with `run: make test`, `run: pytest`, or "
+                            "equivalent so agents know CI validates the test suite."
+                        ),
+                    )],
+                )
+        return CheckResult(
+            check_id="ci.configured",
+            pillar=Pillar.FEEDBACK,
+            score=100.0,
+            weight=0.9,
+            findings=[Finding(
+                check_id="ci.configured",
+                pillar=Pillar.FEEDBACK,
+                severity=Severity.INFO,
+                message=f"CI configuration detected: {label}.",
+            )],
+        )
 
     return CheckResult(
         check_id="ci.configured",

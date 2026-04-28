@@ -135,6 +135,38 @@ class StableContract(unittest.TestCase):
         for key in ("schema", "repo_path", "overall_score", "pillars"):
             self.assertIn(key, d)
 
+    def test_explain_in_json_via_cli(self):
+        """--json output includes explanation text on every check dict."""
+        import json
+        from click.testing import CliRunner
+        from agent_readiness.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(_FIXTURES / "good"), "--json"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        self.assertEqual(data["schema"], 1)
+        checks = [c for p in data["pillars"] for c in p["checks"]]
+        self.assertGreater(len(checks), 0)
+        for c in checks:
+            self.assertIn("explanation", c, f"missing explanation on {c['check_id']}")
+            self.assertIsInstance(c["explanation"], str)
+            self.assertGreater(len(c["explanation"]), 0)
+
+    def test_score_impact_in_json_via_cli(self):
+        """--json output includes score_impact on every check dict."""
+        import json
+        from click.testing import CliRunner
+        from agent_readiness.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["scan", str(_FIXTURES / "good"), "--json"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        data = json.loads(result.output)
+        checks = [c for p in data["pillars"] for c in p["checks"]]
+        for c in checks:
+            self.assertIn("score_impact", c, f"missing score_impact on {c['check_id']}")
+
 
 if __name__ == "__main__":
     unittest.main()

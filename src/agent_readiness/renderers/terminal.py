@@ -25,8 +25,8 @@ def _bar(score: float, width: int = 20) -> str:
     return "█" * filled + "·" * (width - filled)
 
 
-def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str]]:
-    """Return up to *n* (check_id, pillar, message) for the worst issues.
+def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str, float]]:
+    """Return up to *n* (check_id, pillar, message, score_impact) for the worst issues.
 
     A "friction" item is either:
       - a check with at least one WARN or ERROR finding (use the worst one), or
@@ -34,27 +34,30 @@ def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str]]:
     INFO findings on partial-credit checks are explicitly excluded — they
     describe the situation, not friction the maintainer should fix.
 
-    Sort key: severity (error > warn > "low score, no findings"),
+    Sort key: score_impact descending (highest potential gain first),
+    then severity (error > warn > "low score, no findings") as tiebreaker,
     then (100 - score) descending.
     """
     sev_rank = {Severity.ERROR: 0, Severity.WARN: 1, Severity.INFO: 2}
-    rows: list[tuple[int, float, str, str, str]] = []
+    rows: list[tuple[float, int, float, str, str, str, float]] = []
     for ps in report.pillar_scores:
         for cr in ps.check_results:
+            impact = cr.score_impact or 0.0
             actionable = [f for f in cr.findings
                           if f.severity in (Severity.WARN, Severity.ERROR)]
             if actionable:
                 worst = min(actionable, key=lambda f: sev_rank[f.severity])
-                rows.append((sev_rank[worst.severity], 100.0 - cr.score,
+                rows.append((-impact, sev_rank[worst.severity], 100.0 - cr.score,
                              cr.check_id, _PILLAR_LABEL[cr.pillar],
-                             worst.message))
+                             worst.message, impact))
             elif cr.score < 60.0 and not cr.not_measured:
-                rows.append((sev_rank[Severity.WARN] + 1,  # below WARN-with-finding
+                rows.append((-impact, sev_rank[Severity.WARN] + 1,
                              100.0 - cr.score, cr.check_id,
                              _PILLAR_LABEL[cr.pillar],
-                             f"score {cr.score:.0f}/100"))
-    rows.sort(key=lambda r: (r[0], -r[1]))
-    return [(check_id, pillar, msg) for _, _, check_id, pillar, msg in rows[:n]]
+                             f"score {cr.score:.0f}/100", impact))
+    rows.sort(key=lambda r: (r[0], r[1], -r[2]))
+    return [(check_id, pillar, msg, imp)
+            for _, _, _, check_id, pillar, msg, imp in rows[:n]]
 
 
 def render(report: Report, use_rich: bool | None = None) -> str:
@@ -82,8 +85,9 @@ def _render_plain(report: Report) -> str:
     friction = _top_friction(report)
     if friction:
         lines.append("Top friction (fix these first):")
-        for i, (check_id, pillar, msg) in enumerate(friction, start=1):
-            lines.append(f"  {i}. {check_id} — {msg}")
+        for i, (check_id, pillar, msg, impact) in enumerate(friction, start=1):
+            suffix = f"  (+{impact:.1f} pts)" if impact > 0 else ""
+            lines.append(f"  {i}. {check_id} — {msg}{suffix}")
     else:
         lines.append("No findings. Looking good.")
     return "\n".join(lines)
@@ -128,8 +132,9 @@ def _render_rich(report: Report) -> str:
     if friction:
         console.print()
         console.print("[bold]Top friction (fix these first):[/bold]")
-        for i, (check_id, _, msg) in enumerate(friction, start=1):
-            console.print(f"  [bold]{i}.[/bold] [cyan]{check_id}[/cyan] — {msg}")
+        for i, (check_id, _, msg, impact) in enumerate(friction, start=1):
+            suffix = f"  [dim](+{impact:.1f} pts)[/dim]" if impact > 0 else ""
+            console.print(f"  [bold]{i}.[/bold] [cyan]{check_id}[/cyan] — {msg}{suffix}")
     else:
         console.print("\n[green]No findings. Looking good.[/green]")
     return buf.getvalue()
