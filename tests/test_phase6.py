@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_readiness.config import extract_weights, load_config
+from agent_readiness.config import extract_weights, load_config, resolve_weights, NAMED_PRESETS
 from agent_readiness.models import Pillar
 
 
@@ -54,6 +54,49 @@ class ExtractWeightsTest(unittest.TestCase):
         # Other pillars keep defaults
         self.assertAlmostEqual(weights[Pillar.COGNITIVE_LOAD],
                                DEFAULT_WEIGHTS[Pillar.COGNITIVE_LOAD])
+
+
+class NamedPresetsTest(unittest.TestCase):
+
+    def test_strict_preset_weights(self):
+        weights = resolve_weights("strict")
+        self.assertIsNotNone(weights)
+        self.assertAlmostEqual(weights[Pillar.FEEDBACK], 0.50)
+        self.assertAlmostEqual(weights[Pillar.COGNITIVE_LOAD], 0.25)
+        self.assertAlmostEqual(weights[Pillar.FLOW], 0.25)
+
+    def test_lax_preset_weights(self):
+        weights = resolve_weights("lax")
+        self.assertIsNotNone(weights)
+        self.assertAlmostEqual(weights[Pillar.COGNITIVE_LOAD], 0.40)
+
+    def test_default_preset_mirrors_defaults(self):
+        from agent_readiness.scorer import DEFAULT_WEIGHTS
+        weights = resolve_weights("default")
+        self.assertIsNotNone(weights)
+        self.assertAlmostEqual(weights[Pillar.FEEDBACK], DEFAULT_WEIGHTS[Pillar.FEEDBACK])
+
+    def test_none_returns_none(self):
+        self.assertIsNone(resolve_weights(None))
+
+    def test_unknown_name_raises_file_not_found(self):
+        with self.assertRaises(FileNotFoundError):
+            resolve_weights("nonexistent-preset-xyz")
+
+    def test_scan_with_strict_preset(self):
+        from click.testing import CliRunner
+        from agent_readiness.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "scan", str(_FIXTURES / "good"),
+            "--json", "--weights", "strict",
+        ])
+        self.assertEqual(result.exit_code, 0, result.output)
+
+    def test_all_presets_are_known(self):
+        for name in ("default", "strict", "lax"):
+            self.assertIn(name, NAMED_PRESETS)
 
 
 class InitCommandTest(unittest.TestCase):

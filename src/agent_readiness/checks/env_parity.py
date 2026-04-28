@@ -27,6 +27,25 @@ _ENV_PATTERNS = [
 
 _SOURCE_EXTENSIONS = frozenset({".py", ".js", ".ts", ".rb", ".go", ".sh"})
 
+# Per-extension patterns to strip single-line comments before pattern matching.
+# This avoids false positives from commented-out code and documentation.
+_COMMENT_LINE_RE: dict[str, re.Pattern[str]] = {
+    ".py": re.compile(r"^\s*#.*$", re.MULTILINE),
+    ".rb": re.compile(r"^\s*#.*$", re.MULTILINE),
+    ".sh": re.compile(r"^\s*#.*$", re.MULTILINE),
+    ".js": re.compile(r"^\s*//.*$", re.MULTILINE),
+    ".ts": re.compile(r"^\s*//.*$", re.MULTILINE),
+    ".go": re.compile(r"^\s*//.*$", re.MULTILINE),
+}
+
+
+def _strip_comments(text: str, suffix: str) -> str:
+    """Remove single-line comment lines for the given file extension."""
+    pat = _COMMENT_LINE_RE.get(suffix)
+    if pat is None:
+        return text
+    return pat.sub("", text)
+
 _ENV_EXAMPLE_NAMES = (".env.example", ".env.sample", ".env.dist")
 
 
@@ -64,10 +83,11 @@ def check_env_example_parity(ctx: RepoContext) -> CheckResult:
             )],
         )
 
-    # Scan for env var usage
+    # Scan for env var usage (strip comment lines first to avoid false positives)
     has_env_refs = False
     for f in source_files:
-        text = ctx.read_text(f) or ""
+        raw = ctx.read_text(f) or ""
+        text = _strip_comments(raw, f.suffix)
         for pat in _ENV_PATTERNS:
             if pat.search(text):
                 has_env_refs = True

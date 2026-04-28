@@ -81,6 +81,17 @@ class TokenBudgetCheck(unittest.TestCase):
         result = check_token_budget(ctx)
         self.assertGreaterEqual(result.score, 80.0)
 
+    def test_custom_warn_threshold_lowers_score(self):
+        """Configuring a very low token_budget_warn triggers WARN on a small fixture."""
+        _ensure_loaded()
+        # Set warn threshold to 1 token so even a tiny repo triggers WARN
+        ctx = RepoContext(root=_FIXTURES / "bare",
+                         context_config={"token_budget_warn": 1, "token_budget_max": 80_000})
+        result = check_token_budget(ctx)
+        self.assertLess(result.score, 100.0)
+        warn_findings = [f for f in result.findings if f.severity.value == "warn"]
+        self.assertGreater(len(warn_findings), 0)
+
 
 class ChecksRegistered(unittest.TestCase):
 

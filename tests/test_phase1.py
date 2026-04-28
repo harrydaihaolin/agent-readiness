@@ -80,6 +80,52 @@ class Phase1Snapshot(unittest.TestCase):
         )
 
 
+class ScoreImpactField(unittest.TestCase):
+    """score_impact is populated by the scorer and surfaced in the report."""
+
+    def test_score_impact_populated_after_scoring(self):
+        from agent_readiness.models import CheckResult, Pillar
+        from agent_readiness.scorer import score
+
+        results = [
+            CheckResult("readme.has_run_instructions", Pillar.COGNITIVE_LOAD, 0.0),
+            CheckResult("test_command.discoverable",   Pillar.FEEDBACK,       100.0),
+            CheckResult("headless.no_setup_prompts",   Pillar.FLOW,           100.0),
+        ]
+        rep = score(Path("/tmp"), results)
+        # The check with score=0 should have a positive impact
+        readme_cr = next(cr for ps in rep.pillar_scores
+                         for cr in ps.check_results
+                         if cr.check_id == "readme.has_run_instructions")
+        self.assertIsNotNone(readme_cr.score_impact)
+        self.assertGreater(readme_cr.score_impact, 0.0)
+
+    def test_score_impact_in_to_dict(self):
+        from agent_readiness.models import CheckResult, Pillar
+        from agent_readiness.scorer import score
+
+        results = [CheckResult("readme.has_run_instructions", Pillar.COGNITIVE_LOAD, 50.0)]
+        rep = score(Path("/tmp"), results)
+        cr = rep.pillar_scores[0].check_results[0]
+        d = cr.to_dict()
+        self.assertIn("score_impact", d)
+
+    def test_bare_fixture_friction_has_impact_suffix(self):
+        report = _scan(_FIXTURES / "bare")
+        from agent_readiness.renderers.terminal import render
+        output = render(report, use_rich=False)
+        self.assertIn("+", output, "bare fixture friction list should show +N pts")
+
+    def test_perfect_check_has_zero_impact(self):
+        from agent_readiness.models import CheckResult, Pillar
+        from agent_readiness.scorer import score
+
+        results = [CheckResult("readme.has_run_instructions", Pillar.COGNITIVE_LOAD, 100.0)]
+        rep = score(Path("/tmp"), results)
+        cr = rep.pillar_scores[0].check_results[0]
+        self.assertEqual(cr.score_impact, 0.0)
+
+
 class SafetyCapBehaviour(unittest.TestCase):
     """Verify the safety cap fires when secrets are present.
 
@@ -108,6 +154,42 @@ class SafetyCapBehaviour(unittest.TestCase):
         self.assertEqual(rep.overall_score, 30.0,
                          "perfect-otherwise repo should be capped exactly at 30")
         self.assertIsNotNone(rep.safety_cap_applied)
+
+    def test_warn_full_weight_caps_at_75(self):
+        """WARN safety finding with weight=1.0 applies SAFETY_CAP_SOFT (75)."""
+        from agent_readiness.models import CheckResult, Finding, Severity
+
+        results = [
+            CheckResult("test_command.discoverable", Pillar.FEEDBACK, 100.0),
+            CheckResult("headless.no_setup_prompts", Pillar.FLOW,     100.0),
+            CheckResult("security.policy_present",   Pillar.SAFETY, 0.0,
+                        weight=1.0,
+                        findings=[Finding(
+                            "security.policy_present", Pillar.SAFETY,
+                            "SECURITY.md missing", severity=Severity.WARN,
+                        )]),
+        ]
+        rep = score(Path("/tmp"), results)
+        self.assertAlmostEqual(rep.overall_score, 75.0)
+
+    def test_warn_lower_weight_cap_is_more_lenient(self):
+        """WARN finding with weight=0.6 produces a more lenient cap than 75."""
+        from agent_readiness.models import CheckResult, Finding, Severity
+
+        results = [
+            CheckResult("test_command.discoverable", Pillar.FEEDBACK, 100.0),
+            CheckResult("headless.no_setup_prompts", Pillar.FLOW,     100.0),
+            CheckResult("security.policy_present",   Pillar.SAFETY, 0.0,
+                        weight=0.6,
+                        findings=[Finding(
+                            "security.policy_present", Pillar.SAFETY,
+                            "SECURITY.md missing", severity=Severity.WARN,
+                        )]),
+        ]
+        rep = score(Path("/tmp"), results)
+        # effective cap = 75 + (1 - 0.6) * 25 = 75 + 10 = 85
+        self.assertAlmostEqual(rep.overall_score, 85.0)
+        self.assertGreater(rep.overall_score, 75.0)
 
 
 if __name__ == "__main__":

@@ -73,6 +73,9 @@ def score(repo_path: Path, results: list[CheckResult],
     raw_overall = sum(ps.score * weights[ps.pillar] for ps in weighted_pillars) / total_w
 
     # Safety cap: walk all safety findings across all results.
+    # ERROR findings apply the hard cap (30); WARN findings apply a
+    # weight-modulated soft cap — higher-weight checks (more severe signals)
+    # produce a stricter cap, while lower-weight checks are more lenient.
     cap = 100.0
     for ps in pillar_scores:
         if ps.pillar is not Pillar.SAFETY:
@@ -82,10 +85,23 @@ def score(repo_path: Path, results: list[CheckResult],
                 if f.severity is Severity.ERROR:
                     cap = min(cap, SAFETY_CAP_HARD)
                 elif f.severity is Severity.WARN:
-                    cap = min(cap, SAFETY_CAP_SOFT)
+                    soft_range = 100.0 - SAFETY_CAP_SOFT  # = 25
+                    effective_soft = SAFETY_CAP_SOFT + (1.0 - cr.weight) * soft_range
+                    cap = min(cap, effective_soft)
 
     overall = min(raw_overall, cap)
     safety_cap_applied = (raw_overall - overall) if overall < raw_overall else None
+
+    # Populate score_impact on each check: estimated overall-score gain from fixing.
+    # Safety checks influence via cap, not the weighted sum, so their impact is 0.
+    for ps in pillar_scores:
+        pillar_w = weights.get(ps.pillar, 0.0)
+        w_fraction = pillar_w / total_w if total_w > 0 else 0.0
+        for cr in ps.check_results:
+            if cr.not_measured or ps.pillar is Pillar.SAFETY:
+                cr.score_impact = 0.0
+            else:
+                cr.score_impact = round((100.0 - cr.score) * cr.weight * w_fraction, 1)
 
     return Report(
         repo_path=repo_path,

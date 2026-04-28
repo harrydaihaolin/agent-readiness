@@ -27,6 +27,7 @@ _EXCLUDED_DIRS = frozenset({
 class RepoContext:
     """A cached snapshot of a repository on disk."""
     root: Path
+    context_config: dict = field(default_factory=dict)  # from [context] in .agent-readiness.toml
     _files: list[Path] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:

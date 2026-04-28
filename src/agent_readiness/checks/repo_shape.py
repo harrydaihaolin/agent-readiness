@@ -139,19 +139,26 @@ def check_large_files(ctx: RepoContext) -> CheckResult:
 def check_token_budget(ctx: RepoContext) -> CheckResult:
     tokens = ctx.orientation_tokens
 
-    if tokens < 8_000:
+    warn_threshold = int(ctx.context_config.get("token_budget_warn", 16_000))
+    max_threshold = int(ctx.context_config.get("token_budget_max", 80_000))
+
+    half_warn = warn_threshold // 2
+    double_warn = warn_threshold * 2
+    half_max = max_threshold // 2
+
+    if tokens < half_warn:
         score = 100.0
-    elif tokens < 16_000:
+    elif tokens < warn_threshold:
         score = 80.0
-    elif tokens < 32_000:
+    elif tokens < double_warn:
         score = 60.0
-    elif tokens < 64_000:
+    elif tokens < half_max:
         score = 40.0
     else:
         score = 0.0
 
     findings: list[Finding] = []
-    if tokens > 16_000:
+    if tokens > warn_threshold:
         findings.append(Finding(
             check_id="repo_shape.token_budget",
             pillar=Pillar.COGNITIVE_LOAD,

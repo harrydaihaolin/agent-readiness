@@ -66,9 +66,11 @@ class CheckResult:
     weight: float = 1.0         # weight of this check within its pillar
     not_measured: bool = False  # True when this check was skipped (e.g. needs --run)
     findings: list[Finding] = field(default_factory=list)
+    score_impact: float | None = None   # estimated overall-score gain from fixing (set by scorer)
+    explanation: str | None = None      # check rationale text (set by CLI from CheckSpec)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "check_id": self.check_id,
             "pillar": self.pillar.value,
             "score": self.score,
@@ -76,6 +78,11 @@ class CheckResult:
             "not_measured": self.not_measured,
             "findings": [f.to_dict() for f in self.findings],
         }
+        if self.score_impact is not None:
+            d["score_impact"] = self.score_impact
+        if self.explanation is not None:
+            d["explanation"] = self.explanation
+        return d
 
 
 @dataclass
