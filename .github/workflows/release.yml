@@ -93,7 +93,7 @@ jobs:
       - name: Publish to GitHub Packages
         run: |
           twine upload \
-            --repository-url https://upload.pkg.github.com/ \
+            --repository-url https://upload.pkg.github.com/${{ github.repository_owner }}/ \
             --username ${{ github.actor }} \
             --password ${{ secrets.GITHUB_TOKEN }} \
             dist/*
