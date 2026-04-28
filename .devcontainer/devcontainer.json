@@ -1,0 +1,5 @@
+{
+  "name": "agent-readiness",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -e '.[dev]'"
+}

@@ -4,20 +4,21 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-readiness"
-version = "0.1.0.dev0"
+version = "1.0.0"
 description = "Benchmark how agent-ready a code repository is for LLM coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "agent-readiness contributors" }]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Quality Assurance",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 keywords = ["ai", "agents", "code-quality", "developer-experience", "benchmark"]
 dependencies = [
@@ -25,17 +26,27 @@ dependencies = [
     "rich>=13.7",
 ]
 
+[project.urls]
+Homepage = "https://github.com/harrydaihaolin/agent-readiness"
+Repository = "https://github.com/harrydaihaolin/agent-readiness"
+Changelog = "https://github.com/harrydaihaolin/agent-readiness/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/harrydaihaolin/agent-readiness/issues"
+Documentation = "https://github.com/harrydaihaolin/agent-readiness#readme"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "ruff>=0.4",
+    "build",
 ]
 report = ["jinja2>=3.1"]
 complexity = ["lizard>=1.17"]
-full = ["jinja2>=3.1", "lizard>=1.17"]
+mcp = ["mcp>=1.0"]
+full = ["jinja2>=3.1", "lizard>=1.17", "mcp>=1.0"]
 
 [project.scripts]
 agent-readiness = "agent_readiness.cli:cli"
+agent-readiness-mcp = "agent_readiness.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_readiness"]

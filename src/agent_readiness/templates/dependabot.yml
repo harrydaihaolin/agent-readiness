@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Uncomment and adapt the ecosystem(s) relevant to this repo:
+
+  # Python (pip / poetry / uv)
+  # - package-ecosystem: "pip"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+
+  # JavaScript / TypeScript
+  # - package-ecosystem: "npm"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

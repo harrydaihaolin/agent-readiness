@@ -48,6 +48,9 @@ def cli() -> None:
               default=None, help="Write an SVG badge to FILE.")
 @click.option("--sarif", "sarif_file", type=click.Path(path_type=Path),
               default=None, help="Write SARIF 2.1.0 output to FILE.")
+@click.option("--no-progress", is_flag=True,
+              help="Disable the per-check progress indicator on stderr "
+                   "(auto-disabled for --json and non-TTY stderr).")
 def scan(
     path: Path,
     json_output: bool,
@@ -60,6 +63,7 @@ def scan(
     report_file: Path | None,
     badge_file: Path | None,
     sarif_file: Path | None,
+    no_progress: bool,
 ) -> None:
     """Scan a repository and print an AI-readiness report."""
     from agent_readiness.sandbox import (
@@ -137,13 +141,24 @@ def scan(
                 filtered.append(spec)
         specs = filtered
 
-    results = [spec.fn(ctx) for spec in specs]
-    # Apply registry weights to results that didn't override.
+    from agent_readiness.renderers.progress import ScanProgress
+    progress_enabled: bool | None = None
+    if no_progress or json_output:
+        progress_enabled = False
+
+    results = []
+    with ScanProgress(total=len(specs), enabled=progress_enabled) as progress:
+        for spec in specs:
+            progress.advance(spec.check_id)
+            results.append(spec.fn(ctx))
+
     for cr, spec in zip(results, specs, strict=True):
         if cr.weight == 1.0 and spec.weight != 1.0:
             cr.weight = spec.weight
 
     report = score_results(ctx.root, results, weights=weights)
+    report.languages = ctx.detected_languages
+    report.monorepo_tools = ctx.monorepo_tools
 
     # Compute delta if baseline provided
     delta_overall: float | None = None
@@ -270,6 +285,47 @@ def init(path: Path) -> None:
         encoding="utf-8",
     )
     click.echo(f"Wrote {config_path}")
+
+
+@cli.command("scaffold")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        path_type=Path),
+                default=Path("."))
+@click.option("--dry-run", is_flag=True,
+              help="Print what would be created without writing any files.")
+@click.option("--force", is_flag=True,
+              help="Overwrite files that already exist.")
+@click.option("--only", "only_checks", default=None,
+              help="Comma-separated check IDs to scaffold for.")
+def scaffold(path: Path, dry_run: bool, force: bool, only_checks: str | None) -> None:
+    """Generate missing agent-readiness files from templates.
+
+    Scans the repo, identifies checks that are failing due to missing files,
+    and writes minimal template files to fix them. Use --dry-run to preview.
+    """
+    from agent_readiness.scaffold import run_scaffold
+    run_scaffold(path, dry_run=dry_run, force=force, only_checks=only_checks)
+
+
+@cli.command("mcp")
+@click.option("--transport", default="stdio",
+              type=click.Choice(["stdio"]),
+              help="MCP transport (currently only stdio is supported).")
+def mcp_serve(transport: str) -> None:
+    """Start an MCP server exposing agent-readiness tools to AI agents.
+
+    Requires: pip install agent-readiness[mcp]
+    """
+    try:
+        from agent_readiness.mcp_server import main as mcp_main
+    except ImportError:
+        click.echo(
+            "error: MCP server requires the mcp package. "
+            "Install with: pip install agent-readiness[mcp]",
+            err=True,
+        )
+        sys.exit(1)
+    mcp_main()
 
 
 @cli.command("list-checks")

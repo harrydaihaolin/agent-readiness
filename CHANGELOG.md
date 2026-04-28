@@ -5,6 +5,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-04-28
+
+### Added
+- `scan` shows a per-check progress visualizer on stderr (rich when
+  available, plain `\r` fallback otherwise). Auto-disabled for `--json`
+  and non-TTY stderr; opt-out with `--no-progress`. Stdout contract
+  (report / JSON) is unchanged.
+- `ci.configured`: detect Earthly (`Earthfile`), Drone CI
+  (`.drone.yml` / `.drone.yaml`), and Woodpecker CI
+  (`.woodpecker.yml` / `.woodpecker.yaml` / `.woodpecker/`). Reported
+  by users running monorepos where the in-repo build recipe is Earthly
+  but the trigger lives in an external orchestrator.
+
+### Changed
+- `ci.configured`: refactored to a data-driven detector list and a
+  unified message format: `"CI configuration detected: <label>."`
+  Previous per-detector ad-hoc messages are gone. Score behaviour is
+  unchanged for all previously-detected configs.
+- First stable PyPI release. Version bumped to 1.0.0 to reflect
+  complete implementation of all nine phases (Plugin API, SARIF,
+  stable JSON schema v1).
+
 ## [0.9.0] - Phase 9: Plugin API, SARIF, stable contract
 
 ### Added
@@ -113,14 +135,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Good and bare test fixtures
 - Safety cap behaviour tests
 
-[Unreleased]: https://github.com/your-org/agent-readiness/compare/v0.9.0...HEAD
-[0.9.0]: https://github.com/your-org/agent-readiness/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/your-org/agent-readiness/compare/v0.7.0...v0.8.0
-[0.7.0]: https://github.com/your-org/agent-readiness/compare/v0.65.0...v0.7.0
-[0.65.0]: https://github.com/your-org/agent-readiness/compare/v0.5.0...v0.65.0
-[0.5.0]: https://github.com/your-org/agent-readiness/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/your-org/agent-readiness/compare/v0.35.0...v0.4.0
-[0.35.0]: https://github.com/your-org/agent-readiness/compare/v0.3.0...v0.35.0
-[0.3.0]: https://github.com/your-org/agent-readiness/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/your-org/agent-readiness/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/your-org/agent-readiness/releases/tag/v0.1.0
+[Unreleased]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.9.0...v1.0.0
+[0.9.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.8.0...v0.9.0
+[0.8.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.65.0...v0.7.0
+[0.65.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.5.0...v0.65.0
+[0.5.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.35.0...v0.4.0
+[0.35.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.3.0...v0.35.0
+[0.3.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/harrydaihaolin/agent-readiness/releases/tag/v0.1.0

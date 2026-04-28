@@ -66,12 +66,64 @@ class CiConfiguredCheck(unittest.TestCase):
         ctx = RepoContext(root=_FIXTURES / "good")
         result = check_ci_configured(ctx)
         self.assertEqual(result.score, 100.0)
+        # Most-specific detector wins: GHA workflow → message names it.
+        self.assertIn("GitHub Actions", result.findings[0].message)
 
     def test_bare_fixture_no_ci(self):
         _ensure_loaded()
         ctx = RepoContext(root=_FIXTURES / "bare")
         result = check_ci_configured(ctx)
         self.assertEqual(result.score, 0.0)
+
+    def _scan_tmp(self, files: dict[str, str]):
+        """Spin up a tmp dir with the given files and run the check.
+
+        ``files`` maps relative path → contents. Returns the CheckResult.
+        """
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for rel, contents in files.items():
+                path = root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(contents)
+            ctx = RepoContext(root=root)
+            return check_ci_configured(ctx)
+
+    def test_earthfile_detected(self):
+        """Regression: Earthly Earthfile must register as CI.
+
+        Reported by users running large monorepos where the Earthfile is
+        the in-repo build/test recipe and the trigger lives outside the
+        tracked repo. Pre-fix this returned score=0 with "No CI found".
+        """
+        result = self._scan_tmp({"Earthfile": "VERSION 0.7\nFROM alpine\n"})
+        self.assertEqual(result.score, 100.0)
+        self.assertIn("Earthly", result.findings[0].message)
+
+    def test_drone_yaml_detected(self):
+        result = self._scan_tmp({".drone.yaml": "kind: pipeline\n"})
+        self.assertEqual(result.score, 100.0)
+        self.assertIn("Drone", result.findings[0].message)
+
+    def test_woodpecker_dir_detected(self):
+        result = self._scan_tmp(
+            {".woodpecker/test.yml": "steps:\n  - name: test\n"}
+        )
+        self.assertEqual(result.score, 100.0)
+        self.assertIn("Woodpecker", result.findings[0].message)
+
+    def test_gha_takes_precedence_over_earthfile(self):
+        """When both exist, the most specific (trigger) detector wins.
+
+        Order matters only for the message; both score 100.
+        """
+        result = self._scan_tmp({
+            "Earthfile": "VERSION 0.7\n",
+            ".github/workflows/ci.yml": "name: ci\non: [push]\n",
+        })
+        self.assertEqual(result.score, 100.0)
+        self.assertIn("GitHub Actions", result.findings[0].message)
 
 
 class SetupCommandCountCheck(unittest.TestCase):

@@ -22,19 +22,36 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
 
 # Files we recognise. Some live at root, some in .github/.
-_AGENT_DOC_PATHS: tuple[tuple[str, ...], ...] = (
+# Entries are (parts, is_dir_glob) where is_dir_glob=True means we check
+# for any file matching a glob inside a directory.
+_AGENT_DOC_FILES: tuple[tuple[str, ...], ...] = (
     ("AGENTS.md",),
     ("CLAUDE.md",),
     (".cursorrules",),
-    (".cursor", "rules"),
     (".github", "copilot-instructions.md"),
+    ("copilot-setup-steps.yml",),
+    (".github", "copilot-setup-steps.yml"),
+)
+
+# Directories where any matching file counts as a hit
+_AGENT_DOC_DIRS: tuple[tuple[tuple[str, ...], str], ...] = (
+    ((".cursor", "rules"), "*.mdc"),
 )
 
 
 def _resolve(ctx: RepoContext, parts: tuple[str, ...]) -> Path | None:
-    """Return the relative path if it exists in the repo, else None."""
+    """Return the relative path if it exists as a file, else None."""
     candidate = Path(*parts)
     if (ctx.root / candidate).is_file():
+        return candidate
+    return None
+
+
+def _resolve_dir_glob(ctx: RepoContext, parts: tuple[str, ...], pattern: str) -> Path | None:
+    """Return the relative dir path if it exists and contains files matching pattern."""
+    candidate = Path(*parts)
+    dir_path = ctx.root / candidate
+    if dir_path.is_dir() and any(dir_path.glob(pattern)):
         return candidate
     return None
 
@@ -45,16 +62,21 @@ def _resolve(ctx: RepoContext, parts: tuple[str, ...]) -> Path | None:
     title="Repo includes agent-targeted documentation",
     explanation="""
     Agent-targeted docs (AGENTS.md, CLAUDE.md, .cursorrules,
-    .github/copilot-instructions.md) are the place to encode conventions
-    an agent would otherwise have to infer: branch naming, do-not-touch
-    directories, commit message style, preferred libraries. A short doc
-    here is one of the highest-leverage edits a maintainer can make.
+    .cursor/rules/*.mdc, .github/copilot-instructions.md,
+    copilot-setup-steps.yml) encode conventions an agent would otherwise
+    have to infer: branch naming, do-not-touch directories, commit message
+    style, preferred libraries, and tool-specific configuration. A short
+    doc here is one of the highest-leverage edits a maintainer can make.
     """,
 )
 def check(ctx: RepoContext) -> CheckResult:
     found: list[Path] = []
-    for parts in _AGENT_DOC_PATHS:
+    for parts in _AGENT_DOC_FILES:
         rel = _resolve(ctx, parts)
+        if rel is not None:
+            found.append(rel)
+    for parts, pattern in _AGENT_DOC_DIRS:
+        rel = _resolve_dir_glob(ctx, parts, pattern)
         if rel is not None:
             found.append(rel)
 
@@ -67,10 +89,15 @@ def check(ctx: RepoContext) -> CheckResult:
                 check_id="agent_docs.present",
                 pillar=Pillar.COGNITIVE_LOAD,
                 severity=Severity.WARN,
-                message="No agent-targeted docs found "
-                        "(AGENTS.md / CLAUDE.md / .cursorrules / .github/copilot-instructions.md).",
-                fix_hint=("Add an AGENTS.md at the repo root with conventions, "
-                          "do-not-touch paths, and the canonical test command."),
+                message=(
+                    "No agent-targeted docs found "
+                    "(AGENTS.md / CLAUDE.md / .cursorrules / "
+                    ".github/copilot-instructions.md / .cursor/rules/*.mdc)."
+                ),
+                fix_hint=(
+                    "Add an AGENTS.md at the repo root with conventions, "
+                    "do-not-touch paths, and the canonical test command."
+                ),
             )],
         )
 
