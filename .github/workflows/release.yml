@@ -102,7 +102,7 @@ jobs:
         run: |
           TAG=ghcr.io/${{ github.repository }}:${{ github.ref_name }}
           LATEST=ghcr.io/${{ github.repository }}:latest
-          docker build --build-arg WHEEL="$(ls dist/*.whl)" -t "$TAG" -t "$LATEST" -f - . <<'DOCKERFILE'
+          docker build --build-arg WHEEL="$(basename dist/*.whl)" -t "$TAG" -t "$LATEST" -f - . <<'DOCKERFILE'
           FROM python:3.12-slim
           ARG WHEEL
           COPY dist/ /dist/
