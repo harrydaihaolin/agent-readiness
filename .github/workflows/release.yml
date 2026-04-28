@@ -52,6 +52,8 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true   # idempotent: safe to re-run if tag is re-pushed
 
   github-release:
     name: Create GitHub Release
@@ -75,25 +77,37 @@ jobs:
           files: dist/*
 
   publish-github-packages:
-    name: Publish to GitHub Packages
+    name: Publish to GitHub Packages (Container Registry)
     needs: build
     runs-on: ubuntu-latest
     permissions:
       packages: write
 
     steps:
+      - uses: actions/checkout@v6
+
       - uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
 
-      - name: Install twine
-        run: pip install twine
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish to GitHub Packages
+      - name: Build and push installable image to GHCR
         run: |
-          twine upload \
-            --repository-url https://upload.pkg.github.com/${{ github.repository_owner }}/ \
-            --username ${{ github.actor }} \
-            --password ${{ secrets.GITHUB_TOKEN }} \
-            dist/*
+          TAG=ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          LATEST=ghcr.io/${{ github.repository }}:latest
+          docker build --build-arg WHEEL="$(basename dist/*.whl)" -t "$TAG" -t "$LATEST" -f - . <<'DOCKERFILE'
+          FROM python:3.12-slim
+          ARG WHEEL
+          COPY dist/ /dist/
+          RUN pip install --no-cache-dir /dist/${WHEEL} && rm -rf /dist
+          ENTRYPOINT ["agent-readiness"]
+          DOCKERFILE
+          docker push "$TAG"
+          docker push "$LATEST"
