@@ -95,6 +95,60 @@ def check_dependabot(ctx: RepoContext) -> CheckResult:
             )],
         )
 
+    # FOSSA — open-source licence and vulnerability scanning
+    if (ctx.root / ".fossa.yml").is_file():
+        return CheckResult(
+            check_id="security.dependabot_configured",
+            pillar=Pillar.SAFETY,
+            score=100.0,
+            weight=0.8,
+            findings=[Finding(
+                check_id="security.dependabot_configured",
+                pillar=Pillar.SAFETY,
+                severity=Severity.INFO,
+                message="FOSSA config found: .fossa.yml",
+            )],
+        )
+
+    # Mend / WhiteSource — enterprise vulnerability scanning
+    for mend_path in (".whitesource", "whitesource-config.json"):
+        if (ctx.root / mend_path).is_file():
+            return CheckResult(
+                check_id="security.dependabot_configured",
+                pillar=Pillar.SAFETY,
+                score=100.0,
+                weight=0.8,
+                findings=[Finding(
+                    check_id="security.dependabot_configured",
+                    pillar=Pillar.SAFETY,
+                    severity=Severity.INFO,
+                    message=f"Mend/WhiteSource config found: {mend_path}",
+                )],
+            )
+
+    # GitHub Code Scanning / CodeQL — in-tree analysis workflow
+    codeql_dir = ctx.root / ".github" / "workflows"
+    if codeql_dir.is_dir():
+        for f in codeql_dir.iterdir():
+            if f.is_file() and f.suffix in (".yml", ".yaml"):
+                try:
+                    content = f.read_text(encoding="utf-8", errors="replace")
+                    if "codeql" in content.lower() or "code-scanning" in content.lower():
+                        return CheckResult(
+                            check_id="security.dependabot_configured",
+                            pillar=Pillar.SAFETY,
+                            score=100.0,
+                            weight=0.8,
+                            findings=[Finding(
+                                check_id="security.dependabot_configured",
+                                pillar=Pillar.SAFETY,
+                                severity=Severity.INFO,
+                                message=f"GitHub Code Scanning workflow found: .github/workflows/{f.name}",
+                            )],
+                        )
+                except OSError:
+                    pass
+
     return CheckResult(
         check_id="security.dependabot_configured",
         pillar=Pillar.SAFETY,
