@@ -43,10 +43,13 @@ _LOCKFILES = (
     "go.sum",
     "Gemfile.lock",
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+    "npm-shrinkwrap.json",   # npm shrinkwrap (older Node.js projects)
     "composer.lock",
     "pubspec.lock",
     "flake.lock",
     "mix.lock",
+    "Pipfile.lock",          # pipenv lockfile
+    "pdm.lock",              # PDM package manager lockfile
     # Conda / pixi ecosystem
     "conda-lock.yml", "conda-lock.yaml",
     "pixi.lock",
@@ -184,20 +187,36 @@ def check_lockfile_present(ctx: RepoContext) -> CheckResult:
                 )],
             )
 
-    # requirements.txt is a semi-lockfile — better than nothing
-    if ctx.has_file("requirements.txt", case_insensitive=False) is not None:
-        return CheckResult(
-            check_id="manifest.lockfile_present",
-            pillar=Pillar.FEEDBACK,
-            score=70.0,
-            findings=[Finding(
+    # Gradle dependency locking artifacts
+    for name in ("gradle.lockfile", "buildscript-gradle.lockfile"):
+        if ctx.has_file(name, case_insensitive=False) is not None:
+            return CheckResult(
                 check_id="manifest.lockfile_present",
                 pillar=Pillar.FEEDBACK,
-                severity=Severity.INFO,
-                message="Only requirements.txt found — not a true lockfile (no pinned hashes).",
-                fix_hint="Consider switching to uv.lock or poetry.lock for fully reproducible installs.",
-            )],
-        )
+                score=100.0,
+                findings=[Finding(
+                    check_id="manifest.lockfile_present",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Gradle lockfile found: {name}",
+                )],
+            )
+
+    # requirements.txt is a semi-lockfile — better than nothing
+    for req_name in ("requirements.txt", "requirements-dev.txt", "requirements-test.txt"):
+        if ctx.has_file(req_name, case_insensitive=False) is not None:
+            return CheckResult(
+                check_id="manifest.lockfile_present",
+                pillar=Pillar.FEEDBACK,
+                score=70.0,
+                findings=[Finding(
+                    check_id="manifest.lockfile_present",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Only {req_name} found — not a true lockfile (no pinned hashes).",
+                    fix_hint="Consider switching to uv.lock or poetry.lock for fully reproducible installs.",
+                )],
+            )
 
     return CheckResult(
         check_id="manifest.lockfile_present",
