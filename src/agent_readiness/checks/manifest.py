@@ -23,6 +23,18 @@ _MANIFESTS = (
     "composer.json",
     "pubspec.yaml",
     "Package.swift",
+    # .NET / C#
+    "global.json",
+    # Deno
+    "deno.json", "deno.jsonc",
+    # Haskell
+    "stack.yaml", "cabal.project",
+    # Nix
+    "flake.nix", "default.nix",
+    # CMake — signals a C/C++/CUDA project with its own build manifest
+    "CMakeLists.txt",
+    # Bazel — WORKSPACE signals a multi-language monorepo with explicit deps
+    "WORKSPACE", "WORKSPACE.bazel",
 )
 
 _LOCKFILES = (
@@ -67,6 +79,52 @@ def check_manifest_detected(ctx: RepoContext) -> CheckResult:
                     message=f"Project manifest found: {name}",
                 )],
             )
+
+    # .NET projects have per-project .csproj/.fsproj and solution .sln files.
+    # These don't have a fixed name so we search by extension.
+    for f in ctx._files:
+        if f.suffix in (".csproj", ".fsproj", ".vbproj", ".sln"):
+            return CheckResult(
+                check_id="manifest.detected",
+                pillar=Pillar.FEEDBACK,
+                score=100.0,
+                findings=[Finding(
+                    check_id="manifest.detected",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f".NET project manifest found: {f}",
+                )],
+            )
+
+    # Haskell .cabal files have arbitrary names (e.g. myproject.cabal)
+    for f in ctx._files:
+        if f.suffix == ".cabal" and len(f.parts) <= 2:
+            return CheckResult(
+                check_id="manifest.detected",
+                pillar=Pillar.FEEDBACK,
+                score=100.0,
+                findings=[Finding(
+                    check_id="manifest.detected",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Haskell cabal manifest found: {f}",
+                )],
+            )
+
+    # requirements.txt is a loose manifest — gives agents install instructions
+    # even without full version pinning.
+    if ctx.has_file("requirements.txt", case_insensitive=False) is not None:
+        return CheckResult(
+            check_id="manifest.detected",
+            pillar=Pillar.FEEDBACK,
+            score=80.0,
+            findings=[Finding(
+                check_id="manifest.detected",
+                pillar=Pillar.FEEDBACK,
+                severity=Severity.INFO,
+                message="requirements.txt found (consider migrating to pyproject.toml for richer metadata).",
+            )],
+        )
 
     return CheckResult(
         check_id="manifest.detected",
