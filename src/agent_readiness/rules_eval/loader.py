@@ -86,7 +86,12 @@ def _try_validate_with_protocol(data: dict[str, Any]) -> None:
     try:
         Rule.model_validate(data)
     except Exception as exc:  # noqa: BLE001 -- pydantic raises a family
-        logger.warning(
+        # Use debug, not warning: ``CliRunner`` mixes stderr into stdout
+        # by default, and a noisy warning here would contaminate
+        # ``--json`` output with log lines and break downstream parsers.
+        # The evaluator already graceful-degrades unknown match types to
+        # ``not_measured``, so this is purely diagnostic.
+        logger.debug(
             "protocol validation rejected rule (continuing with looser "
             "load); upgrade agent-readiness-insights-protocol to silence: %s",
             exc,
