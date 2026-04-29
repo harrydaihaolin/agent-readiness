@@ -412,25 +412,35 @@ class TestPrivateMatcherRegistration(unittest.TestCase):
         self.assertTrue(cr.not_measured)
 
 
-class TestVendoredPackSmoke(unittest.TestCase):
+class TestInstalledRulesPackSmoke(unittest.TestCase):
+    """Smoke tests against the installed ``agent_readiness_rules`` pkg.
+
+    Q1 phase 4 dropped vendoring; the rules pack is now resolved
+    through ``importlib.resources``. These tests assert that the
+    install is wired correctly and that the Q1 generation of the pack
+    (32 rules) is what we ship.
+    """
+
     def test_default_rules_dir_resolves(self):
         rd = default_rules_dir()
-        self.assertIsNotNone(rd, "vendored rules_pack/ not found; run scripts/vendor_rules.sh v1.0.0")
+        self.assertIsNotNone(
+            rd,
+            "agent-readiness-rules not installed; "
+            "pip install agent-readiness-rules.",
+        )
         self.assertTrue(rd.is_dir())
 
-    def test_vendored_pack_loads_q1_snapshot(self):
+    def test_installed_pack_loads_q1_generation(self):
         rd = default_rules_dir()
         loaded = load_rules_from_dir(rd)
-        # The Q1 snapshot ships 32 rules. The exact number is part of the
-        # vendoring contract — bumping it is a deliberate change to the
-        # snapshot in src/agent_readiness/rules_pack/.
+        # The Q1 generation ships 32 rules. Bumping this number is a
+        # deliberate change in agent-readiness-rules and requires a
+        # coordinated bump on this side.
         self.assertEqual(len(loaded), 32)
 
-    def test_vendored_pack_evaluates_on_self(self):
+    def test_installed_pack_evaluates_on_self(self):
         rd = default_rules_dir()
         loaded = load_rules_from_dir(rd)
-        # Evaluate against the rules_pack directory itself; we don't assert
-        # specific findings, just that it runs end-to-end without raising.
         ctx = RepoContext(root=Path(rd))
         results = evaluate_rules(loaded, ctx)
         self.assertEqual(len(results), len(loaded))
