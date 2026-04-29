@@ -23,10 +23,23 @@ _DEVCONTAINER_PATHS = (
     # Gitpod
     ".gitpod.yml",
     ".gitpod.yaml",
-    # Nix shell — reproducible environment even without Docker
+    # Nix shell / flake — reproducible environment even without Docker
     "shell.nix",
+    "flake.nix",          # Nix flake — modern Nix dev environment
     # CodeSandbox
     "sandbox.config.json",
+    # Devbox (Jetpack.io) — Nix-based isolated dev environments
+    "devbox.json",
+    # Vagrant — VM-based reproducible dev environment
+    "Vagrantfile",
+    # mise-en-place (formerly rtx) — polyglot tool version manager
+    ".mise.toml", "mise.toml",
+    ".mise/config.toml",
+    # asdf — multi-language runtime version manager
+    ".tool-versions",
+    # Docker Compose for development — signals a containerised dev workflow
+    "docker-compose.dev.yml", "docker-compose.dev.yaml",
+    "compose.dev.yml", "compose.dev.yaml",
 )
 
 
