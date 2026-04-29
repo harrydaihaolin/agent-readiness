@@ -9,9 +9,67 @@ perspective:
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from agent_readiness.checks import register
 from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
+
+
+# ---------------------------------------------------------------------------
+# Exclusions for repo_shape.large_files
+# ---------------------------------------------------------------------------
+
+# File suffixes that are never "source code" regardless of size.
+# Flagging a 500-line lock file or a 2 MB PNG as "too large" is a false
+# positive — these files can't be "split into smaller modules".
+_LARGE_FILE_EXCLUDED_SUFFIXES: frozenset[str] = frozenset({
+    # Images and media
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
+    ".bmp", ".tiff", ".tif", ".raw",
+    ".mp4", ".mov", ".avi", ".mkv", ".webm",
+    ".mp3", ".wav", ".ogg", ".flac",
+    # Binary / compiled / archive
+    ".pdf", ".zip", ".tar", ".gz", ".bz2", ".xz", ".7z",
+    ".whl", ".egg", ".jar", ".war",
+    ".so", ".dylib", ".dll", ".exe", ".bin",
+    ".db", ".sqlite", ".sqlite3",
+    # Fonts
+    ".ttf", ".otf", ".woff", ".woff2", ".eot",
+    # Notebooks — large but intentional; a separate check can flag them
+    ".ipynb",
+})
+
+# Exact filenames (case-sensitive) that are expected to be large.
+_LARGE_FILE_EXCLUDED_NAMES: frozenset[str] = frozenset({
+    # Dependency lock files — always generated, never manually split
+    "poetry.lock", "uv.lock", "Cargo.lock", "go.sum",
+    "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb",
+    "composer.lock", "Gemfile.lock", "pubspec.lock",
+    "mix.lock", "flake.lock", "conda-lock.yml",
+    # Generated XML / JSON (docs, sitemaps, OpenAPI specs in large repos)
+    "sitemap.xml",
+    # Dot-ignore templates — can be extremely long in template repositories
+    ".gitignore",
+    # pip freeze — not a true lockfile but valid to be large
+    "requirements-freeze.txt",
+})
+
+# Filename glob patterns (matched against the basename only).
+_LARGE_FILE_EXCLUDED_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # Changelogs and release notes of any form
+    re.compile(r"^CHANGE[S]?(LOG)?\.(md|rst|txt)$", re.IGNORECASE),
+    re.compile(r"^HISTORY\.(md|rst|txt)$", re.IGNORECASE),
+    re.compile(r"^RELEASES?\.(md|rst|txt)$", re.IGNORECASE),
+    re.compile(r"^NEWS\.(md|rst|txt)$", re.IGNORECASE),
+    # Migration / upgrade guides — expected to accumulate over time
+    re.compile(r".*MIGRAT.*\.(md|rst|txt)$", re.IGNORECASE),
+    re.compile(r".*UPGRADE.*\.(md|rst|txt)$", re.IGNORECASE),
+    # Generated lock/hash files not covered by exact names above
+    re.compile(r".*\.lock$", re.IGNORECASE),
+    re.compile(r".*\.sum$", re.IGNORECASE),
+)
 
 
 @register(
@@ -64,6 +122,23 @@ def check_top_level_count(ctx: RepoContext) -> CheckResult:
     )
 
 
+def _is_excluded_from_large_check(f: Path) -> bool:
+    """Return True if this file should not be flagged as 'large'."""
+    name = f.name
+    suffix = f.suffix.lower()
+    # Exclude by file extension (images, binaries, lock file suffixes, etc.)
+    if suffix in _LARGE_FILE_EXCLUDED_SUFFIXES:
+        return True
+    # Exclude by exact filename
+    if name in _LARGE_FILE_EXCLUDED_NAMES:
+        return True
+    # Exclude by filename pattern (changelogs, migrations, etc.)
+    for pattern in _LARGE_FILE_EXCLUDED_PATTERNS:
+        if pattern.match(name):
+            return True
+    return False
+
+
 @register(
     check_id="repo_shape.large_files",
     pillar=Pillar.COGNITIVE_LOAD,
@@ -79,6 +154,9 @@ def check_top_level_count(ctx: RepoContext) -> CheckResult:
 def check_large_files(ctx: RepoContext) -> CheckResult:
     large: list[str] = []
     for f in ctx._files:
+        # Skip files that are expected to be large (not source code)
+        if _is_excluded_from_large_check(f):
+            continue
         full_path = ctx.root / f
         try:
             size = full_path.stat().st_size
@@ -139,8 +217,11 @@ def check_large_files(ctx: RepoContext) -> CheckResult:
 def check_token_budget(ctx: RepoContext) -> CheckResult:
     tokens = ctx.orientation_tokens
 
-    warn_threshold = int(ctx.context_config.get("token_budget_warn", 16_000))
-    max_threshold = int(ctx.context_config.get("token_budget_max", 80_000))
+    # Default warn threshold raised to 24K (from 16K) to reflect modern agent
+    # context windows (128K+). 16K fired too aggressively on well-documented
+    # frameworks. Max raised to 120K to keep scoring proportional.
+    warn_threshold = int(ctx.context_config.get("token_budget_warn", 24_000))
+    max_threshold = int(ctx.context_config.get("token_budget_max", 120_000))
 
     half_warn = warn_threshold // 2
     double_warn = warn_threshold * 2
