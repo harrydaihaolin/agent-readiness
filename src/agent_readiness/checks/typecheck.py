@@ -26,10 +26,15 @@ _PYPROJECT_SECTIONS = ("[tool.mypy]", "[tool.pyright]")
 # Manifests that imply a statically-typed language — the compiler IS the
 # type checker; asking for a separate type-checker config is a false positive.
 _STATIC_LANG_MANIFESTS: tuple[tuple[str, str], ...] = (
-    ("go.mod",      "Go (statically typed)"),
-    ("Cargo.toml",  "Rust (statically typed)"),
-    ("CMakeLists.txt", "C/C++ (statically typed)"),
-    ("Package.swift", "Swift (statically typed)"),
+    ("go.mod",            "Go (statically typed)"),
+    ("Cargo.toml",        "Rust (statically typed)"),
+    ("CMakeLists.txt",    "C/C++ (statically typed)"),
+    ("Package.swift",     "Swift (statically typed)"),
+    # JVM — Java, Kotlin, Groovy, Scala are all statically typed
+    ("pom.xml",           "Java/Maven (statically typed)"),
+    ("build.gradle",      "JVM/Gradle (statically typed)"),
+    ("build.gradle.kts",  "Kotlin/Gradle (statically typed)"),
+    ("build.sbt",         "Scala/SBT (statically typed)"),
 )
 
 
@@ -64,6 +69,26 @@ def check_typecheck_configured(ctx: RepoContext) -> CheckResult:
                 )],
             )
 
+    # tsconfig.*.json variants at repo root (e.g. tsconfig.base.json, tsconfig.app.json)
+    for f in ctx._files:
+        if (
+            len(f.parts) == 1
+            and f.name.startswith("tsconfig")
+            and f.suffix == ".json"
+        ):
+            return CheckResult(
+                check_id="typecheck.configured",
+                pillar=Pillar.FEEDBACK,
+                score=100.0,
+                weight=0.9,
+                findings=[Finding(
+                    check_id="typecheck.configured",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"TypeScript config found: {f.name}",
+                )],
+            )
+
     # Check pyproject.toml for [tool.mypy] or [tool.pyright]
     pyproject = ctx.read_text("pyproject.toml")
     if pyproject:
@@ -81,6 +106,54 @@ def check_typecheck_configured(ctx: RepoContext) -> CheckResult:
                         message=f"Type checker configured in pyproject.toml ({section})",
                     )],
                 )
+
+    # setup.cfg [mypy] section (classic mypy config location)
+    setup_cfg = ctx.read_text("setup.cfg")
+    if setup_cfg and "[mypy]" in setup_cfg:
+        return CheckResult(
+            check_id="typecheck.configured",
+            pillar=Pillar.FEEDBACK,
+            score=100.0,
+            weight=0.9,
+            findings=[Finding(
+                check_id="typecheck.configured",
+                pillar=Pillar.FEEDBACK,
+                severity=Severity.INFO,
+                message="mypy configured in setup.cfg ([mypy] section)",
+            )],
+        )
+
+    # py.typed marker file (PEP 561) — indicates a typed Python package
+    for f in ctx._files:
+        if f.name == "py.typed":
+            return CheckResult(
+                check_id="typecheck.configured",
+                pillar=Pillar.FEEDBACK,
+                score=100.0,
+                weight=0.9,
+                findings=[Finding(
+                    check_id="typecheck.configured",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message="py.typed marker found — PEP 561 typed package",
+                )],
+            )
+
+    # .NET / C# projects — any .csproj/.fsproj/.vbproj signals a statically-typed project
+    for f in ctx._files:
+        if f.suffix in (".csproj", ".fsproj", ".vbproj"):
+            return CheckResult(
+                check_id="typecheck.configured",
+                pillar=Pillar.FEEDBACK,
+                score=100.0,
+                weight=0.9,
+                findings=[Finding(
+                    check_id="typecheck.configured",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Type checking provided by language: .NET/C# (statically typed) [{f.name}]",
+                )],
+            )
 
     # Statically-typed languages: the compiler enforces types; a separate
     # type-checker config file is not expected or required.
