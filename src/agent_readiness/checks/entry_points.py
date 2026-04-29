@@ -17,19 +17,29 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 _ENTRY_POINT_NAMES = {
     # Python
     "main.py", "app.py", "server.py", "wsgi.py", "asgi.py", "cli.py",
+    "run.py", "start.py", "manage.py",   # Django manage.py, Flask run.py
     # JavaScript / TypeScript
     "index.js", "index.ts", "index.mjs", "index.cjs",
+    "app.js", "app.ts", "server.js", "server.ts",
     # Go / Rust
     "main.go", "main.rs",
     # C / C++
     "main.c", "main.cpp", "main.cc",
     # Ruby
-    "main.rb",
-    # Java / Kotlin
+    "main.rb", "app.rb", "config.ru",  # Rack entry point
+    # Java / Kotlin / Scala
     "Main.java", "Main.kt", "Application.java", "Application.kt",
+    "App.java", "App.kt", "App.scala", "Main.scala",
+    # C# / .NET
+    "Program.cs",
+    # PHP
+    "index.php", "app.php",
+    # Swift
+    "main.swift",
 }
 
-_ENTRY_SEARCH_DIRS = ("", "src", "src/main", "src/main/java", "src/main/kotlin")
+_ENTRY_SEARCH_DIRS = ("", "src", "app", "src/main", "src/main/java", "src/main/kotlin",
+                      "src/main/scala", "src/main/csharp")
 
 
 @register(
@@ -75,6 +85,17 @@ def check_entry_points_detected(ctx: RepoContext) -> CheckResult:
                       or "[tool.poetry.scripts]" in pyproject):
         found.append("pyproject.toml [scripts]")
 
+    # Check package.json "main" or "exports" field — indicates a published library entry point
+    pkg_text = ctx.read_text("package.json")
+    if pkg_text:
+        try:
+            import json as _json
+            pkg = _json.loads(pkg_text)
+            if "main" in pkg or "exports" in pkg or "module" in pkg:
+                found.append("package.json (main/exports/module field)")
+        except Exception:
+            pass
+
     if found:
         return CheckResult(
             check_id="entry_points.detected",
@@ -96,6 +117,9 @@ def check_entry_points_detected(ctx: RepoContext) -> CheckResult:
         (ctx.root / "pyproject.toml").is_file()
         or (ctx.root / "Cargo.toml").is_file()
         or (ctx.root / "go.mod").is_file()
+        or (ctx.root / "pom.xml").is_file()
+        or (ctx.root / "build.gradle").is_file()
+        or (ctx.root / "Gemfile").is_file()
         or any(f.name == "__init__.py" and len(f.parts) <= 2 for f in ctx._files)
     )
     if is_library:
