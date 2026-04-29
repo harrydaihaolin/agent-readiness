@@ -9,6 +9,7 @@ A .env.example makes the required config surface explicit.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 from agent_readiness.checks import register
 from agent_readiness.context import RepoContext
@@ -46,7 +47,11 @@ def _strip_comments(text: str, suffix: str) -> str:
         return text
     return pat.sub("", text)
 
-_ENV_EXAMPLE_NAMES = (".env.example", ".env.sample", ".env.dist")
+_ENV_EXAMPLE_NAMES = (
+    ".env.example", ".env.sample", ".env.dist",
+    ".env.template", ".env.defaults", ".env.local.example",
+    "env.example", "example.env",
+)
 
 
 @register(
@@ -109,21 +114,26 @@ def check_env_example_parity(ctx: RepoContext) -> CheckResult:
             )],
         )
 
-    # Env refs found — check for .env.example
-    for name in _ENV_EXAMPLE_NAMES:
-        if (ctx.root / name).is_file():
-            return CheckResult(
-                check_id="env.example_parity",
-                pillar=Pillar.FLOW,
-                score=100.0,
-                weight=0.9,
-                findings=[Finding(
+    # Env refs found — check for .env.example at root and one level deep
+    _SUBDIRS_TO_CHECK = ("", "config", "deploy", "docker", "infra", "env", "envs")
+    for subdir in _SUBDIRS_TO_CHECK:
+        base = ctx.root / subdir if subdir else ctx.root
+        for name in _ENV_EXAMPLE_NAMES:
+            candidate = base / name
+            if candidate.is_file():
+                display = str(Path(subdir) / name) if subdir else name
+                return CheckResult(
                     check_id="env.example_parity",
                     pillar=Pillar.FLOW,
-                    severity=Severity.INFO,
-                    message=f"Env var usage found and documented in {name}.",
-                )],
-            )
+                    score=100.0,
+                    weight=0.9,
+                    findings=[Finding(
+                        check_id="env.example_parity",
+                        pillar=Pillar.FLOW,
+                        severity=Severity.INFO,
+                        message=f"Env var usage found and documented in {display}.",
+                    )],
+                )
 
     return CheckResult(
         check_id="env.example_parity",
