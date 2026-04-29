@@ -45,7 +45,15 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 # Files/paths that are obviously examples; skip them.
 _EXAMPLE_HINTS = ("example", "sample", "template", "fixture", "fixtures",
                   "test", "tests", "__tests__", "spec", "specs",
-                  ".env.example", ".env.sample", ".env.template")
+                  ".env.example", ".env.sample", ".env.template",
+                  # Documentation — example configs/keys in docs are not production
+                  "docs", "doc", "documentation",
+                  # Self-signed test certificates and TLS test material
+                  "certs", "cert", "certificates", "ssl", "tls",
+                  # Demo and sandbox environments
+                  "demo", "sandbox", "mocks", "mock", "stubs", "stub",
+                  # Example integrations / cookbook / tutorials
+                  "examples", "cookbook", "tutorials", "tutorial")
 
 # Skip very large or clearly-binary files.
 _TEXT_SUFFIXES = {
