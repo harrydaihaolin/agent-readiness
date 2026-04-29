@@ -2,27 +2,43 @@ rules_version: 1
 id: repo_shape.large_files
 pillar: cognitive_load
 title: Large source files
-weight: 1.0
+# Weight halved (1.0 → 0.5) after empirical analysis: this rule alone
+# accounted for 56% of all WARN findings in the closed-loop scan over
+# 141 repos. Until per-rule firing volume drops below 25%, keep it light
+# so it does not dominate the overall pillar score.
+weight: 0.5
 severity: warn
 explanation: |
   Files over 500 lines or 50 KB exceed an agent's working memory in a
   single read and force a chunked-reading pattern that loses context
   across chunk boundaries. This rule excludes lock files, generated
-  data, and binary assets — which are large but not "source" files an
+  data, binary assets, long-form tests, vendored third-party code, and
+  build/template artefacts — which are large but not "source" files an
   agent would meaningfully edit.
 match:
   type: file_size
   threshold_lines: 500
   threshold_bytes: 51200
   exclude_globs:
+    # Lock files of every flavour
     - "*.lock"
     - "*lock.json"
     - "Cargo.lock"
     - "uv.lock"
     - "poetry.lock"
     - "yarn.lock"
+    - "pnpm-lock.yaml"
+    - "Gemfile.lock"
+    # Long-form metadata files projects accumulate over time
     - "CHANGELOG.md"
     - "MIGRATION.md"
+    - "HISTORY.md"
+    - "RELEASES.md"
+    - "NEWS.md"
+    # Build orchestration (often grows on cross-platform repos)
+    - "Makefile"
+    - "GNUmakefile"
+    # Binary / media assets
     - "*.png"
     - "*.jpg"
     - "*.jpeg"
@@ -30,10 +46,47 @@ match:
     - "*.gif"
     - "*.webp"
     - "*.ico"
+    - "*.pdf"
+    - "*.zip"
+    - "*.tar.gz"
+    - "*.parquet"
+    - "*.npz"
+    - "*.h5"
+    - "*.safetensors"
+    # Notebooks (large but intentional)
+    - "*.ipynb"
+    # Test files in flat & nested layouts
+    - "**/tests/**"
+    - "**/test/**"
+    - "**/__tests__/**"
+    - "**/e2e/**"
+    - "test_*.py"
+    - "*_test.py"
+    - "*.test.[jt]s"
+    - "*.test.[jt]sx"
+    - "*.spec.[jt]s"
+    - "*.spec.[jt]sx"
+    # Vendored / third-party sources we don't author
+    - "**/vendor/**"
+    - "**/third_party/**"
+    - "**/external/**"
+    # Build / dist / generated output
     - "**/dist/**"
     - "**/build/**"
     - "**/node_modules/**"
     - "**/__generated__/**"
+    - "**/generated/**"
+    # API spec / catalog manifests
+    - "**/openapi/**"
+    - "**/swagger/**"
+    - "**/swagger/docs.go"
+    - "**/gallery/**"
+    - "**/index.yaml"
+    - "**/index.yml"
+    - "**/index.json"
+    # Templates and *.template.* placeholders
+    - "*.tmpl"
+    - "*.template.*"
 fix_hint: |
   Split the file into smaller modules grouped by concept, or add an
   exclusion in `.agent-readiness.toml` if the file is truly intentional

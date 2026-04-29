@@ -1,0 +1,42 @@
+rules_version: 1
+id: naming.search_precision
+pillar: cognitive_load
+title: File names are search-precise (no vague utils/helpers)
+weight: 0.6
+severity: info
+explanation: |
+  An agent that needs to find "the function that retries failed HTTP
+  calls" can't `grep utils.py` — every project has one. Generic
+  names (`utils`, `helpers`, `manager`, `common`, `lib`) at top of
+  `src/` increase the search radius for any agent change. Names
+  that describe intent shrink it.
+match:
+  type: naming_search
+  ambiguous_stems:
+    - utils
+    - helpers
+    - manager
+    - common
+    - shared
+    - misc
+    - lib
+    - base
+    - core
+    - abstract
+  max_depth: 2
+  max_findings: 5
+  exclude_parent_dirs:
+    - tests
+    - test
+    - scripts
+    - docs
+    - fixtures
+    - examples
+    - vendor
+    - third_party
+fix_hint: |
+  Rename `utils.py` → `string_normalisation.py` (or whatever it
+  actually does). If the file genuinely holds five unrelated
+  helpers, that's the signal to split it into five files named for
+  what they do.
+insight_query: vague names utils helpers search precision rename intent

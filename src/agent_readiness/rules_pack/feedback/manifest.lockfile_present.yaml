@@ -1,0 +1,48 @@
+rules_version: 1
+id: manifest.lockfile_present
+pillar: feedback
+title: Dependency lockfile present
+weight: 1.0
+severity: warn
+explanation: |
+  A lockfile pins the exact dependency tree the project was last
+  validated against. Without one, `pip install` / `npm install` will
+  resolve different versions on different machines, so an agent that
+  installs deps and runs tests can't trust a green run on its laptop
+  to predict a green run in CI. Some ecosystems (Cargo, Poetry, npm)
+  produce lockfiles automatically; others (bare requirements.txt) do
+  not, and the project has to opt in.
+match:
+  type: composite
+  op: or
+  summary: At least one ecosystem-specific lockfile is committed.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - poetry.lock
+        - uv.lock
+        - Pipfile.lock
+        - pdm.lock
+        - package-lock.json
+        - npm-shrinkwrap.json
+        - yarn.lock
+        - pnpm-lock.yaml
+        - Cargo.lock
+        - Gemfile.lock
+        - composer.lock
+        - go.sum
+        - mix.lock
+        - flake.lock
+        - conda-lock.yml
+        - pixi.lock
+    - type: path_glob
+      require_globs:
+        - requirements*.txt
+        - environment.yml
+        - environment.yaml
+fix_hint: |
+  Run `poetry lock` / `npm install` / `cargo update` (whichever your
+  manifest needs) and commit the resulting lockfile. For pip-only
+  Python projects, freezing `requirements.txt` to exact versions or
+  switching to `uv` / `poetry` is acceptable.
+insight_query: lockfile dependency pinning poetry npm cargo reproducible install

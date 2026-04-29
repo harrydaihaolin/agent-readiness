@@ -1,0 +1,31 @@
+rules_version: 1
+id: safety.gitleaks_config
+pillar: safety
+title: Secret-scanning config present
+weight: 1.0
+severity: warn
+explanation: |
+  An agent that handles credentials or pushes commits is one
+  copy-paste away from leaking a secret into git history. Repos that
+  declare a secret-scanning config (gitleaks, trufflehog, .pre-commit
+  with detect-secrets, or GitHub's native push protection markers)
+  signal that secret scanning is enforced as part of the contributor
+  flow, which materially reduces leak risk in agent-driven changes.
+match:
+  type: path_glob
+  require_globs:
+    - .gitleaks.toml
+    - .gitleaks.yaml
+    - .gitleaks.yml
+    - gitleaks.toml
+    - .trufflehog.yaml
+    - .trufflehog.yml
+    - .secrets.baseline
+    - .pre-commit-config.yaml
+    - .github/workflows/gitleaks.yml
+    - .github/workflows/secret-scan.yml
+fix_hint: |
+  Add a `.gitleaks.toml` (or `.secrets.baseline` for detect-secrets) and
+  wire it into pre-commit or a GitHub Actions workflow. Example:
+  https://github.com/gitleaks/gitleaks-action.
+insight_query: gitleaks trufflehog detect-secrets secret scanning agent push

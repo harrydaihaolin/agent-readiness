@@ -418,11 +418,13 @@ class TestVendoredPackSmoke(unittest.TestCase):
         self.assertIsNotNone(rd, "vendored rules_pack/ not found; run scripts/vendor_rules.sh v1.0.0")
         self.assertTrue(rd.is_dir())
 
-    def test_vendored_pack_loads_seven_rules(self):
+    def test_vendored_pack_loads_q1_snapshot(self):
         rd = default_rules_dir()
         loaded = load_rules_from_dir(rd)
-        # We know v1.0.0 ships 7 rules.
-        self.assertEqual(len(loaded), 7)
+        # The Q1 snapshot ships 32 rules. The exact number is part of the
+        # vendoring contract — bumping it is a deliberate change to the
+        # snapshot in src/agent_readiness/rules_pack/.
+        self.assertEqual(len(loaded), 32)
 
     def test_vendored_pack_evaluates_on_self(self):
         rd = default_rules_dir()

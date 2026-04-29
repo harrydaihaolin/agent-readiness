@@ -1,0 +1,43 @@
+rules_version: 1
+id: devcontainer.present
+pillar: flow
+title: Dev container or reproducible workspace configured
+weight: 0.8
+severity: info
+explanation: |
+  A devcontainer / Nix flake / Gitpod config / Vagrantfile lets an
+  agent (or a new contributor) get a reproducible environment without
+  hand-installing system deps. The project that ships one cuts the
+  "wrong Python version" / "missing libssl-dev" class of failure
+  to zero.
+match:
+  type: composite
+  op: or
+  summary: At least one reproducible-workspace config is present.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - .devcontainer/devcontainer.json
+        - .devcontainer/**
+        - .devcontainer.json
+        - .gitpod.yml
+        - .gitpod.Dockerfile
+        - flake.nix
+        - shell.nix
+        - default.nix
+        - .nix/**
+        - devbox.json
+        - mise.toml
+        - .mise.toml
+        - .tool-versions
+        - Vagrantfile
+        - .codesandbox/**
+        - docker-compose.dev.yml
+        - docker-compose.dev.yaml
+        - compose.dev.yml
+        - compose.dev.yaml
+fix_hint: |
+  Drop a minimal `.devcontainer/devcontainer.json` referencing a
+  Microsoft base image plus `postCreateCommand: pip install -e .`.
+  For Nix shops, `flake.nix` with a dev shell is the equivalent.
+insight_query: devcontainer Nix Gitpod reproducible environment workspace

@@ -1,0 +1,39 @@
+rules_version: 1
+id: hooks.configured
+pillar: feedback
+title: Git or agent hooks configured
+weight: 0.7
+severity: info
+explanation: |
+  Hooks (pre-commit, husky, lefthook, lint-staged, .claude/settings,
+  .cursor/settings) are how a project gives an agent feedback *before*
+  a commit lands rather than after CI fails. A repo that runs format
+  + lint on every commit cuts the agent's edit/wait/fix loop by an
+  order of magnitude.
+match:
+  type: composite
+  op: or
+  summary: At least one hook framework is configured.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - .pre-commit-config.yaml
+        - .pre-commit-config.yml
+        - .husky/**
+        - lefthook.yml
+        - lefthook.yaml
+        - .lefthook.yml
+        - .lefthook.yaml
+        - .claude/settings.json
+        - .cursor/settings.json
+        - .trunk/**
+    - type: regex_in_files
+      pattern: '"(husky|simple-git-hooks|lint-staged|lefthook)"\s*:'
+      file_globs:
+        - package.json
+fix_hint: |
+  For Python projects, run `pre-commit install` after dropping a
+  `.pre-commit-config.yaml` with at least ruff + the language formatter.
+  For JS, install husky + lint-staged. The goal is "every commit gets
+  formatted and linted before it touches a branch."
+insight_query: pre-commit husky lefthook lint-staged git hooks pre-commit-config

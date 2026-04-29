@@ -1,0 +1,38 @@
+rules_version: 1
+id: templates.present
+pillar: flow
+title: Issue / PR templates and CODEOWNERS present
+weight: 0.7
+severity: info
+explanation: |
+  Issue templates, PR templates, and CODEOWNERS make agent-opened PRs
+  routable: the right reviewer is auto-assigned, the right metadata
+  fields are filled in, and the project's expectations are explicit.
+  Repos without these get a flood of agent PRs that all look the same
+  and have no obvious reviewer.
+match:
+  type: composite
+  op: or
+  summary: Issue templates, PR template, or CODEOWNERS configured.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - .github/ISSUE_TEMPLATE/**
+        - .gitlab/issue_templates/**
+    - type: path_glob
+      require_globs:
+        - .github/PULL_REQUEST_TEMPLATE.md
+        - .github/PULL_REQUEST_TEMPLATE/**
+        - .github/pull_request_template.md
+        - .gitlab/merge_request_templates/**
+    - type: path_glob
+      require_globs:
+        - CODEOWNERS
+        - .github/CODEOWNERS
+        - docs/CODEOWNERS
+fix_hint: |
+  At minimum: drop `.github/ISSUE_TEMPLATE/bug_report.md` (GitHub has
+  a wizard), a `.github/PULL_REQUEST_TEMPLATE.md` with a checklist,
+  and a `CODEOWNERS` file mapping `*` to the team that should review
+  agent-opened PRs.
+insight_query: issue template PR template CODEOWNERS GitHub repository scaffolding

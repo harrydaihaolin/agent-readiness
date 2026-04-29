@@ -1,0 +1,24 @@
+rules_version: 1
+id: branch_rulesets.configured
+pillar: flow
+title: GitHub branch rulesets / protection configured
+weight: 0.8
+severity: info
+explanation: |
+  Branch protection (or the newer "branch rulesets") forces PRs to
+  pass review and CI before they touch the default branch. For an
+  agent-driven workflow this is doubly important: it's the only
+  guard rail against an agent merging something that looks plausible
+  but breaks production. Without it, "the agent can write to main"
+  is true, and that's bad.
+match:
+  type: gh_cli_query
+  api_path: repos/{owner}/{repo}/rulesets
+  fire_when: empty
+  neutral_when_no_gh_cli: true
+fix_hint: |
+  In repo Settings → Branches (or the new Rules / Rulesets UI),
+  require: pull request before merging, status checks (your CI)
+  passing, branch up-to-date. Apply to `main` and any release
+  branches.
+insight_query: branch protection rulesets GitHub gh cli main protected

@@ -1,0 +1,51 @@
+rules_version: 1
+id: ci.configured
+pillar: feedback
+title: CI pipeline configured
+weight: 0.9
+severity: warn
+explanation: |
+  CI is how a coding agent confirms that "my change passes" the same
+  way a human reviewer would. Without it, the agent ships PRs that
+  green-on-laptop, red-in-prod, and the project picks up the cleanup.
+  Any modern CI provider counts; the rule is just "*some* automated
+  test pipeline is configured."
+match:
+  type: composite
+  op: or
+  summary: At least one CI provider config is present.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - .github/workflows/*.yml
+        - .github/workflows/*.yaml
+        - .circleci/config.yml
+        - .gitlab-ci.yml
+        - .travis.yml
+        - azure-pipelines.yml
+        - bitbucket-pipelines.yml
+        - .buildkite/**
+        - .drone.yml
+        - .woodpecker.yml
+        - .woodpecker/**
+        - Jenkinsfile
+        - appveyor.yml
+        - .appveyor.yml
+        - cloudbuild.yaml
+        - .semaphore/**
+        - codefresh.yaml
+        - .teamcity/**
+    - type: path_glob
+      require_globs:
+        - tekton/**
+        - dagger.json
+        - dagger.cue
+        - earthly.yml
+        - Earthfile
+        - .prow.yaml
+fix_hint: |
+  Drop a `.github/workflows/ci.yml` that installs deps, runs the test
+  command, and reports status to PRs. Even a 20-line workflow is
+  worth more than nothing — the agent gets red/green feedback per
+  push.
+insight_query: continuous integration GitHub Actions CircleCI GitLab CI workflow

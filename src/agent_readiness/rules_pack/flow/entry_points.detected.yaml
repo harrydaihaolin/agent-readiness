@@ -1,22 +1,59 @@
 rules_version: 1
 id: entry_points.detected
 pillar: flow
-title: Entry point declared in manifest
+title: Entry point detected
 weight: 1.0
 severity: warn
 explanation: |
-  An agent looking to run the project needs an obvious entry point.
-  Python projects should declare `[project.scripts]` in pyproject.toml
-  (or expose `__main__.py`); JS projects should set `bin` or `main` in
-  package.json. Without one, the agent has to guess from filenames,
-  which fails for non-trivial layouts.
+  An agent looking to run the project needs an obvious entry point. A
+  manifest-declared script (`[project.scripts]` in pyproject.toml,
+  `bin` / `main` in package.json) is the strongest signal, but
+  conventional filenames (`main.py`, `cmd/<name>/main.go`,
+  `__main__.py`, `index.{js,ts}`) also count. Without any of these,
+  the agent has to guess from filenames, which fails for non-trivial
+  layouts.
 match:
-  type: manifest_field
-  manifest: pyproject.toml
-  field_path: project.scripts
-  fire_when: missing
+  type: composite
+  op: or
+  summary: At least one entry-point convention is present.
+  clauses:
+    - type: manifest_field
+      manifest: pyproject.toml
+      field_path: project.scripts
+      fire_when: missing
+    - type: manifest_field
+      manifest: package.json
+      field_path: bin
+      fire_when: missing
+    - type: manifest_field
+      manifest: package.json
+      field_path: main
+      fire_when: missing
+    - type: path_glob
+      require_globs:
+        - main.py
+        - src/main.py
+        - "src/*/main.py"
+        - "src/*/__main__.py"
+        - "src/*/cli.py"
+        - app/main.py
+        - app.py
+        - cli.py
+        - "**/__main__.py"
+        - cmd/**/main.go
+        - main.go
+        - main.rs
+        - "src/main.rs"
+        - index.js
+        - index.ts
+        - src/index.js
+        - src/index.ts
+        - "bin/*"
+        - "cmd/*"
 fix_hint: |
-  Add a `[project.scripts]` table to pyproject.toml mapping a CLI name
-  to your `module.cli:main` entry point. For JS projects, use
-  `"bin": {"name": "src/index.js"}` in package.json.
-insight_query: entry point manifest scripts main bin __main__
+  Add a `[project.scripts]` table to pyproject.toml mapping a CLI
+  name to your `module.cli:main` entry point. For Go, add
+  `cmd/<name>/main.go`. For Node, set `"bin"` or `"main"` in
+  package.json. The goal: an agent running `--help` on the package
+  should find a command that works.
+insight_query: entry point manifest scripts main bin __main__ cmd cli

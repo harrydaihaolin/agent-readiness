@@ -1,0 +1,41 @@
+rules_version: 1
+id: headless.no_setup_prompts
+pillar: flow
+title: Setup is reachable headlessly
+weight: 1.0
+severity: warn
+explanation: |
+  An agent runs in a sandbox or CI — there's no human at a browser
+  to "click here to authorize" or "open the dashboard to confirm".
+  README setup steps that route through GUI authorisation flows or
+  browser-based config wizards are dead-ends for headless agents.
+  This rule scans the setup section of the README for
+  GUI / OAuth-redirect language and fires when any are present.
+match:
+  type: prompt_scan
+  mode: headless_setup
+  gui_phrases:
+    - "click here"
+    - "in the browser"
+    - "in your browser"
+    - "open the dashboard"
+    - "open your browser"
+    - "log in to the website"
+    - "log in to the dashboard"
+    - "sign in with google"
+    - "sign in with github"
+    - "sign in to your account"
+    - "authorize the application"
+    - "complete the wizard"
+    - "follow the prompts"
+  oauth_phrases:
+    - "oauth callback"
+    - "redirect uri"
+    - "authorization code flow"
+    - "device code flow"
+fix_hint: |
+  Replace "open the dashboard to copy your API key" with "set
+  $YOURAPP_API_KEY (get one at https://example.com/settings/api)".
+  Move any GUI step into a one-time human bootstrap section clearly
+  separated from the headless install / run flow.
+insight_query: headless setup GUI authorization browser OAuth interactive prompts

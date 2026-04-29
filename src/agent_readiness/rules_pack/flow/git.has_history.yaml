@@ -1,0 +1,24 @@
+rules_version: 1
+id: git.has_history
+pillar: flow
+title: Repository has meaningful commit history
+weight: 1.0
+severity: warn
+explanation: |
+  An agent that needs to reason about *why* a piece of code looks the
+  way it does — to backport, to revert, to bisect — depends on
+  commit history. A repo with one squash-import commit looks the same
+  as a repo with no history at all: every change is a mystery. This
+  rule fires when fewer than `min_commits` commits exist (and gives
+  a `not_measured` finding on shallow clones).
+match:
+  type: git_log_query
+  mode: commit_count
+  min_commits: 5
+  fire_when: too_few
+  neutral_on_shallow: true
+fix_hint: |
+  If you imported the project as a single squash, re-import preserving
+  history (`git filter-repo` or a fresh clone of the source). For new
+  projects, just keep committing — agents need the trail.
+insight_query: git history commit count shallow squash provenance

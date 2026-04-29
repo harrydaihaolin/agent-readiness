@@ -26,9 +26,10 @@ def main() -> None:
             "Install with: pip install agent-readiness[mcp]"
         ) from exc
 
-    from agent_readiness.checks import _ensure_loaded, all_checks
     from agent_readiness.context import RepoContext
     from agent_readiness.plugins import load_entry_point_plugins, load_local_plugins
+    from agent_readiness.rules_eval import evaluate_rules
+    from agent_readiness.rules_runtime import load_default_rules
     from agent_readiness.scorer import score as score_results
 
     mcp = FastMCP("agent-readiness")
@@ -49,14 +50,10 @@ def main() -> None:
         path = Path(repo_path).resolve()
         load_local_plugins(path)
         load_entry_point_plugins()
-        _ensure_loaded()
 
         ctx = RepoContext(root=path)
-        specs = all_checks()
-        results = [spec.fn(ctx) for spec in specs]
-        for cr, spec in zip(results, specs, strict=True):
-            if cr.weight == 1.0 and spec.weight != 1.0:
-                cr.weight = spec.weight
+        rules = load_default_rules()
+        results = evaluate_rules(rules, ctx)
 
         report = score_results(path, results)
         report.languages = ctx.detected_languages
@@ -114,7 +111,6 @@ def main() -> None:
         path = Path(repo_path).resolve()
         output_lines: list[str] = []
 
-        # Capture click.echo output
         with patch("click.echo", side_effect=lambda msg="", **_: output_lines.append(str(msg))):
             run_scaffold(
                 path,
