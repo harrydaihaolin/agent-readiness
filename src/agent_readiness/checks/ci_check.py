@@ -86,6 +86,14 @@ _DETECTORS: tuple[tuple[str, Callable[[Path], bool]], ...] = (
                                 or (r / ".woodpecker.yaml").is_file()
                                 or _has_yaml_in_dir(r / ".woodpecker")),
     ("Earthly", lambda r: (r / "Earthfile").is_file()),
+    # Prow (Kubernetes-ecosystem CI) — config lives in .prow.yaml or .prow/
+    ("Prow CI", lambda r: (r / ".prow.yaml").is_file()
+                          or _has_yaml_in_dir(r / ".prow")),
+    # Tekton pipelines in-tree
+    ("Tekton", lambda r: _has_yaml_in_dir(r / ".tekton")
+                         or _has_yaml_in_dir(r / "tekton")),
+    # Dagger — modern CI-as-code
+    ("Dagger", lambda r: (r / "dagger.json").is_file()),
 )
 
 
