@@ -30,6 +30,19 @@ _AMBIGUOUS_STEMS = frozenset({
     "common", "shared", "misc",
 })
 
+# Parent directories where ambiguous file names are conventional and expected.
+# A `tests/utils.py` or `scripts/helpers.sh` is a standard test/script
+# utility pattern — flagging it as "ambiguous" misleads the developer.
+_CONVENTIONAL_PARENT_DIRS = frozenset({
+    "tests", "test", "testing", "spec", "specs",
+    "scripts", "script", "tools", "tool",
+    "docs", "doc", "documentation",
+    "fixtures", "fixture",
+    "examples", "example", "demos", "demo",
+    "benchmarks", "benchmark", "perf",
+    "e2e", "integration", "unit",
+})
+
 
 @register(
     check_id="naming.search_precision",
@@ -54,6 +67,10 @@ def check_naming_search_precision(ctx: RepoContext) -> CheckResult:
         # (e.g. src/myapp/config.py) are less of a navigation problem than
         # a top-level standalone utils.py or helpers.py.
         if len(f.parts) > 2:
+            continue
+        # Files inside conventional test, script, or docs directories are
+        # expected to have generic utility names — not a navigation problem.
+        if len(f.parts) >= 2 and f.parts[0].lower() in _CONVENTIONAL_PARENT_DIRS:
             continue
         ambiguous.append(str(f))
 
