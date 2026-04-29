@@ -16,14 +16,20 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
 _ENTRY_POINT_NAMES = {
     # Python
-    "main.py", "app.py", "server.py", "wsgi.py", "asgi.py",
+    "main.py", "app.py", "server.py", "wsgi.py", "asgi.py", "cli.py",
     # JavaScript / TypeScript
-    "index.js", "index.ts", "index.mjs",
+    "index.js", "index.ts", "index.mjs", "index.cjs",
     # Go / Rust
     "main.go", "main.rs",
+    # C / C++
+    "main.c", "main.cpp", "main.cc",
+    # Ruby
+    "main.rb",
+    # Java / Kotlin
+    "Main.java", "Main.kt", "Application.java", "Application.kt",
 }
 
-_ENTRY_SEARCH_DIRS = ("", "src")   # root, or src/
+_ENTRY_SEARCH_DIRS = ("", "src", "src/main", "src/main/java", "src/main/kotlin")
 
 
 @register(
@@ -48,18 +54,26 @@ def check_entry_points_detected(ctx: RepoContext) -> CheckResult:
             if (ctx.root / candidate).is_file():
                 found.append(candidate)
 
-    # Check cmd/ or bin/ directory with at least one file
-    for dirn in ("cmd", "bin"):
+    # Check cmd/ or bin/ directory — any content (files OR subdirs) counts.
+    # Go monorepos put commands in cmd/<name>/main.go, so cmd/ may only
+    # contain subdirectories at the top level.
+    for dirn in ("cmd", "bin", "cli"):
         dirpath = ctx.root / dirn
-        if dirpath.is_dir():
-            has_files = any(True for p in dirpath.iterdir() if p.is_file())
-            if has_files:
-                found.append(f"{dirn}/")
+        if dirpath.is_dir() and any(dirpath.iterdir()):
+            found.append(f"{dirn}/")
 
     # Check __main__.py anywhere in the repo
     for f in ctx._files:
         if f.name == "__main__.py":
             found.append(str(f))
+
+    # Check pyproject.toml for declared console_scripts / scripts entry points
+    pyproject = ctx.read_text("pyproject.toml")
+    if pyproject and ("[project.scripts]" in pyproject
+                      or "[project.gui-scripts]" in pyproject
+                      or "console_scripts" in pyproject
+                      or "[tool.poetry.scripts]" in pyproject):
+        found.append("pyproject.toml [scripts]")
 
     if found:
         return CheckResult(
@@ -72,6 +86,38 @@ def check_entry_points_detected(ctx: RepoContext) -> CheckResult:
                 pillar=Pillar.COGNITIVE_LOAD,
                 severity=Severity.INFO,
                 message=f"Entry point(s) found: {', '.join(found[:5])}",
+            )],
+        )
+
+    # Partial credit: a proper Python/Rust/Go library package is meant to be
+    # imported, not run directly. Score 60 (WARN) instead of 0 so a library
+    # repo isn't penalised for the absence of a runtime entry point.
+    is_library = (
+        (ctx.root / "pyproject.toml").is_file()
+        or (ctx.root / "Cargo.toml").is_file()
+        or (ctx.root / "go.mod").is_file()
+        or any(f.name == "__init__.py" and len(f.parts) <= 2 for f in ctx._files)
+    )
+    if is_library:
+        return CheckResult(
+            check_id="entry_points.detected",
+            pillar=Pillar.COGNITIVE_LOAD,
+            score=60.0,
+            weight=0.8,
+            findings=[Finding(
+                check_id="entry_points.detected",
+                pillar=Pillar.COGNITIVE_LOAD,
+                severity=Severity.WARN,
+                message=(
+                    "No explicit entry point found — this appears to be a library "
+                    "(imported, not run directly). Add a CLI entry point or "
+                    "[project.scripts] in pyproject.toml if agents should be able "
+                    "to invoke it directly."
+                ),
+                fix_hint=(
+                    "For a CLI, add main.py or declare [project.scripts] in pyproject.toml. "
+                    "For a pure library this warning can be ignored."
+                ),
             )],
         )
 
