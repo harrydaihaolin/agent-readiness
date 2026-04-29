@@ -1,0 +1,41 @@
+rules_version: 1
+id: repo_shape.large_files
+pillar: cognitive_load
+title: Large source files
+weight: 1.0
+severity: warn
+explanation: |
+  Files over 500 lines or 50 KB exceed an agent's working memory in a
+  single read and force a chunked-reading pattern that loses context
+  across chunk boundaries. This rule excludes lock files, generated
+  data, and binary assets — which are large but not "source" files an
+  agent would meaningfully edit.
+match:
+  type: file_size
+  threshold_lines: 500
+  threshold_bytes: 51200
+  exclude_globs:
+    - "*.lock"
+    - "*lock.json"
+    - "Cargo.lock"
+    - "uv.lock"
+    - "poetry.lock"
+    - "yarn.lock"
+    - "CHANGELOG.md"
+    - "MIGRATION.md"
+    - "*.png"
+    - "*.jpg"
+    - "*.jpeg"
+    - "*.svg"
+    - "*.gif"
+    - "*.webp"
+    - "*.ico"
+    - "**/dist/**"
+    - "**/build/**"
+    - "**/node_modules/**"
+    - "**/__generated__/**"
+fix_hint: |
+  Split the file into smaller modules grouped by concept, or add an
+  exclusion in `.agent-readiness.toml` if the file is truly intentional
+  (large generated tables, etc.).
+insight_query: large file false positive lock files generated assets

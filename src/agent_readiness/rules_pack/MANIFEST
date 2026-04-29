@@ -1,0 +1,6 @@
+# Vendored from harrydaihaolin/agent-readiness-rules@v1.0.0
+# Do not edit by hand; regenerate via scripts/vendor_rules.sh <tag>.
+vendored_from = "harrydaihaolin/agent-readiness-rules"
+vendored_tag  = "v1.0.0"
+vendored_at   = "2026-04-29T16:42:56Z"
+tarball_sha256 = "4c2bdf6e00e370a02e65a484efa59983535fa53ee67a85e2b915f954f8cd66d5"

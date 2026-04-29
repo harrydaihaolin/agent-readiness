@@ -52,6 +52,17 @@ def cli() -> None:
 @click.option("--no-progress", is_flag=True,
               help="Disable the per-check progress indicator on stderr "
                    "(auto-disabled for --json and non-TTY stderr).")
+@click.option("--with-rules", "with_rules", is_flag=True,
+              help="Also evaluate the vendored YAML rules pack from "
+                   "agent-readiness-rules. Opt-in for v1.1; planned to "
+                   "become default in v1.2.")
+@click.option("--rules-dir", "rules_dir", type=click.Path(path_type=Path,
+                                                          file_okay=False,
+                                                          dir_okay=True,
+                                                          exists=True),
+              default=None,
+              help="Override the vendored rules pack with rules from DIR. "
+                   "Useful when working on rule changes locally.")
 def scan(
     path: Path,
     json_output: bool,
@@ -65,6 +76,8 @@ def scan(
     badge_file: Path | None,
     sarif_file: Path | None,
     no_progress: bool,
+    with_rules: bool,
+    rules_dir: Path | None,
 ) -> None:
     """Scan a repository and print an AI-readiness report."""
     from agent_readiness.sandbox import (
@@ -154,6 +167,16 @@ def scan(
         if cr.weight == 1.0 and spec.weight != 1.0:
             cr.weight = spec.weight
         cr.explanation = spec.explanation
+
+    # Optional: also evaluate the vendored YAML rules pack.
+    if with_rules or rules_dir is not None:
+        from agent_readiness.rules_eval import evaluate_rules, load_rules_from_dir
+        from agent_readiness.rules_pack_loader import default_rules_dir
+
+        chosen_dir = rules_dir or default_rules_dir()
+        if chosen_dir is not None and chosen_dir.is_dir():
+            loaded = load_rules_from_dir(chosen_dir)
+            results.extend(evaluate_rules(loaded, ctx))
 
     report = score_results(ctx.root, results, weights=weights)
     report.languages = ctx.detected_languages
@@ -343,6 +366,76 @@ def mcp_serve(transport: str) -> None:
         )
         sys.exit(1)
     mcp_main()
+
+
+@cli.command("rules-eval")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path),
+                default=Path("."))
+@click.option("--rules", "rules_dir", type=click.Path(path_type=Path,
+                                                      file_okay=False,
+                                                      dir_okay=True,
+                                                      exists=True),
+              default=None,
+              help="Directory containing rule YAML files; defaults to the "
+                   "vendored rules pack.")
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit findings as JSON (one object per line).")
+def rules_eval(path: Path, rules_dir: Path | None, json_output: bool) -> None:
+    """Evaluate the YAML rules pack against PATH (diagnostic).
+
+    Runs only the rules-pack evaluator — does NOT run the @register
+    checks. Used by agent-readiness-rules CI to validate that new rules
+    fire on expected fixtures, and by developers iterating on rule
+    definitions locally.
+    """
+    from agent_readiness.context import RepoContext
+    from agent_readiness.rules_eval import evaluate_rules, load_rules_from_dir
+    from agent_readiness.rules_pack_loader import default_rules_dir
+
+    chosen_dir = rules_dir or default_rules_dir()
+    if chosen_dir is None or not chosen_dir.is_dir():
+        click.echo(
+            "error: no rules directory available. "
+            "Pass --rules DIR or run scripts/vendor_rules.sh first.",
+            err=True,
+        )
+        sys.exit(2)
+
+    ctx = RepoContext(root=path)
+    loaded = load_rules_from_dir(chosen_dir)
+    if not loaded:
+        click.echo(f"error: no rules loaded from {chosen_dir}", err=True)
+        sys.exit(2)
+
+    results = evaluate_rules(loaded, ctx)
+
+    if json_output:
+        import json as _json
+        out = {
+            "repo_path": str(path.resolve()),
+            "rules_dir": str(chosen_dir),
+            "rules_evaluated": len(loaded),
+            "checks": [r.to_dict() for r in results],
+        }
+        click.echo(_json.dumps(out, indent=2, sort_keys=False))
+        return
+
+    click.echo(f"Evaluated {len(loaded)} rules from {chosen_dir}")
+    n_with = sum(1 for r in results if r.findings)
+    n_clean = len(results) - n_with - sum(1 for r in results if r.not_measured)
+    n_skip = sum(1 for r in results if r.not_measured)
+    click.echo(f"  passing: {n_clean}, with findings: {n_with}, not measured: {n_skip}")
+    for r in results:
+        if not r.findings:
+            continue
+        click.echo("")
+        click.echo(f"[{r.pillar.value}] {r.check_id} (score {r.score:.0f})")
+        for f in r.findings[:5]:
+            loc = f"{f.file}" + (f":{f.line}" if f.line else "")
+            click.echo(f"  - {loc}: {f.message}")
+        if len(r.findings) > 5:
+            click.echo(f"  ... and {len(r.findings) - 5} more")
 
 
 @cli.command("list-checks")

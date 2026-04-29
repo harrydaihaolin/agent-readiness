@@ -5,6 +5,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-29
+
+### Added
+- `agent_readiness.rules_eval/`: reference (OSS) evaluator for the
+  declarative YAML rule format defined by
+  `agent-readiness-insights-protocol`. Implements the five OSS match
+  types (`file_size`, `path_glob`, `manifest_field`, `regex_in_files`,
+  `command_in_makefile`). Unknown match types (e.g. `ast_query` from
+  the closed engine) are dropped with `not_measured=True` rather than
+  raising — Bronze stays usable when a rule pack is forward-compatible.
+- `agent_readiness.rules_pack/`: vendored copy of
+  [`agent-readiness-rules`](https://github.com/harrydaihaolin/agent-readiness-rules)
+  v1.0.0 (7 rules across cognitive_load / feedback / flow). Refresh via
+  `scripts/vendor_rules.sh <tag>`; the script writes a `MANIFEST` with
+  the source tag and tarball SHA for traceability.
+- `agent-readiness rules-eval <path>`: new diagnostic CLI command.
+  Runs only the rules-pack evaluator (not `@register` checks). Used by
+  `agent-readiness-rules` CI and by developers iterating on rules.
+- `scan --with-rules`: opt-in flag that merges rules-pack findings into
+  the regular scan output. Planned to become the default in 1.2.0
+  after observing impact on real-world scores.
+- `scan --rules-dir DIR`: override the vendored pack with a local
+  directory. Useful for rule authors testing changes before tagging.
+
+### Changed
+- New runtime deps: `pyyaml>=6` (rule loading) and
+  `agent-readiness-insights-protocol>=0.1,<1.0` (shared schema).
+  Both are tiny pure-Python deps with no transitive baggage.
+- `pyproject.toml` now packages `src/agent_readiness/rules_pack/**/*.yaml`,
+  `MANIFEST`, and `manifest.toml` into the wheel via `tool.hatch.include`.
+
+### Notes for downstream
+- `PROTOCOL_VERSION = 1` and `RULES_VERSION = 1` are unchanged; this
+  release is purely additive on the protocol surface.
+
 ## [1.0.0] - 2026-04-28
 
 ### Added
