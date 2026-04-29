@@ -28,6 +28,27 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
     weight=1.0,
 )
 def check_git_has_history(ctx: RepoContext) -> CheckResult:
+    # A shallow clone (.git/shallow exists) always reports 1 commit even for
+    # repos with thousands. Mark as not_measured so we don't penalise repos
+    # that were scanned with `--depth 1` (common in CI pipelines).
+    shallow_file = ctx.root / ".git" / "shallow"
+    if shallow_file.is_file():
+        return CheckResult(
+            check_id="git.has_history",
+            pillar=Pillar.FLOW,
+            score=100.0,
+            not_measured=True,
+            findings=[Finding(
+                check_id="git.has_history",
+                pillar=Pillar.FLOW,
+                severity=Severity.INFO,
+                message=(
+                    "Shallow clone detected (.git/shallow) — commit count "
+                    "is unreliable. Re-run with a full clone to measure history depth."
+                ),
+            )],
+        )
+
     count = ctx.commit_count
 
     if count == 0:
