@@ -15,15 +15,34 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
 
 _LINT_FILES = (
+    # Python
     "ruff.toml", ".ruff.toml",
     ".flake8",
     "pylintrc", ".pylintrc",
+    # JavaScript / TypeScript
     ".eslintrc", ".eslintrc.js", ".eslintrc.json",
     ".eslintrc.yml", ".eslintrc.cjs",
+    "eslint.config.js", "eslint.config.mjs",
+    # Ruby
     ".rubocop.yml",
+    # Go
     ".golangci.yml", ".golangci.yaml",
+    # PHP
     "phpcs.xml",
+    # JS/TS unified toolchain
     "biome.json",
+    # Rust — rustfmt and clippy configuration
+    "rustfmt.toml", ".rustfmt.toml",
+    "clippy.toml", ".clippy.toml",
+    # C / C++
+    ".clang-format",
+    ".clang-tidy",
+    # Pre-commit framework — hooks often include linters
+    ".pre-commit-config.yaml",
+    # Java / Kotlin
+    "checkstyle.xml", ".checkstyle",
+    # Swift
+    ".swiftlint.yml",
 )
 
 _PYPROJECT_SECTIONS = ("[tool.ruff]", "[tool.flake8]", "[tool.pylint]")
