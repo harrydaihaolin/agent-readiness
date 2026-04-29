@@ -23,11 +23,22 @@ from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
 
-_README_NAMES = ("README.md", "README.rst", "README.txt", "README")
+_README_NAMES = (
+    "README.md", "README.rst", "README.txt", "README", "README.markdown",
+    "readme.md", "Readme.md",
+)
 _FENCE_RE = re.compile(r"```|~~~")
-_INSTALL_RE = re.compile(r"\b(install|installation|setup|getting started)\b", re.I)
-_RUN_RE = re.compile(r"\b(run|usage|quick ?start|how to use)\b", re.I)
-_TEST_RE = re.compile(r"\btest(s|ing)?\b", re.I)
+_INSTALL_RE = re.compile(
+    r"\b(install(ation)?|setup|set[-\s]up|getting started|prerequisite|"
+    r"requirement|dependency|dependencies|before you (begin|start))\b",
+    re.I,
+)
+_RUN_RE = re.compile(
+    r"\b(run|usage|quick ?start|how to use|example|examples|demo|"
+    r"start|getting going|try it)\b",
+    re.I,
+)
+_TEST_RE = re.compile(r"\btest(s|ing|suite)?\b|\bci\b|\bcoverage\b", re.I)
 
 
 @register(
