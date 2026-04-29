@@ -191,14 +191,31 @@ class RepoContext:
 
     @cached_property
     def orientation_tokens(self) -> int:
-        """Estimated tokens for an agent to orient in this repo (chars/4 heuristic)."""
+        """Estimated tokens for an agent to orient in this repo (chars/4 heuristic).
+
+        When an AGENTS.md (or CLAUDE.md) file is present, it is used as the
+        primary orientation document instead of the README. Agent-targeted docs
+        are intentionally concise; using the README for these repos overstates
+        the real orientation cost an agent faces.
+        """
         total_chars = 0
-        # README(s)
-        for name in ("README.md", "README.rst", "README.txt", "README"):
-            f = self.has_file(name)
-            if f:
-                total_chars += len(self.read_text(f) or "")
+        # Prefer AGENTS.md / CLAUDE.md — concise agent-targeted orientation docs.
+        # Fall back to README only when no agent doc is present.
+        agent_doc_names = ("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md")
+        used_agent_doc = False
+        for name in agent_doc_names:
+            path = self.root / name
+            if path.is_file():
+                total_chars += len(self.read_text(name) or "")
+                used_agent_doc = True
                 break
+
+        if not used_agent_doc:
+            for name in ("README.md", "README.rst", "README.txt", "README"):
+                f = self.has_file(name)
+                if f:
+                    total_chars += len(self.read_text(f) or "")
+                    break
         # Primary manifest
         for m in ("pyproject.toml", "package.json", "Cargo.toml", "go.mod", "Gemfile"):
             if (self.root / m).is_file():
