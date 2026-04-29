@@ -97,3 +97,16 @@ __all__ = [
     "register_private_matcher",
     "unregister_private_matcher",
 ]
+
+
+# Side-effect import: registers the OSS-shipped private matchers
+# (git_log_query, ast_complexity, regex_secret_scan, gh_cli_query,
+# naming_search, tree_aggregate, cross_file_consistency, prompt_scan,
+# setup_command_count, manifest_introspection, gitignore_coverage).
+# Done at the bottom of __init__ so `register_private_matcher` is
+# already defined when each matcher module imports it.
+#
+# Downstream engines (agent-readiness-pro, the closed insights engine)
+# can layer their own matchers on top via the same API; the OSS set is
+# the floor every install gets.
+from . import private_matchers  # noqa: E402,F401
