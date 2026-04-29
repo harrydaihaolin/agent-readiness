@@ -62,6 +62,36 @@ _PATTERN_GROUPS = [
             re.compile(r"\.vscode/"),
         ],
     ),
+    # Python packaging artefacts
+    (
+        "Python packaging artefacts (*.egg-info/, .eggs/)",
+        [re.compile(r"\.egg-info/"), re.compile(r"^/?\.eggs/", re.M)],
+    ),
+    # Test / coverage output
+    (
+        "test coverage output (.coverage / htmlcov/ / .pytest_cache/)",
+        [
+            re.compile(r"^/?\.coverage\b", re.M),
+            re.compile(r"^/?htmlcov/", re.M),
+            re.compile(r"^/?\.pytest_cache/", re.M),
+            re.compile(r"^/?coverage/", re.M),
+        ],
+    ),
+    # Swift / Xcode build artefacts
+    (
+        "Swift/Xcode artefacts (.build/ / DerivedData/)",
+        [re.compile(r"^/?\.build/", re.M), re.compile(r"DerivedData")],
+    ),
+    # Terraform state and provider cache
+    (
+        "Terraform artefacts (.terraform/ / *.tfstate)",
+        [re.compile(r"^/?\.terraform/", re.M), re.compile(r"\*\.tfstate\b")],
+    ),
+    # Logs
+    (
+        "log files (*.log)",
+        [re.compile(r"\*\.log\b")],
+    ),
 ]
 
 
