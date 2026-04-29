@@ -39,6 +39,8 @@ _LARGE_FILE_EXCLUDED_SUFFIXES: frozenset[str] = frozenset({
     ".ttf", ".otf", ".woff", ".woff2", ".eot",
     # Notebooks — large but intentional; a separate check can flag them
     ".ipynb",
+    # Protobuf definitions — often auto-generated, not hand-authored source
+    ".proto",
 })
 
 # Exact filenames (case-sensitive) that are expected to be large.
@@ -69,6 +71,11 @@ _LARGE_FILE_EXCLUDED_PATTERNS: tuple[re.Pattern[str], ...] = (
     # Generated lock/hash files not covered by exact names above
     re.compile(r".*\.lock$", re.IGNORECASE),
     re.compile(r".*\.sum$", re.IGNORECASE),
+    # API specification files — auto-generated, often thousands of lines
+    re.compile(r"^(openapi|swagger).*\.(json|yaml|yml)$", re.IGNORECASE),
+    # Database schema dumps — generated DDL, not hand-authored code
+    re.compile(r".*(schema|dump|migration)\.(sql)$", re.IGNORECASE),
+    re.compile(r"^schema\.(json|yaml|yml)$", re.IGNORECASE),
 )
 
 
@@ -122,6 +129,18 @@ def check_top_level_count(ctx: RepoContext) -> CheckResult:
     )
 
 
+# Directories whose contents are excluded from the large-file check.
+# Files in these directories are either assets, generated code, or database
+# artefacts that cannot meaningfully be "split into smaller modules".
+_LARGE_FILE_EXCLUDED_DIRS: frozenset[str] = frozenset({
+    "assets", "static", "media",            # binary / media assets
+    "migrations", "alembic", "flyway",      # database migration files
+    "fixtures", "testdata", "test_data",    # test data / fixtures
+    "snapshots",                             # snapshot test outputs
+    "generated", "gen",                     # generated code directories
+})
+
+
 def _is_excluded_from_large_check(f: Path) -> bool:
     """Return True if this file should not be flagged as 'large'."""
     name = f.name
@@ -135,6 +154,10 @@ def _is_excluded_from_large_check(f: Path) -> bool:
     # Exclude by filename pattern (changelogs, migrations, etc.)
     for pattern in _LARGE_FILE_EXCLUDED_PATTERNS:
         if pattern.match(name):
+            return True
+    # Exclude by parent directory name (assets, migrations, generated code, etc.)
+    for part in f.parts[:-1]:
+        if part.lower() in _LARGE_FILE_EXCLUDED_DIRS:
             return True
     return False
 
