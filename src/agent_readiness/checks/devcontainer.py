@@ -20,6 +20,13 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 _DEVCONTAINER_PATHS = (
     ".devcontainer/devcontainer.json",
     ".devcontainer.json",
+    # Gitpod
+    ".gitpod.yml",
+    ".gitpod.yaml",
+    # Nix shell — reproducible environment even without Docker
+    "shell.nix",
+    # CodeSandbox
+    "sandbox.config.json",
 )
 
 
@@ -51,6 +58,22 @@ def check(ctx: RepoContext) -> CheckResult:
                     message=f"Dev container config found: {rel}",
                 )],
             )
+
+    # .devcontainer/ directory with any content (docker-compose.yml etc.)
+    dc_dir = ctx.root / ".devcontainer"
+    if dc_dir.is_dir() and any(dc_dir.iterdir()):
+        return CheckResult(
+            check_id="devcontainer.present",
+            pillar=Pillar.FLOW,
+            score=100.0,
+            weight=0.8,
+            findings=[Finding(
+                check_id="devcontainer.present",
+                pillar=Pillar.FLOW,
+                severity=Severity.INFO,
+                message="Dev container config found: .devcontainer/",
+            )],
+        )
 
     return CheckResult(
         check_id="devcontainer.present",
