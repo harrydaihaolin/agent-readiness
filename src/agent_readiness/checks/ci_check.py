@@ -97,6 +97,20 @@ _DETECTORS: tuple[tuple[str, Callable[[Path], bool]], ...] = (
                          or _has_yaml_in_dir(r / "tekton")),
     # Dagger — modern CI-as-code
     ("Dagger", lambda r: (r / "dagger.json").is_file()),
+    # Codefresh — codefresh.yml at repo root
+    ("Codefresh", lambda r: (r / "codefresh.yml").is_file()
+                            or (r / "codefresh.yaml").is_file()),
+    # Semaphore CI — .semaphore/semaphore.yml
+    ("Semaphore CI", lambda r: _has_yaml_in_dir(r / ".semaphore")),
+    # TeamCity — .teamcity/ directory with Kotlin DSL or XML
+    ("TeamCity", lambda r: (r / ".teamcity").is_dir()),
+    # Concourse CI — ci/ directory with pipeline YAML
+    ("Concourse CI", lambda r: (r / "ci" / "pipeline.yml").is_file()
+                               or (r / "ci" / "pipeline.yaml").is_file()),
+    # Harness CI — .harness/ directory
+    ("Harness CI", lambda r: (r / ".harness").is_dir()),
+    # Nx Cloud / Nx affected CI recipe
+    ("Nx", lambda r: (r / "nx.json").is_file()),
 )
 
 
@@ -118,9 +132,11 @@ _DETECTORS: tuple[tuple[str, Callable[[Path], bool]], ...] = (
 
     Detected: GitHub Actions, CircleCI, Buildkite, Travis CI, Jenkins,
     GitLab CI, Azure Pipelines, Bitbucket Pipelines, AppVeyor, Drone CI,
-    Woodpecker CI, Earthly. Detection is filename-based; absence here
-    does not mean CI doesn't exist (orgs run repos via custom
-    orchestrators), it means an agent walking the repo cannot find it.
+    Woodpecker CI, Earthly, Prow CI, Tekton, Dagger, Codefresh,
+    Semaphore CI, TeamCity, Concourse CI, Harness CI, Nx. Detection is
+    filename-based; absence here does not mean CI doesn't exist (orgs run
+    repos via custom orchestrators), it means an agent walking the repo
+    cannot find it.
     """,
     weight=0.9,
 )
