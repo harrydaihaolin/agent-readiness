@@ -20,10 +20,13 @@ _SETUP_HEADINGS = re.compile(
 )
 _NEXT_HEADING = re.compile(r"(?m)^\s*#{1,6}\s+\S")
 
-# Lines starting with $
-_SHELL_PROMPT = re.compile(r"^\s*\$\s+\S")
-# Fenced bash/sh blocks
-_FENCE_OPEN = re.compile(r"^```\s*(bash|sh|shell|zsh|console)\s*$", re.I)
+# Lines starting with $ or > (PowerShell prompt)
+_SHELL_PROMPT = re.compile(r"^\s*[\$>]\s+\S")
+# Fenced shell/script blocks (extended to cover PowerShell, batch, Python installs)
+_FENCE_OPEN = re.compile(
+    r"^```\s*(bash|sh|shell|zsh|console|powershell|posh|ps|cmd|batch|python|pip)\s*$",
+    re.I,
+)
 _FENCE_CLOSE = re.compile(r"^```\s*$")
 # Command lines inside a fenced block (non-empty, non-comment)
 _CMD_LINE = re.compile(r"^\s*[^#\s]")
