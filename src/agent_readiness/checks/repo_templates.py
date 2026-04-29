@@ -38,25 +38,37 @@ def check(ctx: RepoContext) -> CheckResult:
     present: list[str] = []
     missing: list[str] = []
 
-    # Issue templates
-    issue_tmpl_dir = ctx.root / ".github" / "ISSUE_TEMPLATE"
-    if issue_tmpl_dir.is_dir() and any(
-        f.suffix in (".md", ".yml", ".yaml")
-        for f in issue_tmpl_dir.iterdir()
-        if f.is_file()
+    # Issue templates (GitHub and GitLab)
+    issue_tmpl_dirs = (
+        ctx.root / ".github" / "ISSUE_TEMPLATE",
+        ctx.root / ".gitlab" / "issue_templates",
+    )
+    if any(
+        d.is_dir() and any(
+            f.suffix in (".md", ".yml", ".yaml")
+            for f in d.iterdir()
+            if f.is_file()
+        )
+        for d in issue_tmpl_dirs
     ):
         present.append("issue templates")
     else:
-        missing.append("issue templates (.github/ISSUE_TEMPLATE/)")
+        missing.append("issue templates (.github/ISSUE_TEMPLATE/ or .gitlab/issue_templates/)")
 
-    # PR template
+    # PR template (single file or directory of templates)
     pr_template_paths = (
         ".github/pull_request_template.md",
         ".github/PULL_REQUEST_TEMPLATE.md",
         "PULL_REQUEST_TEMPLATE.md",
         "pull_request_template.md",
+        # GitLab merge request template
+        ".gitlab/merge_request_templates/default.md",
     )
-    if any((ctx.root / p).is_file() for p in pr_template_paths):
+    pr_tmpl_dir = ctx.root / ".github" / "PULL_REQUEST_TEMPLATE"
+    if (
+        any((ctx.root / p).is_file() for p in pr_template_paths)
+        or (pr_tmpl_dir.is_dir() and any(pr_tmpl_dir.iterdir()))
+    ):
         present.append("PR template")
     else:
         missing.append("PR template (.github/pull_request_template.md)")
