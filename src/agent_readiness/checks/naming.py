@@ -14,12 +14,20 @@ from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
 
-# File stems considered ambiguous — domain-agnostic dumping grounds
+# File stems considered ambiguous — domain-agnostic dumping grounds that
+# force an agent to read the file to know what's in it.
+#
+# Intentionally NOT included:
+#   config     — "config.py / config.go / config.yaml" is a conventional,
+#                unambiguous name meaning "configuration for this module"
+#   constants  — conventional in many languages (Go, Java, JS)
+#   types      — conventional in TypeScript / Go
+#   interfaces — conventional in Go / Java
+#   base       — "base class" is a widely understood pattern
 _AMBIGUOUS_STEMS = frozenset({
-    "utils", "helpers", "helper", "manager", "managers",
-    "common", "shared", "misc", "base",
-    "constants", "config",
-    "types", "interfaces",
+    "utils", "helpers", "helper",
+    "manager", "managers",
+    "common", "shared", "misc",
 })
 
 
