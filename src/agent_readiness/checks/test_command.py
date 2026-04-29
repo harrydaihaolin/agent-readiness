@@ -113,6 +113,43 @@ def _check_gemfile_rakefile(ctx: RepoContext) -> _Match | None:
     return None
 
 
+def _check_tox(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("tox.ini"):
+        return _Match("tox.ini", "tox.ini", 100.0, "tox")
+    return None
+
+
+def _check_nox(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("noxfile.py"):
+        return _Match("noxfile.py", "noxfile.py", 100.0, "nox")
+    return None
+
+
+def _check_hatch(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("hatch.toml"):
+        return _Match("hatch.toml", "hatch.toml", 80.0, "hatch test")
+    pyproject = ctx.read_text("pyproject.toml")
+    if pyproject and "[tool.hatch.envs" in pyproject:
+        return _Match("pyproject.toml [tool.hatch.envs]", "pyproject.toml",
+                      80.0, "hatch test")
+    return None
+
+
+def _check_justfile(ctx: RepoContext) -> _Match | None:
+    for name in ("Justfile", "justfile"):
+        text = ctx.read_text(name)
+        if text and re.search(r"(?m)^test\b", text):
+            return _Match(f"{name} recipe 'test'", name, 80.0, "just test")
+    return None
+
+
+def _check_cmake(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("CMakeLists.txt"):
+        return _Match("CMakeLists.txt (CTest convention)", "CMakeLists.txt",
+                      80.0, "ctest")
+    return None
+
+
 def _check_scripts_test(ctx: RepoContext) -> _Match | None:
     for name in ("scripts/test", "scripts/test.sh", "bin/test"):
         if (ctx.root / name).is_file():
@@ -126,9 +163,14 @@ _DETECTORS = (
     _check_package_json,
     _check_pyproject,
     _check_pytest_ini,
+    _check_tox,
+    _check_nox,
+    _check_hatch,
     _check_cargo,
     _check_go_mod,
     _check_gemfile_rakefile,
+    _check_justfile,
+    _check_cmake,
     _check_scripts_test,
 )
 
