@@ -23,6 +23,15 @@ _TYPECHECK_FILES = (
 
 _PYPROJECT_SECTIONS = ("[tool.mypy]", "[tool.pyright]")
 
+# Manifests that imply a statically-typed language — the compiler IS the
+# type checker; asking for a separate type-checker config is a false positive.
+_STATIC_LANG_MANIFESTS: tuple[tuple[str, str], ...] = (
+    ("go.mod",      "Go (statically typed)"),
+    ("Cargo.toml",  "Rust (statically typed)"),
+    ("CMakeLists.txt", "C/C++ (statically typed)"),
+    ("Package.swift", "Swift (statically typed)"),
+)
+
 
 @register(
     check_id="typecheck.configured",
@@ -72,6 +81,23 @@ def check_typecheck_configured(ctx: RepoContext) -> CheckResult:
                         message=f"Type checker configured in pyproject.toml ({section})",
                     )],
                 )
+
+    # Statically-typed languages: the compiler enforces types; a separate
+    # type-checker config file is not expected or required.
+    for manifest, lang_label in _STATIC_LANG_MANIFESTS:
+        if (ctx.root / manifest).is_file():
+            return CheckResult(
+                check_id="typecheck.configured",
+                pillar=Pillar.FEEDBACK,
+                score=100.0,
+                weight=0.9,
+                findings=[Finding(
+                    check_id="typecheck.configured",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Type checking provided by language: {lang_label}",
+                )],
+            )
 
     return CheckResult(
         check_id="typecheck.configured",
