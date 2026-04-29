@@ -1,7 +1,0 @@
-rules_version   = 1
-protocol_compat = [1]
-pack_version    = "2.0.0-pre.q1"
-
-[meta]
-description = "Open-source rule pack vendored by agent-readiness and consumed by the closed insights engine. Snapshot taken during Q1 migration; will be replaced by a pip dependency in migration phase 4."
-maintainers = ["@harrydaihaolin"]

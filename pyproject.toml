@@ -26,6 +26,10 @@ dependencies = [
     "rich>=13.7",
     "pyyaml>=6",
     "agent-readiness-insights-protocol>=0.1,<1.0",
+    # Q1 phase 4: rules pack ships separately. Pinned to the
+    # feat/q1-pkg-pyproject branch until the first 2.0.0 tag is
+    # cut on agent-readiness-rules.
+    "agent-readiness-rules @ git+https://github.com/harrydaihaolin/agent-readiness-rules.git@feat/q1-pkg-pyproject",
 ]
 
 [project.urls]
@@ -50,13 +54,14 @@ full = ["jinja2>=3.1", "lizard>=1.17", "mcp>=1.0"]
 agent-readiness = "agent_readiness.cli:cli"
 agent-readiness-mcp = "agent_readiness.mcp_server:main"
 
+[tool.hatch.metadata]
+# Required to allow the `agent-readiness-rules @ git+https://...`
+# direct reference dependency until the rules pack ships its first
+# tagged release on PyPI.
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent_readiness"]
-include = [
-    "src/agent_readiness/rules_pack/**/*.yaml",
-    "src/agent_readiness/rules_pack/MANIFEST",
-    "src/agent_readiness/rules_pack/manifest.toml",
-]
 
 [tool.ruff]
 line-length = 100

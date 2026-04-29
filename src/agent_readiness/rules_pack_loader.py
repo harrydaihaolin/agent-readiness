@@ -1,33 +1,36 @@
-"""Locate the vendored rules pack on disk.
+"""Locate the rules pack via the installed ``agent_readiness_rules`` pkg.
 
-The rules pack is vendored (not pip-installed) so it ships with the
-wheel. This module handles the small dance of locating the directory
-inside an installed package vs an editable checkout.
+Pre-Q1 the rules pack was vendored under
+``src/agent_readiness/rules_pack/`` and refreshed by
+``scripts/vendor_rules.sh``. Q1 phase 4 swaps that for a normal pip
+dependency: the ``agent-readiness-rules`` distribution ships an
+``agent_readiness_rules`` Python package that exposes the YAMLs as
+package data. We resolve the directory through it.
+
+Absence is still OK — a developer working on a checkout that hasn't
+installed ``agent-readiness-rules`` yet should still be able to import
+``agent_readiness`` without a hard crash. The CLI surfaces a clear
+``error: no rules loaded`` message in that case.
 """
 
 from __future__ import annotations
 
-from importlib.resources import files
 from pathlib import Path
 
 
 def default_rules_dir() -> Path | None:
-    """Return the path to the vendored rules pack, or None if absent.
+    """Return the path to the installed rules pack, or None if absent.
 
-    Absence is OK — the rules pack is opt-in and a developer working on
-    a checkout that hasn't run scripts/vendor_rules.sh yet should still
-    be able to run agent-readiness.
+    Resolves the ``agent_readiness_rules.rules_dir()`` helper if the
+    package is installed; returns None otherwise.
     """
     try:
-        traversable = files("agent_readiness").joinpath("rules_pack")
-    except (ModuleNotFoundError, AttributeError):
+        from agent_readiness_rules import rules_dir as _rules_dir
+    except ImportError:
         return None
-    # Convert importlib.resources.Traversable -> Path; this works for
-    # filesystem-backed packages, which is our case (no zipped wheels in
-    # the wild that would need extract_to).
     try:
-        path = Path(str(traversable))
-    except TypeError:
+        path = _rules_dir()
+    except FileNotFoundError:
         return None
     if not path.is_dir():
         return None
@@ -35,21 +38,32 @@ def default_rules_dir() -> Path | None:
 
 
 def vendored_manifest() -> dict[str, str] | None:
-    """Read the MANIFEST file written by scripts/vendor_rules.sh."""
-    rd = default_rules_dir()
-    if rd is None:
+    """Read ``manifest.toml`` from the installed rules pack.
+
+    Returns a dict of the top-level scalar fields (rules_version,
+    pack_version, …) so dashboards can show what version of the pack
+    is in play. Returns None if the pack is absent or the manifest is
+    missing.
+    """
+    try:
+        from agent_readiness_rules import manifest_path
+    except ImportError:
         return None
-    manifest_path = rd / "MANIFEST"
-    if not manifest_path.is_file():
+    try:
+        path = manifest_path()
+    except FileNotFoundError:
         return None
+    if not path.is_file():
+        return None
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover - python < 3.11
+        return None
+    data = tomllib.loads(path.read_text())
     out: dict[str, str] = {}
-    for line in manifest_path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if "=" in line:
-            k, _, v = line.partition("=")
-            out[k.strip()] = v.strip().strip('"')
+    for k, v in data.items():
+        if isinstance(v, (str, int, float, bool)):
+            out[k] = str(v)
     return out
 
 
