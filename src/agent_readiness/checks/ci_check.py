@@ -36,9 +36,12 @@ def _has_yaml_in_dir(p: Path) -> bool:
 # which covers the vast majority of real workflows without YAML parsing.
 _TEST_CMD_RE = re.compile(
     r"run:\s*.*\b("
-    r"pytest|python -m unittest|npm test|npm run test|"
-    r"cargo test|go test|make test|gradle test|mvn test|"
-    r"\.\/gradlew test|pnpm test|yarn test"
+    r"pytest|python -m pytest|python -m unittest|"
+    r"npm test|npm run test|pnpm test|yarn test|bun test|"
+    r"cargo test|go test|"
+    r"make test|gradle test|mvn test|\.\/gradlew test|"
+    r"swift test|mix test|bundle exec rspec|phpunit|"
+    r"deno test|jest|vitest"
     r")\b",
 )
 
