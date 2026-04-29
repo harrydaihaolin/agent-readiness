@@ -68,12 +68,29 @@ def _try_validate_with_protocol(data: dict[str, Any]) -> None:
     If the protocol package isn't installed, skip validation — the
     consumer just gets the looser load. We don't want agent-readiness
     to hard-require the protocol pkg; rules_eval works either way.
+
+    If the protocol *is* installed but rejects the rule (typically
+    because the user has an older protocol release that pre-dates a
+    schema extension like ``PrivateMatch``), log a warning and skip.
+    The rule's own structural fields are still loaded by the
+    permissive ``LoadedRule`` dataclass downstream, and unknown
+    ``match.type`` values gracefully degrade to ``not_measured`` in
+    the evaluator. Failing the entire scan because the user's
+    protocol pin is one minor version behind would be the wrong
+    trade-off — best-effort means best-effort.
     """
     try:
         from agent_readiness_insights_protocol import Rule  # type: ignore[import-not-found]
     except ImportError:
         return
-    Rule.model_validate(data)
+    try:
+        Rule.model_validate(data)
+    except Exception as exc:  # noqa: BLE001 -- pydantic raises a family
+        logger.warning(
+            "protocol validation rejected rule (continuing with looser "
+            "load); upgrade agent-readiness-insights-protocol to silence: %s",
+            exc,
+        )
 
 
 def load_rule_file(path: Path) -> LoadedRule | None:
