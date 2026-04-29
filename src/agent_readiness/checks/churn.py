@@ -32,6 +32,25 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
     weight=0.6,
 )
 def check_churn_hotspots(ctx: RepoContext) -> CheckResult:
+    # Shallow clone: commit_count is unreliable; skip measurement.
+    shallow_file = ctx.root / ".git" / "shallow"
+    if shallow_file.is_file():
+        return CheckResult(
+            check_id="git.churn_hotspots",
+            pillar=Pillar.COGNITIVE_LOAD,
+            score=100.0,
+            weight=0.6,
+            not_measured=True,
+            findings=[Finding(
+                check_id="git.churn_hotspots",
+                pillar=Pillar.COGNITIVE_LOAD,
+                severity=Severity.INFO,
+                message=(
+                    "Shallow clone detected — churn analysis skipped. "
+                    "Re-run with a full clone to measure hotspots."
+                ),
+            )],
+        )
     # Skip if fewer than 5 commits (not enough history to measure churn)
     if ctx.commit_count < 5:
         return CheckResult(
