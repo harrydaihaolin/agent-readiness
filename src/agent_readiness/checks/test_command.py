@@ -48,6 +48,10 @@ def _check_makefile(ctx: RepoContext) -> _Match | None:
     # Match a line that begins a make target named test (with optional deps).
     if re.search(r"(?m)^test\s*:", text):
         return _Match("Makefile target 'test'", "Makefile", 100.0, "make test")
+    # Also accept common aliases
+    for alias in ("tests", "test-all", "check", "ci", "verify"):
+        if re.search(rf"(?m)^{alias}\s*:", text):
+            return _Match(f"Makefile target '{alias}'", "Makefile", 100.0, f"make {alias}")
     return None
 
 
@@ -150,8 +154,50 @@ def _check_cmake(ctx: RepoContext) -> _Match | None:
     return None
 
 
+def _check_maven(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("pom.xml"):
+        return _Match("pom.xml (mvn test convention)", "pom.xml",
+                      80.0, "mvn test")
+    return None
+
+
+def _check_gradle(ctx: RepoContext) -> _Match | None:
+    for name in ("build.gradle", "build.gradle.kts"):
+        if ctx.has_file(name):
+            return _Match(f"{name} (Gradle test convention)", name,
+                          80.0, "./gradlew test")
+    return None
+
+
+def _check_mix(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("mix.exs"):
+        return _Match("mix.exs (mix test convention)", "mix.exs",
+                      80.0, "mix test")
+    return None
+
+
+def _check_sbt(ctx: RepoContext) -> _Match | None:
+    if ctx.has_file("build.sbt"):
+        return _Match("build.sbt (sbt test convention)", "build.sbt",
+                      80.0, "sbt test")
+    return None
+
+
+def _check_conftest(ctx: RepoContext) -> _Match | None:
+    """Root-level conftest.py is a strong pytest signal even without explicit config."""
+    if ctx.has_file("conftest.py"):
+        return _Match("conftest.py (pytest fixture root)", "conftest.py",
+                      80.0, "pytest")
+    return None
+
+
 def _check_scripts_test(ctx: RepoContext) -> _Match | None:
-    for name in ("scripts/test", "scripts/test.sh", "bin/test"):
+    for name in (
+        "scripts/test", "scripts/test.sh", "scripts/run_tests.sh",
+        "scripts/test-all.sh", "scripts/ci.sh",
+        "bin/test", "bin/ci",
+        "ci/test.sh", "ci/run_tests.sh",
+    ):
         if (ctx.root / name).is_file():
             return _Match(f"{name} (custom script)", name, 70.0,
                           f"./{name}")
@@ -168,9 +214,14 @@ _DETECTORS = (
     _check_hatch,
     _check_cargo,
     _check_go_mod,
+    _check_maven,
+    _check_gradle,
+    _check_mix,
+    _check_sbt,
     _check_gemfile_rakefile,
     _check_justfile,
     _check_cmake,
+    _check_conftest,
     _check_scripts_test,
 )
 
