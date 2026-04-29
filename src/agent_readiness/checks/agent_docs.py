@@ -27,15 +27,30 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 _AGENT_DOC_FILES: tuple[tuple[str, ...], ...] = (
     ("AGENTS.md",),
     ("CLAUDE.md",),
+    ("GEMINI.md",),
+    # Windsurf
+    (".windsurfrules",),
+    # Cursor
     (".cursorrules",),
+    # GitHub Copilot
     (".github", "copilot-instructions.md"),
     ("copilot-setup-steps.yml",),
     (".github", "copilot-setup-steps.yml"),
+    # Aider
+    (".aider.conf.yml",),
+    # Zed
+    (".zed", "settings.json"),
+    # Bolt / StackBlitz
+    (".bolt", "prompt"),
 )
 
 # Directories where any matching file counts as a hit
 _AGENT_DOC_DIRS: tuple[tuple[tuple[str, ...], str], ...] = (
     ((".cursor", "rules"), "*.mdc"),
+    # GitHub Copilot instructions directory (newer format)
+    ((".github", "instructions"), "*.md"),
+    # Windsurf rules directory
+    ((".windsurf", "rules"), "*.md"),
 )
 
 
