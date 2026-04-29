@@ -114,20 +114,60 @@ def check_manifest_detected(ctx: RepoContext) -> CheckResult:
                 )],
             )
 
-    # requirements.txt is a loose manifest — gives agents install instructions
-    # even without full version pinning.
-    if ctx.has_file("requirements.txt", case_insensitive=False) is not None:
-        return CheckResult(
-            check_id="manifest.detected",
-            pillar=Pillar.FEEDBACK,
-            score=80.0,
-            findings=[Finding(
+    # Ruby gemspec — arbitrary name but always at depth ≤ 2
+    for f in ctx._files:
+        if f.suffix == ".gemspec" and len(f.parts) <= 2:
+            return CheckResult(
                 check_id="manifest.detected",
                 pillar=Pillar.FEEDBACK,
-                severity=Severity.INFO,
-                message="requirements.txt found (consider migrating to pyproject.toml for richer metadata).",
-            )],
-        )
+                score=100.0,
+                findings=[Finding(
+                    check_id="manifest.detected",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Ruby gemspec manifest found: {f}",
+                )],
+            )
+
+    # Monorepo fallback — look for manifests at depth 2 (e.g. packages/core/pyproject.toml)
+    # Score 80 because the root doesn't directly tell an agent how to install.
+    _MONOREPO_MANIFESTS = frozenset({
+        "pyproject.toml", "package.json", "Cargo.toml",
+        "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
+    })
+    for f in ctx._files:
+        if len(f.parts) == 2 and f.name in _MONOREPO_MANIFESTS:
+            return CheckResult(
+                check_id="manifest.detected",
+                pillar=Pillar.FEEDBACK,
+                score=80.0,
+                findings=[Finding(
+                    check_id="manifest.detected",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Project manifest found in subdirectory: {f} (monorepo layout).",
+                    fix_hint=(
+                        "Consider adding a root-level manifest or workspace file "
+                        "so agents can find dependencies without navigating subdirectories."
+                    ),
+                )],
+            )
+
+    # requirements.txt is a loose manifest — gives agents install instructions
+    # even without full version pinning.
+    for req_name in ("requirements.txt", "requirements-dev.txt", "requirements-test.txt"):
+        if ctx.has_file(req_name, case_insensitive=False) is not None:
+            return CheckResult(
+                check_id="manifest.detected",
+                pillar=Pillar.FEEDBACK,
+                score=80.0,
+                findings=[Finding(
+                    check_id="manifest.detected",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"{req_name} found (consider migrating to pyproject.toml for richer metadata).",
+                )],
+            )
 
     return CheckResult(
         check_id="manifest.detected",
