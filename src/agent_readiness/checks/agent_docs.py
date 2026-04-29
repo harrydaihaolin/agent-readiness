@@ -38,10 +38,21 @@ _AGENT_DOC_FILES: tuple[tuple[str, ...], ...] = (
     (".github", "copilot-setup-steps.yml"),
     # Aider
     (".aider.conf.yml",),
+    (".aider.conf",),
     # Zed
     (".zed", "settings.json"),
     # Bolt / StackBlitz
     (".bolt", "prompt"),
+    # Cline (VS Code agent)
+    (".clinerules",),
+    # Replit AI
+    (".replit",),
+    # Amazon Q Developer (formerly AWS CodeWhisperer)
+    (".amazonq", "customization.json"),
+    # Copilot Workspace config
+    (".github", "workspace.json"),
+    # JetBrains AI Assistant
+    (".idea", "ai-settings.xml"),
 )
 
 # Directories where any matching file counts as a hit
@@ -51,6 +62,10 @@ _AGENT_DOC_DIRS: tuple[tuple[tuple[str, ...], str], ...] = (
     ((".github", "instructions"), "*.md"),
     # Windsurf rules directory
     ((".windsurf", "rules"), "*.md"),
+    # Cline rules directory
+    ((".clinerules",), "*.md"),
+    # Cursor rules subdirectory
+    ((".cursor",), "*.cursorrules"),
 )
 
 
