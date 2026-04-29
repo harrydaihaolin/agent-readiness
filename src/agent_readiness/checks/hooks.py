@@ -12,6 +12,8 @@ Scoring:
 
 from __future__ import annotations
 
+import json
+
 from agent_readiness.checks import register
 from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
@@ -21,9 +23,30 @@ _HOOK_SIGNALS: list[tuple[str, str, bool]] = [
     (".husky", "Husky git hooks", True),
     ("lefthook.yml", "Lefthook", False),
     (".lefthook.yml", "Lefthook", False),
+    ("lefthook.yaml", "Lefthook", False),
     (".pre-commit-config.yaml", "pre-commit framework", False),
     (".claude/settings.json", "Claude Code hooks (PostToolUse)", False),
+    # Overcommit (Ruby) and commitlint config
+    (".overcommit.yml", "Overcommit", False),
+    ("commitlint.config.js", "commitlint", False),
+    (".commitlintrc", "commitlint", False),
+    (".commitlintrc.json", "commitlint", False),
+    (".commitlintrc.yml", "commitlint", False),
 ]
+
+
+def _husky_in_package_json(ctx: RepoContext) -> bool:
+    """Return True if package.json declares husky as a dependency."""
+    text = ctx.read_text("package.json")
+    if text is None:
+        return False
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        return False
+    dev_deps = data.get("devDependencies") or {}
+    deps = data.get("dependencies") or {}
+    return "husky" in dev_deps or "husky" in deps
 
 
 @register(
@@ -47,6 +70,11 @@ def check(ctx: RepoContext) -> CheckResult:
         target = ctx.root / rel
         if (is_dir and target.is_dir()) or (not is_dir and target.is_file()):
             found.append(label)
+    # Husky v4 uses .husky/ (already above); Husky v6+ is declared in
+    # package.json devDependencies without a .husky/ directory necessarily
+    # existing until `husky install` is run.
+    if not found and _husky_in_package_json(ctx):
+        found.append("Husky (declared in package.json)")
 
     if found:
         return CheckResult(
