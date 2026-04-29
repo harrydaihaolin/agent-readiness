@@ -28,6 +28,15 @@ _ENV_PATTERNS = [
 
 _SOURCE_EXTENSIONS = frozenset({".py", ".js", ".ts", ".rb", ".go", ".sh"})
 
+# Directories where env var references are expected and don't require a .env.example.
+# Tests commonly use os.environ to inject config for test runs; scripts/ and
+# ci/ directories often use env vars for build configuration.
+_TEST_DIRS = frozenset({
+    "tests", "test", "testing", "specs", "spec", "__tests__",
+    "scripts", "script", "tools", "ci", "e2e", "integration",
+    "conftest",
+})
+
 # Per-extension patterns to strip single-line comments before pattern matching.
 # This avoids false positives from commented-out code and documentation.
 _COMMENT_LINE_RE: dict[str, re.Pattern[str]] = {
@@ -68,9 +77,12 @@ _ENV_EXAMPLE_NAMES = (
     weight=0.9,
 )
 def check_env_example_parity(ctx: RepoContext) -> CheckResult:
-    # Find source files
+    # Find source files — exclude test and script directories where env var usage
+    # is for test config injection, not application configuration that needs documenting.
     source_files = [
-        f for f in ctx._files if f.suffix in _SOURCE_EXTENSIONS
+        f for f in ctx._files
+        if f.suffix in _SOURCE_EXTENSIONS
+        and not (len(f.parts) >= 2 and f.parts[0].lower() in _TEST_DIRS)
     ]
 
     if not source_files:
