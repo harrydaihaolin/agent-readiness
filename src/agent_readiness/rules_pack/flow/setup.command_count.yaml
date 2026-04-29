@@ -1,0 +1,29 @@
+rules_version: 1
+id: setup.command_count
+pillar: flow
+title: Setup requires few commands
+weight: 0.7
+severity: warn
+explanation: |
+  Each command in a README's Setup / Installation section is a place
+  the agent can fail (wrong flag, missing prerequisite, version
+  mismatch). Agents succeed at 1-3 setup commands at near-100% and
+  fall off a cliff after 5. The rule counts distinct shell commands
+  in the setup section's fenced code blocks and shell-prompt lines.
+match:
+  type: setup_command_count
+  max_commands: 5
+  setup_headings:
+    - install
+    - installation
+    - setup
+    - getting started
+    - quick start
+    - quickstart
+    - prerequisites
+fix_hint: |
+  Bundle multi-step setup into a single `make setup` (or
+  `scripts/setup`) target. The README then documents one command
+  instead of five. The script can still do five things — it just
+  hides the noise from the agent.
+insight_query: setup command count fewer steps installation make setup script

@@ -1,0 +1,27 @@
+rules_version: 1
+id: readme.has_run_instructions
+pillar: cognitive_load
+title: README documents install / run / test
+weight: 1.0
+severity: warn
+explanation: |
+  The README is the agent's first stop. If it has prose but no
+  `install` / `run` / `test` signals — paragraphs without fenced code
+  blocks, or no mention of those steps at all — the agent has to
+  reverse-engineer the workflow from manifests and CI configs. Each
+  of the three signals (install / run / test) is independently
+  scored; the rule fires when any are missing.
+match:
+  type: prompt_scan
+  mode: readme_run_instructions
+  signals:
+    - install
+    - run
+    - test
+  require_fenced_code: true
+fix_hint: |
+  Add three short sections to README: Install (one fenced block),
+  Run (one fenced block showing the canonical entry point), Test
+  (one fenced block). Three fenced blocks is the floor; if your
+  project genuinely needs more, write more.
+insight_query: README install run test fenced code instructions agent orientation

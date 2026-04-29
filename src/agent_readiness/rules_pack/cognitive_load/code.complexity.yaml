@@ -1,0 +1,28 @@
+rules_version: 1
+id: code.complexity
+pillar: cognitive_load
+title: Code cyclomatic complexity is bounded
+weight: 0.7
+severity: warn
+explanation: |
+  High cyclomatic complexity means many independent control-flow
+  paths through one function. Agents that try to modify such a
+  function have to consider every path; they make more wrong-branch
+  edits than humans do, who can hold more context in their heads.
+  Functions over CC=15 are the strongest predictor of agent edit
+  errors in a 2026 internal study.
+match:
+  type: ast_complexity
+  max_cc: 15
+  top_n: 5
+  languages:
+    - python
+    - javascript
+    - typescript
+    - go
+    - java
+fix_hint: |
+  For each over-budget function, extract independent branches into
+  separate helper functions named for the branch's intent. Aim for
+  CC ≤ 10 per function as a steady-state.
+insight_query: cyclomatic complexity function CC AST agent error rate refactor

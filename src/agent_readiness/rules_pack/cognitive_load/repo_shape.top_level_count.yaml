@@ -1,0 +1,43 @@
+rules_version: 1
+id: repo_shape.top_level_count
+pillar: cognitive_load
+title: Few non-meta files at repo root
+weight: 0.8
+severity: warn
+explanation: |
+  An agent's first impression of a repo is `ls`. A root with 30+
+  non-meta files (excluding readme / license / config) signals a
+  flat, undirectory'd project where finding *anything* requires
+  reading every name. Mature projects keep the root short by
+  pushing source into `src/`, `pkg/`, `app/`, etc.
+match:
+  type: tree_aggregate
+  mode: top_level_count
+  warn_above: 20
+  exclude_dotfiles: true
+  exclude_stems:
+    - readme
+    - license
+    - licence
+    - copying
+    - notice
+    - authors
+    - contributors
+    - changelog
+    - history
+    - news
+    - codeowners
+    - makefile
+    - dockerfile
+    - vagrantfile
+    - earthfile
+    - justfile
+    - rakefile
+    - taskfile
+    - gemfile
+    - rakefile
+fix_hint: |
+  Move source into `src/<package>/`, scripts into `scripts/`, docs
+  into `docs/`. The root should contain manifest + README + license
+  + maybe a Makefile, and that's it.
+insight_query: repo shape top level files root flat structure src package

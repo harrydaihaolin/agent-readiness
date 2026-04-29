@@ -1,0 +1,25 @@
+rules_version: 1
+id: repo_shape.token_budget
+pillar: cognitive_load
+title: Orientation fits in agent context window
+weight: 0.7
+severity: warn
+explanation: |
+  Most agents start a session by reading some combination of
+  AGENTS.md / CLAUDE.md / README + the primary manifest + a handful
+  of representative source files. If that combined "orientation
+  bundle" exceeds the agent's context budget, the agent either
+  truncates (loses signal) or skips files (works from incomplete
+  knowledge). Repos that fit comfortably under the warn threshold
+  give every agent a fair start.
+match:
+  type: tree_aggregate
+  mode: orientation_tokens
+  warn_tokens: 24000
+  max_tokens: 120000
+fix_hint: |
+  Trim AGENTS.md / README to the essentials and split monolithic
+  modules so the largest representative source file is < 500 lines.
+  The orientation budget is fixed; the only variable is how much
+  signal you fit into it.
+insight_query: token budget orientation context window AGENTS README size

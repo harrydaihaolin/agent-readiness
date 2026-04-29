@@ -1,0 +1,59 @@
+rules_version: 1
+id: lint.configured
+pillar: feedback
+title: Linter is configured
+weight: 0.9
+severity: warn
+explanation: |
+  A configured linter is the difference between an agent's edit being
+  immediately rejected with a clear error and the same edit silently
+  drifting from house style. Even if the linter is permissive, having
+  *a* config tells agents which rules are intentional and which are
+  drift.
+match:
+  type: composite
+  op: or
+  summary: At least one linter config is present.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - ruff.toml
+        - .ruff.toml
+        - .flake8
+        - .pylintrc
+        - pylintrc
+        - .eslintrc
+        - .eslintrc.js
+        - .eslintrc.cjs
+        - .eslintrc.json
+        - .eslintrc.yml
+        - .eslintrc.yaml
+        - eslint.config.js
+        - eslint.config.mjs
+        - eslint.config.cjs
+        - biome.json
+        - biome.jsonc
+        - rustfmt.toml
+        - .rustfmt.toml
+        - .clang-format
+        - .stylelintrc
+        - .stylelintrc.json
+        - .stylelintrc.js
+    - type: regex_in_files
+      pattern: '\[tool\.(ruff|black|pylint|isort)\]'
+      file_globs:
+        - pyproject.toml
+    - type: regex_in_files
+      pattern: '\[(flake8|pylint|tool:pytest)\]'
+      file_globs:
+        - setup.cfg
+    - type: regex_in_files
+      pattern: '"(eslintConfig|prettier|lint-staged)"\s*:'
+      file_globs:
+        - package.json
+fix_hint: |
+  For Python: `pip install ruff` + drop `[tool.ruff]` in pyproject.toml.
+  For JS/TS: `npm i -D eslint` + run `eslint --init`. The minimal
+  config is fine — what matters is that the rules are explicit, not
+  inherited from the agent's defaults.
+insight_query: linter eslint ruff pylint biome stylelint config

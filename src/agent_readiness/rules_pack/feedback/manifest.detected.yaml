@@ -1,0 +1,22 @@
+rules_version: 1
+id: manifest.detected
+pillar: feedback
+title: Project manifest detected
+weight: 1.0
+severity: warn
+explanation: |
+  A manifest (`pyproject.toml`, `package.json`, `Cargo.toml`,
+  `go.mod`, …) is the contract that tells an agent what the project
+  is, how to install it, and what depends on what. Without one, the
+  agent has to infer everything from filenames and tribal knowledge.
+  This rule looks for a manifest at the repo root or, for monorepos,
+  at depth ≤ 2 (`packages/<name>/pyproject.toml`).
+match:
+  type: manifest_introspection
+  mode: any_manifest_present
+  monorepo_depth: 2
+fix_hint: |
+  Drop a `pyproject.toml` (or `package.json` / `Cargo.toml` / etc.)
+  at the repo root with at least name + version + dependencies. For
+  monorepos, every package directory should have its own manifest.
+insight_query: project manifest pyproject package.json Cargo.toml go.mod monorepo

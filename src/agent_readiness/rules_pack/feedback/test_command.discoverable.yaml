@@ -1,20 +1,50 @@
 rules_version: 1
 id: test_command.discoverable
 pillar: feedback
-title: Test command discoverable in Makefile
+title: Test command is statically discoverable
 weight: 2.0
 severity: warn
 explanation: |
-  Agents need a single canonical test command they can invoke headlessly.
-  When a Makefile exists but has no `test` target, the agent has to
-  parse pyproject scripts / package.json / shell history to find one,
-  often picking the wrong invocation. A Makefile target is the most
-  predictable contract.
+  Agents need a single canonical test command they can invoke
+  headlessly. The strongest signal is a `test:` Makefile target;
+  next-strongest is `[tool.pytest.ini_options]` / `scripts.test` in
+  `package.json` / `tox.ini` / `pytest.ini` / language-conventional
+  test files (`*_test.go`, `Cargo.toml [[test]]`, `tests/`). Without
+  any of these the agent has to guess from shell history, often
+  picking the wrong invocation.
 match:
-  type: command_in_makefile
-  target: test
-  fire_when: missing
+  type: composite
+  op: or
+  summary: At least one canonical test invocation is statically discoverable.
+  clauses:
+    - type: command_in_makefile
+      target: test
+      fire_when: missing
+    - type: command_in_makefile
+      target: tests
+      fire_when: missing
+    - type: regex_in_files
+      pattern: '\[tool\.pytest|\[tool\.hatch\.envs|\[tool\.tox\]'
+      file_globs:
+        - pyproject.toml
+    - type: regex_in_files
+      pattern: '"test"\s*:'
+      file_globs:
+        - package.json
+    - type: path_glob
+      require_globs:
+        - pytest.ini
+        - tox.ini
+        - noxfile.py
+        - conftest.py
+        - tests/**
+        - test/**
+        - "**/*_test.go"
+        - "**/test_*.py"
+        - Cargo.toml
 fix_hint: |
   Add a `test:` target to your Makefile that runs your test suite
-  non-interactively. Example: `test:\n\tpython -m unittest discover -s tests`.
-insight_query: test command discoverable makefile pyproject scripts
+  non-interactively. Example: `test:\n\tpython -m pytest tests/`.
+  This is the universal headless contract; everything else is a
+  fallback.
+insight_query: test command discoverable makefile pyproject scripts pytest tox

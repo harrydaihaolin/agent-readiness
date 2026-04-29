@@ -1,7 +1,11 @@
 """scaffold.py — generate missing agent-readiness files from templates.
 
-Called by `agent-readiness scaffold [PATH] [--dry-run] [--force] [--only]`.
-Fully headless: no interactive prompts. Use --dry-run to preview.
+Called by ``agent-readiness scaffold [PATH] [--dry-run] [--force] [--only]``.
+Fully headless: no interactive prompts. Use ``--dry-run`` to preview.
+
+Post-Q1 the scaffolder is driven by the YAML rules pack: we evaluate
+every rule whose id appears in :data:`_CHECK_TEMPLATES`, and write the
+mapped templates whenever a rule fires.
 """
 
 from __future__ import annotations
@@ -11,11 +15,12 @@ from pathlib import Path
 
 import click
 
-from agent_readiness.checks import _ensure_loaded, all_checks
 from agent_readiness.context import RepoContext
+from agent_readiness.rules_eval import evaluate_rules
+from agent_readiness.rules_runtime import load_default_rules
 
 
-# Maps check_id → list of (relative_dest, template_name) tuples.
+# Maps rule_id -> list of (relative_dest, template_name) tuples.
 # Each entry describes one file this check requires.
 _CHECK_TEMPLATES: dict[str, list[tuple[str, str]]] = {
     "agent_docs.present": [
@@ -33,7 +38,7 @@ _CHECK_TEMPLATES: dict[str, list[tuple[str, str]]] = {
     "hooks.configured": [
         (".pre-commit-config.yaml", "pre-commit-config.yaml"),
     ],
-    "security.dependabot_configured": [
+    "safety.dependency_automation": [
         (".github/dependabot.yml", "dependabot.yml"),
     ],
     "security.policy_present": [
@@ -52,7 +57,6 @@ def _load_template(name: str) -> str:
         template_text = (files("agent_readiness") / "templates" / name).read_text(encoding="utf-8")
         return template_text
     except (FileNotFoundError, TypeError, ModuleNotFoundError):
-        # Fallback: locate relative to this file
         here = Path(__file__).parent
         template_path = here / "templates" / name
         if template_path.is_file():
@@ -80,26 +84,24 @@ def run_scaffold(
     from agent_readiness.plugins import load_entry_point_plugins, load_local_plugins
     load_local_plugins(path)
     load_entry_point_plugins()
-    _ensure_loaded()
 
     ctx = RepoContext(root=path)
-    specs = all_checks()
+    rules = load_default_rules()
 
-    # Filter by --only if requested
     filter_ids: set[str] | None = None
     if only_checks:
         filter_ids = {t.strip() for t in only_checks.split(",")}
 
-    # Run checks to find which ones are failing
+    candidate_rules = [
+        r for r in rules
+        if r.rule_id in _CHECK_TEMPLATES
+        and (filter_ids is None or r.rule_id in filter_ids)
+    ]
+
     failing_ids: set[str] = set()
-    for spec in specs:
-        if filter_ids and spec.check_id not in filter_ids:
-            continue
-        if spec.check_id not in _CHECK_TEMPLATES:
-            continue
-        result = spec.fn(ctx)
+    for result in evaluate_rules(candidate_rules, ctx):
         if not result.not_measured and result.score < 60.0:
-            failing_ids.add(spec.check_id)
+            failing_ids.add(result.check_id)
 
     if not failing_ids:
         click.echo("Nothing to scaffold — all templateable checks are passing.")

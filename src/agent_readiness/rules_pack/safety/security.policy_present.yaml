@@ -1,0 +1,23 @@
+rules_version: 1
+id: security.policy_present
+pillar: safety
+title: Security policy (SECURITY.md) present
+weight: 0.6
+severity: info
+explanation: |
+  A SECURITY.md (or .github/SECURITY.md / docs/SECURITY.md) tells
+  agents and reporters where to send vulnerability disclosures and what
+  the project's response window is. Without it, a coding agent that
+  finds a security issue has no documented escalation path and may
+  default to opening a public issue.
+match:
+  type: path_glob
+  require_globs:
+    - SECURITY.md
+    - .github/SECURITY.md
+    - docs/SECURITY.md
+fix_hint: |
+  Add a SECURITY.md at the repo root with at least: how to report a
+  vulnerability (private channel), supported versions, and expected
+  response time. GitHub's "Add a security policy" template is fine.
+insight_query: SECURITY.md security policy disclosure vulnerability reporting

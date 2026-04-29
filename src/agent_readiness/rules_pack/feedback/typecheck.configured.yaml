@@ -1,0 +1,45 @@
+rules_version: 1
+id: typecheck.configured
+pillar: feedback
+title: Type checker is configured
+weight: 0.9
+severity: warn
+explanation: |
+  A type checker catches whole categories of agent errors (missing
+  fields, wrong arg shapes, stale imports) before they reach runtime.
+  Statically-typed language repos pass automatically; for Python and
+  JS this is opt-in but high-leverage.
+match:
+  type: composite
+  op: or
+  summary: At least one type-checker config or statically-typed manifest is present.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - mypy.ini
+        - .mypy.ini
+        - pyrightconfig.json
+        - tsconfig.json
+        - tsconfig.*.json
+        - "*.csproj"
+        - "*.fsproj"
+        - "*.vbproj"
+        - go.mod
+        - Cargo.toml
+        - build.gradle
+        - build.gradle.kts
+        - "**/py.typed"
+    - type: regex_in_files
+      pattern: '\[tool\.(mypy|pyright|pyre)\]'
+      file_globs:
+        - pyproject.toml
+    - type: regex_in_files
+      pattern: '\[mypy\]'
+      file_globs:
+        - setup.cfg
+fix_hint: |
+  For Python: drop `[tool.mypy]` (or pyright) in pyproject.toml and a
+  `py.typed` marker in your package. For TypeScript: a `tsconfig.json`
+  with `strict: true`. Type checking pays for itself within ~3
+  agent-driven changes.
+insight_query: type checker mypy pyright tsconfig type checking config

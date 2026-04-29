@@ -1,0 +1,35 @@
+rules_version: 1
+id: gitignore.covers_junk
+pillar: safety
+title: .gitignore covers build artifacts and secrets
+weight: 1.0
+severity: warn
+explanation: |
+  An agent that runs `pip install` / `npm install` / a build will
+  produce artefact directories (`__pycache__`, `node_modules`,
+  `dist/`, `build/`, IDE settings, coverage reports). If the
+  `.gitignore` doesn't cover them, those artefacts get accidentally
+  committed and pollute future diffs. The same pattern catches
+  secrets — `.env` not being ignored is how API keys end up in
+  public history.
+match:
+  type: gitignore_coverage
+  min_groups_covered: 7
+  groups:
+    - python_pycache
+    - node_modules
+    - dotenv
+    - dist_build
+    - go_vendor
+    - rust_target
+    - jvm_class
+    - ide_junk
+    - python_egg_info
+    - coverage
+    - terraform
+    - logs
+fix_hint: |
+  Run `gitignore.io` for your stack and paste the result into
+  `.gitignore`. At minimum, cover: `__pycache__`, `node_modules`,
+  `.env`, `dist/`, `build/`, `*.log`, IDE settings, coverage dirs.
+insight_query: .gitignore build artifacts secrets node_modules pycache .env coverage

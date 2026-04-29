@@ -1,0 +1,26 @@
+rules_version: 1
+id: meta.consistency
+pillar: cognitive_load
+title: README claims match repo contents
+weight: 0.5
+severity: warn
+explanation: |
+  Drift between what README documents and what the repo actually has
+  is one of the most expensive false starts for an agent: it follows
+  the README, runs into a missing tool, and either reverts or
+  invents a workaround. Common drifts caught here: README mentions
+  pytest but no pytest config exists; README mentions `npm test`
+  but no package.json; AGENTS.md / CLAUDE.md is a placeholder.
+match:
+  type: cross_file_consistency
+  mode: readme_repo_match
+  checks:
+    - pytest_mention_requires_config
+    - npm_test_requires_package_json
+    - agent_doc_not_placeholder
+fix_hint: |
+  If your README says "run `pytest`", drop a `[tool.pytest.ini_options]`
+  table in pyproject.toml so a fresh checkout actually runs tests
+  with `pytest`. Same logic for any other tool you mention. Agent
+  docs should be ≥ 100 bytes of real content, not a stub.
+insight_query: README repo drift consistency placeholder pytest npm AGENTS.md

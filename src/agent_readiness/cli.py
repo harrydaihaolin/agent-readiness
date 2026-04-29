@@ -8,9 +8,10 @@ from pathlib import Path
 import click
 
 from agent_readiness import __version__
-from agent_readiness.checks import _ensure_loaded, all_checks, get_check
 from agent_readiness.context import RepoContext
 from agent_readiness.renderers import terminal
+from agent_readiness.rules_eval import evaluate_rules
+from agent_readiness.rules_runtime import get_rule, load_default_rules
 from agent_readiness.sandbox import SandboxUnavailableError, preflight
 from agent_readiness.scorer import score as score_results
 
@@ -52,10 +53,6 @@ def cli() -> None:
 @click.option("--no-progress", is_flag=True,
               help="Disable the per-check progress indicator on stderr "
                    "(auto-disabled for --json and non-TTY stderr).")
-@click.option("--with-rules", "with_rules", is_flag=True,
-              help="Also evaluate the vendored YAML rules pack from "
-                   "agent-readiness-rules. Opt-in for v1.1; planned to "
-                   "become default in v1.2.")
 @click.option("--rules-dir", "rules_dir", type=click.Path(path_type=Path,
                                                           file_okay=False,
                                                           dir_okay=True,
@@ -76,10 +73,15 @@ def scan(
     badge_file: Path | None,
     sarif_file: Path | None,
     no_progress: bool,
-    with_rules: bool,
     rules_dir: Path | None,
 ) -> None:
-    """Scan a repository and print an AI-readiness report."""
+    """Scan a repository and print an AI-readiness report.
+
+    All checks live as YAML rules in the vendored rules pack (or the
+    directory passed via ``--rules-dir``). The OSS evaluator dispatches
+    to built-in match types and to private matchers registered by
+    ``agent_readiness.rules_eval.private_matchers`` at import time.
+    """
     from agent_readiness.sandbox import (
         DockerSandbox, SandboxConfig,
         detect_docker_native, resolve_image,
@@ -111,46 +113,51 @@ def scan(
             click.echo(f"  {note}", err=True)
 
         from agent_readiness.sandbox import Phase
-        # Run setup phase
         setup_run = sandbox.run(Phase.SETUP, ["sh", "-c", "echo setup done"])
         if not setup_run.succeeded:
             click.echo(f"Setup phase failed (exit {setup_run.exit_code})", err=True)
 
-        # Run test phase
         test_run = sandbox.run(Phase.TEST, ["sh", "-c", "echo test done"])
         if not test_run.succeeded:
             click.echo(f"Test phase failed (exit {test_run.exit_code})", err=True)
 
-    # Load config from .agent-readiness.toml
-    from agent_readiness.config import extract_context_config, extract_weights, load_config, resolve_weights
+    from agent_readiness.config import (
+        extract_context_config, extract_weights, load_config, resolve_weights,
+    )
     repo_config = load_config(path)
     weights = extract_weights(repo_config)
 
-    # Override with explicit --weights value (named preset or file path)
     if weights_file is not None:
         override = resolve_weights(weights_file)
         if override:
             weights = override
 
-    # Load plugins before ensuring checks
+    # Plugins may register additional private matchers at import time.
+    # They cannot register YAML rules; for that, ship a separate rules
+    # directory and pass --rules-dir.
     from agent_readiness.plugins import load_entry_point_plugins, load_local_plugins
     load_local_plugins(path)
     load_entry_point_plugins()
 
-    _ensure_loaded()
     ctx = RepoContext(root=path, context_config=extract_context_config(repo_config))
-    specs = all_checks()
+    rules = load_default_rules(rules_dir)
 
-    # Filter by --only if provided
+    if not rules:
+        click.echo(
+            "error: no rules loaded. Pass --rules-dir DIR or reinstall "
+            "agent-readiness so the vendored rules pack is present.",
+            err=True,
+        )
+        sys.exit(2)
+
+    # Filter by --only if provided. Tokens may be either rule ids or
+    # pillar names ("flow", "feedback", "cognitive_load", "safety").
     if only_checks:
         tokens = {t.strip().lower() for t in only_checks.split(",")}
-        filtered = []
-        for spec in specs:
-            if spec.check_id in tokens:
-                filtered.append(spec)
-            elif spec.pillar.value.lower() in tokens:
-                filtered.append(spec)
-        specs = filtered
+        rules = [
+            r for r in rules
+            if r.rule_id.lower() in tokens or r.pillar.lower() in tokens
+        ]
 
     from agent_readiness.renderers.progress import ScanProgress
     progress_enabled: bool | None = None
@@ -158,31 +165,15 @@ def scan(
         progress_enabled = False
 
     results = []
-    with ScanProgress(total=len(specs), enabled=progress_enabled) as progress:
-        for spec in specs:
-            progress.advance(spec.check_id)
-            results.append(spec.fn(ctx))
-
-    for cr, spec in zip(results, specs, strict=True):
-        if cr.weight == 1.0 and spec.weight != 1.0:
-            cr.weight = spec.weight
-        cr.explanation = spec.explanation
-
-    # Optional: also evaluate the vendored YAML rules pack.
-    if with_rules or rules_dir is not None:
-        from agent_readiness.rules_eval import evaluate_rules, load_rules_from_dir
-        from agent_readiness.rules_pack_loader import default_rules_dir
-
-        chosen_dir = rules_dir or default_rules_dir()
-        if chosen_dir is not None and chosen_dir.is_dir():
-            loaded = load_rules_from_dir(chosen_dir)
-            results.extend(evaluate_rules(loaded, ctx))
+    with ScanProgress(total=len(rules), enabled=progress_enabled) as progress:
+        for rule in rules:
+            progress.advance(rule.rule_id)
+            results.extend(evaluate_rules([rule], ctx))
 
     report = score_results(ctx.root, results, weights=weights)
     report.languages = ctx.detected_languages
     report.monorepo_tools = ctx.monorepo_tools
 
-    # Compute delta if baseline provided
     delta_overall: float | None = None
     delta_pillars: dict[str, float] | None = None
     delta_checks: dict[str, float] | None = None
@@ -194,7 +185,6 @@ def scan(
             delta_overall = round(report.overall_score - baseline_score, 1)
             delta_pillars = {}
             delta_checks = {}
-            # Build a lookup of check_id → baseline score
             baseline_checks: dict[str, float] = {}
             for bp in baseline_data.get("pillars", []):
                 for bc in bp.get("checks", []):
@@ -216,7 +206,6 @@ def scan(
         except (KeyError, ValueError, json.JSONDecodeError):
             pass
 
-    # Write optional outputs
     if report_file is not None:
         try:
             from agent_readiness.renderers import html_renderer
@@ -257,7 +246,6 @@ def scan(
             )
         click.echo(output)
 
-    # --fail-below gate
     if fail_below > 0 and report.overall_score < fail_below:
         sys.exit(1)
 
@@ -384,28 +372,19 @@ def mcp_serve(transport: str) -> None:
 def rules_eval(path: Path, rules_dir: Path | None, json_output: bool) -> None:
     """Evaluate the YAML rules pack against PATH (diagnostic).
 
-    Runs only the rules-pack evaluator — does NOT run the @register
-    checks. Used by agent-readiness-rules CI to validate that new rules
-    fire on expected fixtures, and by developers iterating on rule
-    definitions locally.
+    Equivalent to ``scan`` but skips scoring/rendering and prints raw
+    finding lists. Used by ``agent-readiness-rules`` CI to validate
+    that new rules fire on expected fixtures.
     """
-    from agent_readiness.context import RepoContext
-    from agent_readiness.rules_eval import evaluate_rules, load_rules_from_dir
-    from agent_readiness.rules_pack_loader import default_rules_dir
-
-    chosen_dir = rules_dir or default_rules_dir()
-    if chosen_dir is None or not chosen_dir.is_dir():
+    ctx = RepoContext(root=path)
+    loaded = load_default_rules(rules_dir)
+    if not loaded:
         click.echo(
             "error: no rules directory available. "
-            "Pass --rules DIR or run scripts/vendor_rules.sh first.",
+            "Pass --rules DIR or reinstall agent-readiness with the "
+            "vendored rules pack.",
             err=True,
         )
-        sys.exit(2)
-
-    ctx = RepoContext(root=path)
-    loaded = load_rules_from_dir(chosen_dir)
-    if not loaded:
-        click.echo(f"error: no rules loaded from {chosen_dir}", err=True)
         sys.exit(2)
 
     results = evaluate_rules(loaded, ctx)
@@ -414,17 +393,16 @@ def rules_eval(path: Path, rules_dir: Path | None, json_output: bool) -> None:
         import json as _json
         out = {
             "repo_path": str(path.resolve()),
-            "rules_dir": str(chosen_dir),
             "rules_evaluated": len(loaded),
             "checks": [r.to_dict() for r in results],
         }
         click.echo(_json.dumps(out, indent=2, sort_keys=False))
         return
 
-    click.echo(f"Evaluated {len(loaded)} rules from {chosen_dir}")
+    click.echo(f"Evaluated {len(loaded)} rules")
     n_with = sum(1 for r in results if r.findings)
-    n_clean = len(results) - n_with - sum(1 for r in results if r.not_measured)
     n_skip = sum(1 for r in results if r.not_measured)
+    n_clean = len(results) - n_with - n_skip
     click.echo(f"  passing: {n_clean}, with findings: {n_with}, not measured: {n_skip}")
     for r in results:
         if not r.findings:
@@ -440,14 +418,14 @@ def rules_eval(path: Path, rules_dir: Path | None, json_output: bool) -> None:
 
 @cli.command("list-checks")
 def list_checks() -> None:
-    """List all registered checks (headless, machine-readable).
+    """List all loaded rules (headless, machine-readable).
 
-    Output is one check per line: `<check_id>\\t<pillar>\\t<title>`.
+    Output is one rule per line: ``<rule_id>\\t<pillar>\\t<title>``.
     Stable, parseable, and zero ceremony.
     """
-    _ensure_loaded()
-    for spec in all_checks():
-        click.echo(f"{spec.check_id}\t{spec.pillar.value}\t{spec.title}")
+    rules = load_default_rules()
+    for r in rules:
+        click.echo(f"{r.rule_id}\t{r.pillar}\t{r.title}")
 
 
 @cli.command()
@@ -458,18 +436,19 @@ def explain(check_id: str) -> None:
     Designed to be readable both by humans and agents grepping for
     fix guidance.
     """
-    _ensure_loaded()
-    spec = get_check(check_id)
-    if spec is None:
+    rule = get_rule(check_id)
+    if rule is None:
         click.echo(f"error: unknown check id: {check_id!r}", err=True)
         click.echo("Run `agent-readiness list-checks` to see available ids.",
                    err=True)
         sys.exit(2)
-    click.echo(f"{spec.check_id}")
-    click.echo(f"  pillar: {spec.pillar.value}")
-    click.echo(f"  title:  {spec.title}")
+    click.echo(f"{rule.rule_id}")
+    click.echo(f"  pillar: {rule.pillar}")
+    click.echo(f"  title:  {rule.title}")
+    if rule.fix_hint:
+        click.echo(f"  fix:    {rule.fix_hint}")
     click.echo("")
-    click.echo(spec.explanation)
+    click.echo(rule.explanation or "(no explanation provided)")
 
 
 if __name__ == "__main__":

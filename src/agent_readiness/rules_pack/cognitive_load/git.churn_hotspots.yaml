@@ -1,0 +1,26 @@
+rules_version: 1
+id: git.churn_hotspots
+pillar: cognitive_load
+title: No high-churn large files (hotspots)
+weight: 0.6
+severity: warn
+explanation: |
+  Files that are both large *and* frequently edited are the highest-
+  risk surface for an agent: each touch has the most context to
+  re-read and the most history to consider. Splitting them into
+  smaller modules cuts agent error rates more than any other
+  refactor. This rule fires per file that exceeds both the touch and
+  size thresholds; gives `not_measured` on shallow clones and
+  repos with very few commits.
+match:
+  type: git_log_query
+  mode: churn_hotspots
+  min_commits_touching_file: 10
+  min_file_lines: 200
+  max_findings: 5
+  neutral_on_shallow: true
+fix_hint: |
+  For each hotspot, identify the dominant axes of change (e.g. one
+  file holds both API routing and validation logic) and split along
+  those lines. After the split, both halves see lower per-file churn.
+insight_query: churn hotspot large file frequently edited refactor split
