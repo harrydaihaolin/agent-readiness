@@ -18,6 +18,8 @@ from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
 # Pattern groups that a .gitignore should cover.
 # Each group is (description, list of regexes — any match satisfies the group).
+# Multiple ecosystems are represented so that Go/Rust/Java repos can score
+# well even though they don't have Python/__pycache__ entries.
 _PATTERN_GROUPS = [
     (
         "compiled Python (*.pyc / __pycache__)",
@@ -34,6 +36,31 @@ _PATTERN_GROUPS = [
     (
         "build output (dist/ or build/)",
         [re.compile(r"^/?dist/", re.M), re.compile(r"^/?build/", re.M)],
+    ),
+    # Go vendor directory and compiled binaries
+    (
+        "Go vendor/ or *.exe",
+        [re.compile(r"^/?vendor/", re.M), re.compile(r"\*\.exe\b")],
+    ),
+    # Rust / Maven / Gradle build output
+    (
+        "target/ (Rust / Maven / Gradle)",
+        [re.compile(r"^/?target/", re.M)],
+    ),
+    # Java compiled classes
+    (
+        "*.class (Java)",
+        [re.compile(r"\*\.class\b")],
+    ),
+    # IDE and OS junk
+    (
+        "IDE/OS metadata (.idea/, .DS_Store, *.swp)",
+        [
+            re.compile(r"\.idea/"),
+            re.compile(r"\.DS_Store"),
+            re.compile(r"\*\.swp\b"),
+            re.compile(r"\.vscode/"),
+        ],
     ),
 ]
 
@@ -83,7 +110,10 @@ def check_gitignore_covers_junk(ctx: RepoContext) -> CheckResult:
     text = gitignore_path.read_text(encoding="utf-8", errors="replace")
     covered = _covered_groups(text)
 
-    if covered == 4:
+    # Scoring: 4+ groups = 100 (ecosystem-comprehensive), 2-3 = 70
+    # (good enough), 1 = 30 (minimal), 0 = 0. With 8 possible groups
+    # across multiple ecosystems, most well-maintained repos hit 2+.
+    if covered >= 4:
         score = 100.0
     elif covered >= 2:
         score = 70.0
