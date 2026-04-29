@@ -71,6 +71,26 @@ _LARGE_FILE_EXCLUDED_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r".*\.sum$", re.IGNORECASE),
 )
 
+# ---------------------------------------------------------------------------
+# Exclusions for repo_shape.top_level_count
+# ---------------------------------------------------------------------------
+
+# Standard project-metadata files that every repo is expected to have at root.
+# These don't add cognitive load — agents know what they are on sight.
+_ROOT_META_STEMS = frozenset({
+    "readme", "license", "licence", "copying",
+    "changelog", "changes", "history", "news", "releases",
+    "contributing", "contributors", "authors", "maintainers", "codeowners",
+    "code_of_conduct", "security", "notice",
+    "makefile", "rakefile", "gemfile", "procfile", "earthfile",
+    "dockerfile",
+})
+
+
+def _is_root_meta(name: str) -> bool:
+    """Return True if this root file is standard project metadata."""
+    return name.lower().split(".")[0] in _ROOT_META_STEMS
+
 
 @register(
     check_id="repo_shape.top_level_count",
@@ -81,15 +101,20 @@ _LARGE_FILE_EXCLUDED_PATTERNS: tuple[re.Pattern[str], ...] = (
     root with dozens of files imposes a high navigation cost: the agent must
     read or at least skim each file to decide whether it's relevant to the
     task. Keeping the root lean (≤10 non-hidden files) means the agent can
-    orient quickly.
+    orient quickly. Standard project-metadata files (README, LICENSE,
+    CHANGELOG, CONTRIBUTING, Makefile, Dockerfile) are excluded from the
+    count — agents recognise these on sight.
     """,
     weight=0.8,
 )
 def check_top_level_count(ctx: RepoContext) -> CheckResult:
-    # Count non-hidden, non-directory files at root level
+    # Count non-hidden root files, excluding well-known metadata files that
+    # every project is expected to have and that agents recognise on sight.
     count = sum(
         1 for f in ctx._files
-        if len(f.parts) == 1 and not f.name.startswith(".")
+        if len(f.parts) == 1
+        and not f.name.startswith(".")
+        and not _is_root_meta(f.name)
     )
 
     if count <= 10:
