@@ -241,6 +241,83 @@ def match_command_in_makefile(
 
 
 # ---------------------------------------------------------------------------
+# composite (and / or / not over leaf clauses)
+# ---------------------------------------------------------------------------
+
+
+# Engines should never recurse deeper than this. Keeps evaluation cheap
+# and disallows degenerate hand-written rules from blowing the stack.
+_COMPOSITE_MAX_DEPTH = 4
+
+
+def _eval_clause(
+    clause: dict[str, Any], ctx: RepoContext, depth: int
+) -> list[tuple[str | None, int | None, str]]:
+    ctype = str(clause.get("type", ""))
+    if ctype == "composite":
+        return _match_composite(ctx, clause, depth=depth + 1)
+    matcher = OssMatchTypeRegistry.get(ctype)
+    if matcher is None:
+        # Unknown leaf type — treat as a no-finding clause so AND/NOT
+        # semantics remain conservative (fail closed; do not fire).
+        return []
+    return matcher(ctx, clause)
+
+
+def _match_composite(
+    ctx: RepoContext, cfg: dict[str, Any], depth: int = 0
+) -> list[tuple[str | None, int | None, str]]:
+    if depth > _COMPOSITE_MAX_DEPTH:
+        return []
+    op = str(cfg.get("op", "and")).lower()
+    clauses = cfg.get("clauses") or []
+    if not clauses:
+        return []
+    summary = cfg.get("summary")
+
+    if op == "not":
+        # `not` operates on the FIRST clause only; extras are ignored.
+        sub = _eval_clause(clauses[0], ctx, depth)
+        if sub:
+            return []
+        msg = summary or "Composite NOT: expected absence, but found nothing required to fire."
+        # Convey what the inner clause was looking for.
+        ctype = clauses[0].get("type", "?")
+        return [(None, None, f"{msg} (clause type={ctype})")]
+
+    # Evaluate each clause once for both `and` and `or`.
+    sub_findings = [_eval_clause(c, ctx, depth) for c in clauses]
+    if op == "and":
+        if not all(sub for sub in sub_findings):
+            return []
+        msg = summary or "Composite AND fired: all clauses produced findings."
+        return [(None, None, msg)]
+    if op == "or":
+        out: list[tuple[str | None, int | None, str]] = []
+        any_fired = False
+        for sub in sub_findings:
+            if sub:
+                any_fired = True
+                # Preserve the first finding from each firing clause so
+                # users see *what* fired without flooding the report.
+                out.append(sub[0])
+        if not any_fired:
+            return []
+        if summary:
+            return [(None, None, summary), *out]
+        return out
+    # Unknown op → fail closed (no findings).
+    return []
+
+
+def match_composite(
+    ctx: RepoContext, cfg: dict[str, Any]
+) -> list[tuple[str | None, int | None, str]]:
+    """Public entry point for the composite matcher (depth tracked internally)."""
+    return _match_composite(ctx, cfg, depth=0)
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -251,4 +328,5 @@ OssMatchTypeRegistry: dict[str, MatcherFn] = {
     "manifest_field": match_manifest_field,
     "regex_in_files": match_regex_in_files,
     "command_in_makefile": match_command_in_makefile,
+    "composite": match_composite,
 }
