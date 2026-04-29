@@ -42,8 +42,14 @@ _SECURITY_PATHS = (
     weight=0.8,
 )
 def check_dependabot(ctx: RepoContext) -> CheckResult:
-    # Also accept Renovate as an equivalent tool
-    renovate_paths = ("renovate.json", "renovate.json5", ".renovaterc", ".renovaterc.json")
+    # Also accept Renovate as an equivalent tool.
+    # Renovate config can live at root or inside .github/.
+    renovate_paths = (
+        "renovate.json", "renovate.json5",
+        ".renovaterc", ".renovaterc.json",
+        ".github/renovate.json", ".github/renovate.json5",
+        ".gitlab/renovate.json",
+    )
 
     for rel in _DEPENDABOT_PATHS:
         if (ctx.root / rel).is_file():
@@ -73,6 +79,21 @@ def check_dependabot(ctx: RepoContext) -> CheckResult:
                     message=f"Renovate config found: {rel}",
                 )],
             )
+
+    # Snyk — security-focused alternative to Dependabot
+    if (ctx.root / ".snyk").is_file():
+        return CheckResult(
+            check_id="security.dependabot_configured",
+            pillar=Pillar.SAFETY,
+            score=100.0,
+            weight=0.8,
+            findings=[Finding(
+                check_id="security.dependabot_configured",
+                pillar=Pillar.SAFETY,
+                severity=Severity.INFO,
+                message="Snyk config found: .snyk",
+            )],
+        )
 
     return CheckResult(
         check_id="security.dependabot_configured",
