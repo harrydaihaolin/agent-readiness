@@ -1,0 +1,20 @@
+rules_version: 1
+id: test_command.discoverable
+pillar: feedback
+title: Test command discoverable in Makefile
+weight: 2.0
+severity: warn
+explanation: |
+  Agents need a single canonical test command they can invoke headlessly.
+  When a Makefile exists but has no `test` target, the agent has to
+  parse pyproject scripts / package.json / shell history to find one,
+  often picking the wrong invocation. A Makefile target is the most
+  predictable contract.
+match:
+  type: command_in_makefile
+  target: test
+  fire_when: missing
+fix_hint: |
+  Add a `test:` target to your Makefile that runs your test suite
+  non-interactively. Example: `test:\n\tpython -m unittest discover -s tests`.
+insight_query: test command discoverable makefile pyproject scripts

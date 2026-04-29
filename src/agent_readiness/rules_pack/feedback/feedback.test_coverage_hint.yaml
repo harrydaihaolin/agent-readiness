@@ -1,0 +1,24 @@
+rules_version: 1
+id: feedback.test_coverage_hint
+pillar: feedback
+title: Coverage configuration hint
+weight: 0.5
+severity: info
+explanation: |
+  Coverage configuration (`.coveragerc`, `codecov.yml`, `coveralls.yml`,
+  `pyproject.toml [tool.coverage.*]`) signals that the repo tracks which
+  code is exercised by tests. Agents benefit from knowing what is and
+  isn't tested before making a change, so they can target tests
+  appropriately. Community-contributed demo rule.
+match:
+  type: path_glob
+  require_globs:
+    - .coveragerc
+    - codecov.yml
+    - .codecov.yml
+    - coveralls.yml
+    - .coveralls.yml
+fix_hint: |
+  Add a coverage config (`.coveragerc` for pytest-cov, `codecov.yml` for
+  Codecov) so coverage signal is visible to both humans and agents.
+insight_query: test coverage config codecov coveralls pytest-cov

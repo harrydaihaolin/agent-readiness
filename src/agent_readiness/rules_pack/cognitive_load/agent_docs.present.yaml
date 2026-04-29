@@ -1,0 +1,25 @@
+rules_version: 1
+id: agent_docs.present
+pillar: cognitive_load
+title: Agent-targeted docs present
+weight: 1.5
+severity: warn
+explanation: |
+  Agents perform measurably better when the repo includes docs aimed at
+  them (canonical commands, do-not-touch lists, branch conventions). A
+  README is for humans; AGENTS.md / CLAUDE.md / .cursorrules /
+  .github/copilot-instructions.md are for agents. Absence of all of them
+  forces the agent to infer conventions from prose, which it gets wrong.
+match:
+  type: path_glob
+  require_globs:
+    - AGENTS.md
+    - CLAUDE.md
+    - .cursorrules
+    - .cursor/rules/*.mdc
+    - .github/copilot-instructions.md
+fix_hint: |
+  Add an AGENTS.md to the root with at least: canonical commands
+  (install/test/lint/run), do-not-touch list, and commit conventions.
+  See agent-readiness/AGENTS.md for an example.
+insight_query: AGENTS.md CLAUDE.md cursor rules adoption

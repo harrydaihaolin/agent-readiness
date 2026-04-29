@@ -1,0 +1,22 @@
+rules_version: 1
+id: entry_points.detected
+pillar: flow
+title: Entry point declared in manifest
+weight: 1.0
+severity: warn
+explanation: |
+  An agent looking to run the project needs an obvious entry point.
+  Python projects should declare `[project.scripts]` in pyproject.toml
+  (or expose `__main__.py`); JS projects should set `bin` or `main` in
+  package.json. Without one, the agent has to guess from filenames,
+  which fails for non-trivial layouts.
+match:
+  type: manifest_field
+  manifest: pyproject.toml
+  field_path: project.scripts
+  fire_when: missing
+fix_hint: |
+  Add a `[project.scripts]` table to pyproject.toml mapping a CLI name
+  to your `module.cli:main` entry point. For JS projects, use
+  `"bin": {"name": "src/index.js"}` in package.json.
+insight_query: entry point manifest scripts main bin __main__

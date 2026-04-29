@@ -1,0 +1,22 @@
+rules_version: 1
+id: docs.contributing_guide
+pillar: cognitive_load
+title: CONTRIBUTING.md present
+weight: 0.5
+severity: info
+explanation: |
+  A CONTRIBUTING.md tells agents (and humans) the contribution flow:
+  branch naming, commit message style, PR template expectations,
+  required pre-commit checks. Absence forces the agent to infer this
+  from git log, which it gets wrong on small repos with little history.
+  Community-contributed demo rule.
+match:
+  type: path_glob
+  require_globs:
+    - CONTRIBUTING.md
+    - CONTRIBUTING
+    - .github/CONTRIBUTING.md
+fix_hint: |
+  Add a CONTRIBUTING.md describing branch naming, commit style,
+  required local checks, and the PR review flow.
+insight_query: contributing guide PR conventions branch naming
