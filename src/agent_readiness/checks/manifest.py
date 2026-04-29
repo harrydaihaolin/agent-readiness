@@ -35,6 +35,9 @@ _LOCKFILES = (
     "pubspec.lock",
     "flake.lock",
     "mix.lock",
+    # Conda / pixi ecosystem
+    "conda-lock.yml", "conda-lock.yaml",
+    "pixi.lock",
 )
 
 
@@ -104,6 +107,22 @@ def check_lockfile_present(ctx: RepoContext) -> CheckResult:
                     pillar=Pillar.FEEDBACK,
                     severity=Severity.INFO,
                     message=f"Lockfile found: {name}",
+                )],
+            )
+
+    # Conda environment files — pinned when created with `conda env export`
+    for name in ("environment.yml", "environment.yaml"):
+        if ctx.has_file(name, case_insensitive=False) is not None:
+            return CheckResult(
+                check_id="manifest.lockfile_present",
+                pillar=Pillar.FEEDBACK,
+                score=80.0,
+                findings=[Finding(
+                    check_id="manifest.lockfile_present",
+                    pillar=Pillar.FEEDBACK,
+                    severity=Severity.INFO,
+                    message=f"Conda environment file found: {name}",
+                    fix_hint="For full reproducibility, consider also generating a conda-lock.yml.",
                 )],
             )
 
