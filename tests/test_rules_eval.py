@@ -230,6 +230,31 @@ class TestCompositeMatcher(unittest.TestCase):
             }
             self.assertEqual(match_composite(ctx, cfg), [])
 
+    def test_or_silent_when_only_one_clause_satisfied(self):
+        # Regression: rules pack rules like ci.configured / lint.configured
+        # /  manifest.lockfile_present are written as composite OR over
+        # several alternative path schemes ("github actions OR tekton OR
+        # earthly"). If ANY scheme is present the rule must be satisfied
+        # silently — emitting findings about the unmatched alternatives
+        # was previously dragging every repo's score down by 30+ points.
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td), {
+                ".github/workflows/ci.yml": "name: CI\n",
+            })
+            cfg = {
+                "type": "composite",
+                "op": "or",
+                "summary": "At least one CI provider config is present.",
+                "clauses": [
+                    {"type": "path_glob",
+                     "require_globs": [".github/workflows/*.yml",
+                                       ".github/workflows/*.yaml"]},
+                    {"type": "path_glob",
+                     "require_globs": ["tekton/**", "dagger.json", "earthly.yml"]},
+                ],
+            }
+            self.assertEqual(match_composite(ctx, cfg), [])
+
     def test_not_fires_when_inner_silent(self):
         # `not` is the standard "X is missing" — fires when require_globs
         # produces NO findings (i.e. AGENTS.md is present).

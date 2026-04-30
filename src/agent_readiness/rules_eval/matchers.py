@@ -293,18 +293,23 @@ def _match_composite(
         msg = summary or "Composite AND fired: all clauses produced findings."
         return [(None, None, msg)]
     if op == "or":
+        # OR is satisfied (= produces no findings) when AT LEAST ONE clause
+        # is satisfied. In this codebase a clause "is satisfied" when its
+        # leaf matcher returns no findings — i.e. the required paths are
+        # present, the required regex matches, etc. This matches every
+        # rules-pack author's intent ("at least one CI provider configured",
+        # "any of these alternative READMEs/lockfiles is fine"), even though
+        # an earlier docstring described the inverse OR-of-failures
+        # semantic. Only when EVERY clause failed do we surface findings,
+        # one per failing clause so the user sees each unmet alternative.
+        if any(not sub for sub in sub_findings):
+            return []
         out: list[tuple[str | None, int | None, str]] = []
-        any_fired = False
         for sub in sub_findings:
             if sub:
-                any_fired = True
-                # Preserve the first finding from each firing clause so
-                # users see *what* fired without flooding the report.
                 out.append(sub[0])
-        if not any_fired:
-            return []
         if summary:
-            return [(None, None, summary), *out]
+            return [(None, None, f"{summary} (no clause matched)"), *out]
         return out
     # Unknown op → fail closed (no findings).
     return []
