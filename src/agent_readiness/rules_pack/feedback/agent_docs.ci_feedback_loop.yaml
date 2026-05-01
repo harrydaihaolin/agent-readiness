@@ -1,0 +1,49 @@
+rules_version: 1
+id: agent_docs.ci_feedback_loop
+pillar: feedback
+title: AGENTS.md documents CI monitoring as feedback
+weight: 0.75
+severity: warn
+explanation: |
+  CI is the main automated feedback channel once an agent pushes a
+  branch. repos that never tell agents to watch workflow results or to
+  treat failing checks as something to fix (not noise) see agents land
+  red PRs, declare "done," and disappear — the same failure mode as
+  missing hooks, only slower. Root `AGENTS.md` should explicitly bind
+  **monitor CI / checks → read failures → fix and iterate** into the
+  agent contract.
+match:
+  type: composite
+  op: and
+  summary: |
+    AGENTS.md is present but does not tell agents to monitor CI runs /
+    check results and act on failures as feedback.
+  clauses:
+    # Fire only when canonical AGENTS.md exists (let agent_docs.canonical
+    # own the "missing file" case).
+    - type: composite
+      op: not
+      summary: Skip when AGENTS.md is absent.
+      clauses:
+        - type: path_glob
+          require_globs:
+            - AGENTS.md
+    - type: regex_in_files
+      pattern: >-
+        (?is)(?:(?:\bCI\b|GitHub Actions|workflow|\bchecks?\b).{0,400}\b(?:monitor|watch|check|track|review)\b)|(?:(?:\bmonitor\b|\bwatch\b|\bcheck\b|\btrack\b).{0,400}(?:\bCI\b|GitHub Actions|workflow|\bchecks?\b))|(?:(?:\bCI\b|workflow|checks?).{0,400}(?:fail|failure|failing|red|broken).{0,400}(?:fix|address|investigate|triage|remediate|resolve|iterat))|(?:(?:\bCI\b|workflow).{0,200}\bfeedback\s+loop\b)|(?:\bfeedback\s+loop\b.{0,200}(?:\bCI\b|workflow|checks?))
+      file_globs:
+        - AGENTS.md
+      fire_when: no_match
+fix_hint: |
+  Add a short "CI and the feedback loop" section to `AGENTS.md`: after
+  pushing or updating a PR, monitor workflow / PR check results; when CI
+  fails, use logs as signal, fix the root cause, and iterate until green.
+fix_template:
+  kind: append_to_file
+  path: AGENTS.md
+  content: |
+
+    ## CI and the feedback loop
+
+    **CI is part of the feedback loop.** After you push or update a PR, **monitor GitHub Actions / workflow runs and check results**. When **CI fails**, read the logs, **fix the root cause**, and push follow-up commits. Do not stop while checks are red or ignore failing workflows.
+insight_query: AGENTS.md CI monitoring workflow failures feedback loop pull request checks
