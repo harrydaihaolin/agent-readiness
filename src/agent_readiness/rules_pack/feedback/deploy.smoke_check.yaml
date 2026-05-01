@@ -1,0 +1,92 @@
+rules_version: 1
+id: deploy.smoke_check
+pillar: feedback
+title: Deploy workflow has a post-deploy smoke check
+weight: 0.9
+severity: warn
+explanation: |
+  When a workflow ships a build to a hosted environment (GitHub Pages,
+  Netlify, Vercel, S3/CloudFront, gh-pages branch, Cloud Run, Fly,
+  Render, Surge), the only feedback signal an agent gets out of the
+  box is "the deploy step exited 0." That is not the same as "the
+  deployed site actually loads." Without a post-deploy smoke check
+  (curl HTTP 200, Playwright/Puppeteer probe, Lighthouse run, etc.),
+  silent prod regressions — broken `base` paths, broken SPA 404
+  fallbacks, asset 404s, missing data files — ship green and the
+  agent declares "done."
+
+  This rule fires when at least one workflow file references a deploy
+  step, AND no workflow file contains evidence of a smoke check
+  (HTTP probe, e2e tool, or `lighthouse` invocation).
+match:
+  type: composite
+  op: and
+  summary: |
+    A deploy step is configured but no workflow performs a post-deploy
+    smoke check (HTTP probe, Playwright/Cypress/Puppeteer, or Lighthouse).
+  clauses:
+    - type: regex_in_files
+      pattern: >-
+        (?i)(actions/deploy-pages|peaceiris/actions-gh-pages|JamesIves/github-pages-deploy-action|nwtgck/actions-netlify|amondnet/vercel-action|aws-actions/configure-aws-credentials.{0,500}aws\s+s3\s+sync|aws\s+s3\s+sync\b|wrangler\s+pages\s+deploy|wrangler\s+deploy|firebase\s+deploy\b|netlify\s+deploy\b|vercel\s+deploy\b|surge\s+--domain|gh-pages\s+-d\b|fly\s+deploy\b|gcloud\s+run\s+deploy\b|kubectl\s+apply|helm\s+upgrade)
+      file_globs:
+        - .github/workflows/*.yml
+        - .github/workflows/*.yaml
+        - .gitlab-ci.yml
+        - .circleci/config.yml
+        - azure-pipelines.yml
+        - bitbucket-pipelines.yml
+      fire_when: match
+    - type: regex_in_files
+      pattern: >-
+        (?i)(curl\s+(-[A-Za-z]+\s+)*(--fail\b|-f\b|-w\s+["']?%?\{?http_code|--write-out)|wget\s+--spider|playwright\s+test|@?playwright/test|cypress\s+run|puppeteer|lighthouse(?:\s+--?)|lhci\s+autorun|axe(?:-core)?\s+|pa11y(?:-ci)?\s|httpie\b|http\s+--check-status\s+GET|smoke[-_ ]?test|k6\s+run|hurl\s+|newman\s+run\b)
+      file_globs:
+        - .github/workflows/*.yml
+        - .github/workflows/*.yaml
+        - .gitlab-ci.yml
+        - .circleci/config.yml
+        - azure-pipelines.yml
+        - bitbucket-pipelines.yml
+        - scripts/**
+        - bin/**
+        - Makefile
+        - makefile
+      fire_when: no_match
+fix_hint: |
+  After the deploy step (or in a separate `workflow_run` workflow),
+  add a smoke check that hits the deployed URL and fails on non-2xx
+  or on a missing expected marker. Minimum useful version:
+
+      - name: Smoke check deployed site
+        run: |
+          set -euo pipefail
+          base="${{ steps.deployment.outputs.page_url }}"
+          curl -fsSL "$base" | grep -q '<div id="root"></div>'
+          curl -fsS  -o /dev/null -w '%{http_code}\n' "${base}data/healthz.json"
+
+  For SPA-on-Pages projects, also probe a deep route to verify the
+  404 fallback redirects to a valid hash route.
+fix_template:
+  kind: create_file
+  path: .github/workflows/post-deploy-smoke.yml
+  content: |
+    name: post-deploy-smoke
+    on:
+      workflow_run:
+        workflows: ["publish", "deploy", "pages-build-deployment"]
+        types: [completed]
+
+    jobs:
+      smoke:
+        if: ${{ github.event.workflow_run.conclusion == 'success' }}
+        runs-on: ubuntu-latest
+        steps:
+          - name: Probe deployed site
+            run: |
+              set -euo pipefail
+              SITE_URL="https://your-org.github.io/your-repo/"
+              echo "Probing $SITE_URL"
+              curl -fsSL "$SITE_URL" -o /tmp/index.html
+              grep -q '<div id="root"></div>' /tmp/index.html
+              code=$(curl -sS -o /tmp/deep.html -w '%{http_code}' "${SITE_URL}repos")
+              test "$code" = "200" -o "$code" = "404"
+insight_query: post-deploy smoke test deployed site verification curl playwright lighthouse SPA pages 404 fallback

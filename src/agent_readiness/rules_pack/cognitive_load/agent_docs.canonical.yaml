@@ -20,4 +20,36 @@ fix_hint: |
   Add an AGENTS.md to the repo root with: canonical commands
   (install/test/lint/run), a do-not-touch list, and commit conventions.
   See agent-readiness/AGENTS.md for an example.
+fix_template:
+  kind: create_file
+  path: AGENTS.md
+  content: |
+    # Agent guide
+
+    Conventions for AI coding agents working in this repository.
+
+    ## Canonical commands
+
+    - Install dev deps: `<replace with your install command>`
+    - Run tests:        `<replace with your test command>`
+    - Lint:             `<replace with your lint command>`
+
+    ## Do-not-touch
+
+    - Generated/vendored directories (list them).
+    - Lockfiles unless the change is intentional.
+
+    ## Style
+
+    - Keep diffs scoped to one logical change.
+    - Don't skip pre-commit hooks (`--no-verify`); fix the underlying issue.
+
+    ## Headless contract
+
+    The canonical commands above must run non-interactively — no TTY,
+    no prompts. If a step needs human input, gate it behind a flag.
+
+    ## CI and the feedback loop
+
+    **CI is part of the feedback loop.** After you push or update a PR, **monitor GitHub Actions / workflow runs and check results**. When **CI fails**, read the logs, **fix the root cause**, and push follow-up commits. Do not stop while checks are red or ignore failing workflows.
 insight_query: AGENTS.md canonical contract agent docs convention

@@ -16,6 +16,10 @@ the context they need to work effectively in this repository.
 # <fill in your lint command>
 ```
 
+## CI and the feedback loop
+
+**CI is part of the feedback loop.** After you push or update a PR, **monitor GitHub Actions / workflow runs and check results**. When **CI fails**, read the logs, **fix the root cause**, and push follow-up commits. Do not stop while checks are red or ignore failing workflows.
+
 ## Do-not-touch paths
 
 - <!-- list paths agents should never modify, e.g. generated/, vendor/ -->

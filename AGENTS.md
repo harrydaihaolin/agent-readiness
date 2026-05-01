@@ -14,6 +14,10 @@ The tool itself is fully headless: stable JSON via `--json`, tab-separated
 `list-checks`, prose `explain <check_id>`, and exit codes that mean
 things. There are no required interactive prompts.
 
+## CI and the feedback loop
+
+**CI is part of the feedback loop.** After you push or update a PR, **monitor GitHub Actions / workflow runs and check results**. When **CI fails**, read the logs, **fix the root cause**, and push follow-up commits. Do not stop while checks are red or ignore failing workflows.
+
 ## Source of truth
 
 - [`RUBRIC.md`](./RUBRIC.md) — what we benchmark and why. Every check

@@ -446,10 +446,10 @@ class TestVendoredPackSmoke(unittest.TestCase):
     def test_vendored_pack_loads_q1_snapshot(self):
         rd = default_rules_dir()
         loaded = load_rules_from_dir(rd)
-        # The Q1 snapshot ships 32 rules. The exact number is part of the
+        # The vendored snapshot ships 34 rules. The exact number is part of the
         # vendoring contract — bumping it is a deliberate change to the
         # snapshot in src/agent_readiness/rules_pack/.
-        self.assertEqual(len(loaded), 32)
+        self.assertEqual(len(loaded), 34)
 
     def test_vendored_pack_evaluates_on_self(self):
         rd = default_rules_dir()

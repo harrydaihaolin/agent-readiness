@@ -15,14 +15,9 @@ node_modules/
 # Mirrors the groups expected by the agent-readiness `gitignore.covers_junk`
 # rule so future contributors don't accidentally commit build artefacts,
 # coverage output, terraform state, or stray IDE settings.
-__pycache__/
 *.pyc
 *.pyo
-node_modules/
-.env
 .env.local
-dist/
-build/
 vendor/
 target/
 *.class
@@ -31,13 +26,11 @@ target/
 .vscode/
 .DS_Store
 *.swp
-*.egg-info/
 .eggs/
-.coverage
-.pytest_cache/
 htmlcov/
 coverage/
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfstate.*
 *.log

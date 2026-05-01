@@ -1,0 +1,12 @@
+# Minimal gitleaks config — satisfies agent-readiness `safety.gitleaks_config`.
+# Wire into CI via https://github.com/gitleaks/gitleaks-action as needed.
+
+title = "agent-readiness"
+
+[allowlist]
+description = "Per-repo false-positive allowlist"
+paths = [
+  '''(.*?)(\.lock|\.snap)$''',
+  '''node_modules/''',
+  '''vendor/''',
+]
