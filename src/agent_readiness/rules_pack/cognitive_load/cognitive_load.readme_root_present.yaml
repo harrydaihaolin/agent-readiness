@@ -1,0 +1,17 @@
+rules_version: 1
+id: cognitive_load.readme_root_present
+pillar: cognitive_load
+title: README at repository root
+weight: 0.8
+severity: warn
+explanation: |
+  Agents and contributors expect a root README.md as the primary orientation
+  surface. Its absence forces guesswork from filenames and CI config alone.
+match:
+  type: path_glob
+  require_globs:
+    - README.md
+    - readme.md
+fix_hint: |
+  Add a README.md at the repo root with install, run, and test instructions.
+insight_query: README missing repository root documentation orientation

@@ -5,6 +5,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-02
+
+### Changed
+- Vendored `agent-readiness-rules@v1.5.0`. The rules pack adds the new
+  community-contributed `cognitive_load.readme_root_present` check
+  (38 checks total, up from 37 in v1.4.0) and recalibrates the
+  `repo_shape.large_files` thresholds (`threshold_lines` 500 → 1500,
+  `threshold_bytes` 50 KB → 150 KB) to land its v3 cohort fire rate
+  inside the 30–60% discriminative band. v3.1 had it firing at 88.1%,
+  high enough that it had stopped discriminating; the recalibration is
+  the one ideas-sweep change that ships in v1.5.0. The rest of the
+  19-item v3.1 ideas backlog
+  ([agent-readiness-research/research/ideas.archive.md](https://github.com/harrydaihaolin/agent-readiness-research/blob/main/research/ideas.archive.md))
+  is closed out as deferred-with-rationale (engine matcher gap or
+  research-grade gate per item).
+- `MANIFEST.vendored_tag` bumped from `v1.4.0` to `v1.5.0`. Tarball
+  SHA recorded in `src/agent_readiness/rules_pack/MANIFEST`.
+- Reference fixtures regenerated against `agent-readiness-fixtures@v1.0.0`
+  to reflect the new rule + the threshold change.
+
+### Production gate
+- The v3.2 release-snapshot run on the leaderboard's full 1000-repo
+  cohort is the production confirmation gate. If `repo_shape.large_files`
+  lands outside the 30–60% target band on v3.2, a v1.5.1 patch will
+  tune thresholds further. Tracked under
+  `agent-readiness-leaderboard/data/releases/scores_v3_1000_2026-05-XX.json`
+  in the next snapshot release.
+
 ## [1.4.0] - 2026-05-02
 
 ### Added

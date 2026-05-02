@@ -1,6 +1,6 @@
 rules_version   = 1
 protocol_compat = [1]
-pack_version    = "1.4.0"
+pack_version    = "1.5.0"
 
 [meta]
 description = "Open-source rule pack vendored by agent-readiness and consumed by the closed insights engine."
