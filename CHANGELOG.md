@@ -5,6 +5,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-02
+
+### Added
+- Vendored `agent-readiness-rules@v1.4.0` rules pack (37 checks,
+  up from 7 in v1.0.0). New checks span all four pillars and unlock
+  the v3 article cohort: `headless.unrunnable_e2e`,
+  `workflow.concurrency_guard`, `agent_docs.ci_feedback_loop`,
+  `deploy.smoke_check`, plus refinements to existing
+  `cognitive_load`, `feedback`, `flow`, and `safety` rules. The
+  rules pack is the version cited by the v3 1000-repo article.
+- `--list-rules` (planned 1.5) is **not** in this release; downstream
+  consumers continue to read `MANIFEST.vendored_tag` + count
+  `*.yaml` to discover pack version + check count (see
+  `agent-readiness-leaderboard/scripts/scan.py:_scanner_meta`).
+
+### Changed
+- `MANIFEST.vendored_tag` bumped from `v1.0.0` to `v1.4.0`.
+  `verify-vendoring` CI gate confirms the pack matches the
+  upstream tag's tarball SHA.
+
+### Notes for downstream
+- `agent-readiness-leaderboard` should pin
+  `agent-readiness>=1.4.0,<2`. Existing v1.0.0 cohort snapshots
+  remain valid for replay; the v3 article reruns under `v1.4.0`
+  will be filed as `scores_v3_*.v140.json` alongside the
+  preserved `*.v100.json`.
+- `agent-readiness-pro` already vendored the same rule set ahead
+  of this release; no further pin work needed there.
+
 ## [1.1.0] - 2026-04-29
 
 ### Added
