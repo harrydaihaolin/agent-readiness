@@ -1,0 +1,58 @@
+rules_version: 1
+id: workflow.concurrency_guard
+pillar: flow
+title: Self-pushing workflow lacks `concurrency:` guard
+weight: 0.7
+severity: warn
+explanation: |
+  GitHub Actions workflows that push back to their own repo (typical
+  for daily-scan / weekly-rebuild / scheduled data-publishing
+  patterns) without a top-level `concurrency:` block can race
+  themselves. Two scheduled runs (or a manual edit colliding with the
+  cron) lose one set of changes silently — the second `git push` is
+  rejected by the remote, the workflow exits 0, and the data drift is
+  invisible until a human notices stale dashboards.
+
+  The fix is one block per workflow. For write workflows, prefer
+  `cancel-in-progress: false` so the second run waits for the first
+  rather than tossing its work.
+match:
+  type: composite
+  op: and
+  summary: |
+    A workflow does `git push` and no workflow has a top-level
+    `concurrency:` block. The self-pushing workflow can race itself.
+  clauses:
+    # Clause 1 fires when at least one workflow file contains `git push`
+    # (regex match → fire_when=match → produces a finding).
+    - type: regex_in_files
+      pattern: 'git\s+push'
+      file_globs:
+        - .github/workflows/*.yml
+        - .github/workflows/*.yaml
+      fire_when: match
+    # Clause 2 fires when NO workflow file has a top-level `concurrency:`
+    # key (regex no_match → fire_when=no_match → produces a finding when
+    # absent everywhere). The `^` anchor narrows to top-level keys; a
+    # `concurrency:` nested inside a job stanza is not enough — GitHub
+    # only honours top-level concurrency for the whole workflow.
+    - type: regex_in_files
+      pattern: '^concurrency:'
+      file_globs:
+        - .github/workflows/*.yml
+        - .github/workflows/*.yaml
+      fire_when: no_match
+fix_hint: |
+  Add a `concurrency:` block at the top of any workflow that does
+  `git push`. Use a stable group name (e.g. the workflow file name) so
+  multiple runs of the same workflow serialise. For write workflows,
+  set `cancel-in-progress: false`:
+
+      concurrency:
+        group: ${{ github.workflow }}
+        cancel-in-progress: false
+
+  Combine with `git pull --rebase` before the `git push` so the second
+  run picks up the first run's commit instead of failing on a non-fast
+  forward.
+insight_query: github actions workflow concurrency self-push race condition

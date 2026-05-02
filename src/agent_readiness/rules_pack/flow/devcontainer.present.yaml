@@ -40,4 +40,18 @@ fix_hint: |
   Drop a minimal `.devcontainer/devcontainer.json` referencing a
   Microsoft base image plus `postCreateCommand: pip install -e .`.
   For Nix shops, `flake.nix` with a dev shell is the equivalent.
+fix_template:
+  kind: create_file
+  path: .devcontainer/devcontainer.json
+  content: |
+    {
+      "name": "default",
+      "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+      "postCreateCommand": "echo 'Replace with your install command (see AGENTS.md).'",
+      "customizations": {
+        "vscode": {
+          "extensions": []
+        }
+      }
+    }
 insight_query: devcontainer Nix Gitpod reproducible environment workspace

@@ -59,6 +59,14 @@ def _env_parity_mode(
     source_globs = tuple(cfg.get("source_globs") or ("src/**/*.py", "src/**/*.js", "src/**/*.ts"))
     exclude_segments = {seg.lower() for seg in (cfg.get("exclude_path_segments") or [])}
     require_one_of = tuple(cfg.get("require_one_of") or (".env.example", ".env.sample"))
+    doc_globs = tuple(cfg.get("doc_globs") or ())
+    doc_pattern_strs = cfg.get("doc_patterns") or ()
+    doc_compiled: list[re.Pattern[str]] = []
+    for pat in doc_pattern_strs:
+        try:
+            doc_compiled.append(re.compile(pat))
+        except (re.error, TypeError):
+            continue
 
     has_env_refs = False
     for f in ctx._files:
@@ -82,6 +90,18 @@ def _env_parity_mode(
     for candidate in require_one_of:
         if (ctx.root / candidate).is_file():
             return []
+
+    # Doc-only fallback: prose documentation of env vars
+    # (e.g. `export FOO=` snippets or an "Environment vars" heading)
+    # counts as parity even without a .env.example file.
+    if doc_globs and doc_compiled:
+        for doc in doc_globs:
+            text = ctx.read_text(doc)
+            if not text:
+                continue
+            for pat in doc_compiled:
+                if pat.search(text):
+                    return []
 
     return [(
         None, None,
@@ -112,8 +132,52 @@ def _has_pytest_config(ctx: RepoContext) -> bool:
 # Each named consistency check returns a finding tuple if it fires.
 _PYTEST_RE = re.compile(r"\bpytest\b", re.IGNORECASE)
 _NPM_TEST_RE = re.compile(r"\bnpm\s+test\b|\bnpm\s+run\s+test\b", re.IGNORECASE)
+_MAKE_TARGET_RE = re.compile(r"`?make\s+([a-zA-Z][a-zA-Z0-9_-]*)`?")
+_NPM_RUN_RE = re.compile(r"`?npm\s+run\s+([a-zA-Z][a-zA-Z0-9:_-]*)`?")
+_PIP_EDITABLE_RE = re.compile(r"pip\s+install\s+-e\s+\.")
 _AGENT_DOC_NAMES = ("AGENTS.md", "CLAUDE.md")
 _PLACEHOLDER_BYTES = 100
+
+# Make-target stop-words: README boilerplate that looks like
+# `make X` but isn't really invoking a target (e.g. "make sure", "make a").
+_MAKE_STOPWORDS = frozenset({
+    "sure", "a", "an", "the", "it", "your", "this", "that",
+    "changes", "sense", "use", "do", "you",
+})
+
+# npm-script stop-words for the same reason.
+_NPM_RUN_STOPWORDS = frozenset({"the", "a", "your"})
+
+
+def _makefile_targets(ctx: RepoContext) -> set[str]:
+    """Return the set of `target:` names in any present Makefile-like
+    file. Empty set if no Makefile exists (caller will treat that as a
+    no-op rather than a finding-storm)."""
+    targets: set[str] = set()
+    target_re = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
+    for name in ("Makefile", "GNUmakefile", "makefile"):
+        text = ctx.read_text(name)
+        if not text:
+            continue
+        targets.update(m.group(1) for m in target_re.finditer(text))
+    return targets
+
+
+def _package_json_scripts(ctx: RepoContext) -> set[str] | None:
+    """Return the set of npm script names, or None if no package.json
+    exists. None means "downstream check is moot, suppress findings"."""
+    raw = ctx.read_text("package.json")
+    if not raw:
+        return None
+    try:
+        import json
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        return set()
+    scripts = data.get("scripts") or {}
+    if not isinstance(scripts, dict):
+        return set()
+    return set(scripts.keys())
 
 
 def _readme_repo_match_mode(
@@ -123,6 +187,9 @@ def _readme_repo_match_mode(
         "pytest_mention_requires_config",
         "npm_test_requires_package_json",
         "agent_doc_not_placeholder",
+        "make_target_referenced_in_readme",
+        "package_json_script_referenced_in_readme",
+        "pip_editable_requires_manifest",
     ])
     findings: list[tuple[str | None, int | None, str]] = []
     readme_text = _read_readme(ctx)
@@ -145,6 +212,54 @@ def _readme_repo_match_mode(
             findings.append((
                 None, None,
                 "README references npm test but no package.json was found.",
+            ))
+
+        if "make_target_referenced_in_readme" in enabled:
+            mentioned = {
+                m.group(1).lower()
+                for m in _MAKE_TARGET_RE.finditer(readme_text)
+                if m.group(1).lower() not in _MAKE_STOPWORDS
+            }
+            if mentioned:
+                actual = {t.lower() for t in _makefile_targets(ctx)}
+                # Only fire when *some* Makefile exists; otherwise the
+                # mention is documentation-only and a different rule
+                # (entry_points / test_command) is the right channel.
+                makefile_present = any(
+                    (ctx.root / n).is_file()
+                    for n in ("Makefile", "GNUmakefile", "makefile")
+                )
+                if makefile_present:
+                    for target in sorted(mentioned - actual):
+                        findings.append((
+                            "README.md", None,
+                            f"README references `make {target}` but no `{target}:` target exists in Makefile.",
+                        ))
+
+        if "package_json_script_referenced_in_readme" in enabled:
+            mentioned = {
+                m.group(1)
+                for m in _NPM_RUN_RE.finditer(readme_text)
+                if m.group(1).lower() not in _NPM_RUN_STOPWORDS
+            }
+            if mentioned:
+                scripts = _package_json_scripts(ctx)
+                if scripts is not None:
+                    for script in sorted(mentioned - scripts):
+                        findings.append((
+                            "README.md", None,
+                            f"README references `npm run {script}` but `scripts.{script}` is missing from package.json.",
+                        ))
+
+        if (
+            "pip_editable_requires_manifest" in enabled
+            and _PIP_EDITABLE_RE.search(readme_text)
+            and not (ctx.root / "pyproject.toml").is_file()
+            and not (ctx.root / "setup.py").is_file()
+        ):
+            findings.append((
+                "README.md", None,
+                "README documents `pip install -e .` but neither pyproject.toml nor setup.py exists.",
             ))
 
     if "agent_doc_not_placeholder" in enabled:

@@ -32,4 +32,39 @@ fix_hint: |
   Run `gitignore.io` for your stack and paste the result into
   `.gitignore`. At minimum, cover: `__pycache__`, `node_modules`,
   `.env`, `dist/`, `build/`, `*.log`, IDE settings, coverage dirs.
+fix_template:
+  # ``append_to_file`` so the patch works whether the repo already has a
+  # `.gitignore` (we add the missing groups) or has none (it gets
+  # created). The appended block is intentionally generic — covers the
+  # 7+ groups this rule scores on without language-specific assumptions.
+  kind: append_to_file
+  path: .gitignore
+  content: |
+    # --- agent-readiness: cover common build artefacts and secrets ---
+    # Python
+    __pycache__/
+    *.py[cod]
+    *.egg-info/
+    .venv/
+    venv/
+
+    # JS / Node
+    node_modules/
+
+    # Build / dist
+    dist/
+    build/
+    target/
+
+    # IDE / OS junk
+    .idea/
+    .vscode/
+    .DS_Store
+
+    # Coverage / logs / env
+    coverage/
+    htmlcov/
+    *.log
+    .env
+    .env.*
 insight_query: .gitignore build artifacts secrets node_modules pycache .env coverage

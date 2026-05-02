@@ -1,0 +1,143 @@
+rules_version: 1
+id: headless.unrunnable_e2e
+pillar: flow
+title: Repo is unrunnable end-to-end by an agent
+# Heaviest single rule in the pack — this is the "all three load-bearing
+# affordances are missing" composite. If this fires, an agent landing in
+# the repo cannot read any agent-targeted docs, cannot find a conventional
+# entry point, and cannot statically discover a test command. So even a
+# correct plan from the README is dead-on-arrival without trial-and-error,
+# which is the most expensive failure mode in agent runtime.
+weight: 3.0
+severity: error
+explanation: |
+  This is a composite of three already-shipping signals:
+    - agent_docs.present  (cognitive_load)
+    - entry_points.detected  (flow)
+    - test_command.discoverable  (feedback)
+  Individually any one of them is a soft signal. Together — when ALL
+  THREE are absent — the repo is functionally agent-blind: no doc to
+  read, no thing to run, no way to verify. Most healthy repos satisfy
+  at least one; this rule isolates the worst-case intersection.
+
+  Note: the sub-conditions are written as AND-of-misses (each leaf
+  matcher fires explicitly when its signal is missing), not as OR-of-
+  alternatives mirrored from the source rules. The source rules use
+  OR semantics where the regex clauses default to fire_when=match and
+  go silent when their target file is absent — which makes those rules
+  under-fire on real repos. We avoid that by being explicit here.
+match:
+  type: composite
+  op: and
+  summary: |
+    No agent-targeted docs, no conventional entry point, and no
+    statically-discoverable test command — repo is unrunnable
+    end-to-end by an agent.
+  clauses:
+    # 1) No agent-targeted docs anywhere — same matcher as
+    # agent_docs.present (path_glob fires when no required path matches).
+    - type: path_glob
+      require_globs:
+        - AGENTS.md
+        - CLAUDE.md
+        - GEMINI.md
+        - .cursorrules
+        - .cursor/rules/*.mdc
+        - .cursor/settings.json
+        - .github/copilot-instructions.md
+        - .github/instructions/*.md
+        - .ai/**
+        - prompts/**
+        - .windsurfrules
+        - .clinerules
+        - .aider.conf.yml
+        - .aiderconfig
+        - .zed/settings.json
+        - .replit
+        - .bolt/**
+        - .amazon-q/**
+        - .idea/copilot/**
+    # 2) No entry-point convention — AND-of-misses across manifests
+    # and conventional file paths. Each clause fires explicitly when
+    # its specific entry-point signal is absent; AND fires only when
+    # they are all simultaneously absent.
+    - type: composite
+      op: and
+      summary: All entry-point conventions are absent.
+      clauses:
+        - type: manifest_field
+          manifest: pyproject.toml
+          field_path: project.scripts
+          fire_when: missing
+        - type: manifest_field
+          manifest: package.json
+          field_path: bin
+          fire_when: missing
+        - type: manifest_field
+          manifest: package.json
+          field_path: main
+          fire_when: missing
+        - type: path_glob
+          require_globs:
+            - main.py
+            - src/main.py
+            - "src/*/main.py"
+            - "src/*/__main__.py"
+            - "src/*/cli.py"
+            - app/main.py
+            - app.py
+            - cli.py
+            - "**/__main__.py"
+            - cmd/**/main.go
+            - main.go
+            - main.rs
+            - "src/main.rs"
+            - index.js
+            - index.ts
+            - src/index.js
+            - src/index.ts
+            - "bin/*"
+            - "cmd/*"
+    # 3) No statically-discoverable test command — same AND-of-misses
+    # treatment. regex_in_files uses fire_when=no_match so it fires
+    # when the target file is missing OR the pattern doesn't match,
+    # which is the actual "test config absent" semantic.
+    - type: composite
+      op: and
+      summary: All test-command signals are absent.
+      clauses:
+        - type: command_in_makefile
+          target: test
+          fire_when: missing
+        - type: command_in_makefile
+          target: tests
+          fire_when: missing
+        - type: regex_in_files
+          pattern: '\[tool\.pytest|\[tool\.hatch\.envs|\[tool\.tox\]'
+          file_globs:
+            - pyproject.toml
+          fire_when: no_match
+        - type: regex_in_files
+          pattern: '"test"\s*:'
+          file_globs:
+            - package.json
+          fire_when: no_match
+        - type: path_glob
+          require_globs:
+            - pytest.ini
+            - tox.ini
+            - noxfile.py
+            - conftest.py
+            - tests/**
+            - test/**
+            - "**/*_test.go"
+            - "**/test_*.py"
+            - Cargo.toml
+fix_hint: |
+  Pick the lightest of the three to add first — agent-targeted docs are
+  by far the cheapest. Drop an AGENTS.md at the repo root that names a
+  canonical entry point and a canonical test command, then back those
+  claims with the actual files (`[project.scripts]` in pyproject.toml,
+  `test:` target in a Makefile, etc.). The goal is for an agent to be
+  able to read one file and run two commands without guessing.
+insight_query: agent-blind unrunnable e2e no entry point no test command no AGENTS.md

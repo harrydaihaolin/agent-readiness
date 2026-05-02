@@ -25,6 +25,7 @@ match:
     A deploy step is configured but no workflow performs a post-deploy
     smoke check (HTTP probe, Playwright/Cypress/Puppeteer, or Lighthouse).
   clauses:
+    # Clause 1: at least one workflow references a hosted deploy step.
     - type: regex_in_files
       pattern: >-
         (?i)(actions/deploy-pages|peaceiris/actions-gh-pages|JamesIves/github-pages-deploy-action|nwtgck/actions-netlify|amondnet/vercel-action|aws-actions/configure-aws-credentials.{0,500}aws\s+s3\s+sync|aws\s+s3\s+sync\b|wrangler\s+pages\s+deploy|wrangler\s+deploy|firebase\s+deploy\b|netlify\s+deploy\b|vercel\s+deploy\b|surge\s+--domain|gh-pages\s+-d\b|fly\s+deploy\b|gcloud\s+run\s+deploy\b|kubectl\s+apply|helm\s+upgrade)
@@ -36,6 +37,7 @@ match:
         - azure-pipelines.yml
         - bitbucket-pipelines.yml
       fire_when: match
+    # Clause 2: NO workflow file shows evidence of a smoke check.
     - type: regex_in_files
       pattern: >-
         (?i)(curl\s+(-[A-Za-z]+\s+)*(--fail\b|-f\b|-w\s+["']?%?\{?http_code|--write-out)|wget\s+--spider|playwright\s+test|@?playwright/test|cypress\s+run|puppeteer|lighthouse(?:\s+--?)|lhci\s+autorun|axe(?:-core)?\s+|pa11y(?:-ci)?\s|httpie\b|http\s+--check-status\s+GET|smoke[-_ ]?test|k6\s+run|hurl\s+|newman\s+run\b)
@@ -83,10 +85,13 @@ fix_template:
           - name: Probe deployed site
             run: |
               set -euo pipefail
+              # Replace SITE_URL with your live URL (or read from a workflow output).
               SITE_URL="https://your-org.github.io/your-repo/"
               echo "Probing $SITE_URL"
               curl -fsSL "$SITE_URL" -o /tmp/index.html
               grep -q '<div id="root"></div>' /tmp/index.html
+              # Optional: probe deep SPA route via the 404 fallback.
               code=$(curl -sS -o /tmp/deep.html -w '%{http_code}' "${SITE_URL}repos")
+              # GitHub Pages SPA fallback: 404 with redirect HTML is fine.
               test "$code" = "200" -o "$code" = "404"
 insight_query: post-deploy smoke test deployed site verification curl playwright lighthouse SPA pages 404 fallback

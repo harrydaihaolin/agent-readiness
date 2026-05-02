@@ -4,15 +4,80 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
       - run: make lint
       - run: make test
-      - run: python -m agent_readiness.cli scan . --json
+      # Capture self-scan score and fail loud if it regresses below the
+      # current floor. Floor is the rounded-down current score minus a
+      # small safety margin; bump it as the score improves.
+      - run: python -m agent_readiness.cli scan . --json --fail-below 95
         env:
           PYTHONPATH: src
+      # Belt-and-braces: contributors are expected to install local
+      # pre-commit hooks via `pre-commit install`; this step makes CI
+      # fail loudly the same way if they didn't.
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Run all pre-commit hooks
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  verify-vendoring:
+    # IL1: prove that `src/agent_readiness/rules_pack/` matches what
+    # `scripts/vendor_rules.sh <vendored_tag>` would produce against the
+    # tag declared in MANIFEST. Without this, a manual edit to a
+    # vendored YAML would silently change the OSS engine's behaviour
+    # without showing up in any review of the canonical rules pack.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
+        with:
+          python-version: "3.12"
+      - name: Read vendored tag and tarball_sha256 from MANIFEST
+        id: manifest
+        run: |
+          set -euo pipefail
+          MANIFEST_PATH=src/agent_readiness/rules_pack/MANIFEST
+          TAG=$(grep -E '^vendored_tag\b' "$MANIFEST_PATH" | sed -E 's/.*"(.*)"/\1/')
+          SHA=$(grep -E '^tarball_sha256\b' "$MANIFEST_PATH" | sed -E 's/.*"(.*)"/\1/')
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "manifest tag: $TAG"
+          echo "manifest sha: $SHA"
+      - name: Refuse placeholder / non-hex tarball_sha256
+        env:
+          SHA: ${{ steps.manifest.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::tarball_sha256 in MANIFEST is not a 64-char hex digest: '$SHA'"
+            echo "Cut the corresponding agent-readiness-rules release tag, then"
+            echo "re-run scripts/vendor_rules.sh <tag> locally and commit the result."
+            exit 1
+          fi
+      - name: Re-vendor and diff against committed pack
+        env:
+          TAG: ${{ steps.manifest.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Vendor into a scratch directory so we can diff cleanly. We
+          # call the same script contributors run locally; any drift
+          # between committed pack and the upstream tag is a hard error.
+          WORK=$(mktemp -d)
+          cp -r src/agent_readiness/rules_pack "$WORK/committed"
+          # Re-vendor in-place (script writes to src/agent_readiness/rules_pack)
+          bash scripts/vendor_rules.sh "$TAG"
+          # MANIFEST.vendored_at is a free-form ISO timestamp produced
+          # at vendor time; ignore it in the diff so a re-vendor that
+          # is otherwise identical doesn't trip CI. tarball_sha256 must
+          # match exactly.
+          diff -ruN \
+            --ignore-matching-lines='^vendored_at' \
+            "$WORK/committed" src/agent_readiness/rules_pack \
+            || { echo "::error::vendored rules pack drifts from $TAG"; exit 1; }

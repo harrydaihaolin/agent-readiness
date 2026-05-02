@@ -19,4 +19,32 @@ match:
 fix_hint: |
   Add a CONTRIBUTING.md describing branch naming, commit style,
   required local checks, and the PR review flow.
+fix_template:
+  kind: create_file
+  path: CONTRIBUTING.md
+  content: |
+    # Contributing
+
+    Thanks for helping! This file is the short version of the rules.
+
+    ## Branches
+
+    - `main` is the integration branch; protect it.
+    - Feature branches: `feat/<short-description>`.
+    - Fix branches:     `fix/<short-description>`.
+
+    ## Commits
+
+    - One logical change per commit. Use the imperative mood.
+    - Reference issues with `Closes #<n>` in the commit body.
+
+    ## Local checks before pushing
+
+    - Run the canonical lint and test commands documented in `AGENTS.md`.
+    - Don't skip pre-commit hooks; fix the underlying issue if one fails.
+
+    ## Pull request flow
+
+    - Fill in the PR template; describe what changed and how to verify.
+    - Expect a review within ~1 business day; ping if stuck.
 insight_query: contributing guide PR conventions branch naming

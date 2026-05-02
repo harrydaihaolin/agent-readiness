@@ -47,4 +47,17 @@ fix_hint: |
   non-interactively. Example: `test:\n\tpython -m pytest tests/`.
   This is the universal headless contract; everything else is a
   fallback.
+fix_template:
+  # ``append_to_file`` (not ``create_file``) so the patch applies whether
+  # the project already has a Makefile (just appends a `test:` target) or
+  # has none at all (the appender creates the file). The composite-or
+  # match can fire even when a Makefile exists but lacks a test target,
+  # so a ``create_file`` patch would clobber existing content.
+  kind: append_to_file
+  path: Makefile
+  content: |
+    .PHONY: test
+
+    test:
+    	python -m pytest tests/
 insight_query: test command discoverable makefile pyproject scripts pytest tox

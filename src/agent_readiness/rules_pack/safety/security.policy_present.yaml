@@ -20,4 +20,28 @@ fix_hint: |
   Add a SECURITY.md at the repo root with at least: how to report a
   vulnerability (private channel), supported versions, and expected
   response time. GitHub's "Add a security policy" template is fine.
+fix_template:
+  kind: create_file
+  path: SECURITY.md
+  content: |
+    # Security policy
+
+    ## Reporting a vulnerability
+
+    Please **do not open a public issue** for security problems. Email
+    the maintainers at `<security@example.com>` (replace with the right
+    address) or use GitHub's private vulnerability reporting if enabled.
+    Include reproduction steps and any logs you can share.
+
+    ## Supported versions
+
+    | Version | Supported |
+    | ------- | --------- |
+    | latest  | ✅        |
+    | older   | best effort |
+
+    ## Response window
+
+    We aim to acknowledge reports within 2 business days and to ship a
+    fix or mitigation within 30 days for high-severity issues.
 insight_query: SECURITY.md security policy disclosure vulnerability reporting

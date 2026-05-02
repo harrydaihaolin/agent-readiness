@@ -11,7 +11,7 @@ set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
   echo "Usage: $0 <tag>"
-  echo "Example: $0 v1.0.0"
+  echo "Example: $0 v1.4.0"
   exit 2
 fi
 
@@ -22,6 +22,16 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 REPO="harrydaihaolin/agent-readiness-rules"
+
+# IL2: refuse to vendor from a tag that doesn't exist on origin. Without
+# this guard the script will happily commit `tarball_sha256 = "..."`
+# computed from a curl 404 page, defeating the audit-trail purpose of
+# the manifest. Bail loud instead.
+echo "Checking that $REPO@$TAG exists on origin ..."
+if ! git ls-remote --tags "https://github.com/$REPO.git" "refs/tags/$TAG" | grep -q "$TAG"; then
+  echo "error: tag $TAG not found on $REPO. Cut the release first, then re-run."
+  exit 3
+fi
 
 echo "Fetching $REPO@$TAG ..."
 
@@ -51,8 +61,14 @@ mkdir -p "$DEST"
 cp -r "$PACK_DIR/rules/." "$DEST/"
 cp "$PACK_DIR/manifest.toml" "$DEST/manifest.toml"
 
-# Compute a SHA from the tarball for traceability.
+# Compute a SHA from the tarball for traceability. Refuse a hash that
+# isn't 64 hex chars — that would mean we wrote a placeholder by
+# accident.
 SHA=$(shasum -a 256 "$ARCHIVE" | awk '{print $1}')
+if ! printf '%s' "$SHA" | grep -Eq '^[0-9a-f]{64}$'; then
+  echo "error: refusing to write non-64-hex tarball_sha256: '$SHA'"
+  exit 4
+fi
 
 cat > "$DEST/MANIFEST" <<EOF
 # Vendored from harrydaihaolin/agent-readiness-rules@$TAG

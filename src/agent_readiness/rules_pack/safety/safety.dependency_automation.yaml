@@ -43,4 +43,24 @@ fix_hint: |
   the repo root that updates `pip` / `npm` / `github-actions`
   weekly. Add a CodeQL workflow if your language is supported. See
   https://docs.github.com/en/code-security/dependabot for examples.
+fix_template:
+  kind: create_file
+  path: .github/dependabot.yml
+  content: |
+    # Updates GitHub Actions and the most common ecosystems weekly.
+    # Add or remove `package-ecosystem` blocks to match your stack.
+    version: 2
+    updates:
+      - package-ecosystem: "github-actions"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+      - package-ecosystem: "pip"
+        directory: "/"
+        schedule:
+          interval: "weekly"
+      - package-ecosystem: "npm"
+        directory: "/"
+        schedule:
+          interval: "weekly"
 insight_query: dependabot renovate snyk fossa codeql dependency vuln scan automated

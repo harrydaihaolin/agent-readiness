@@ -7,7 +7,7 @@ dev:
 	pip install -e ".[dev]"
 
 test:
-	PYTHONPATH=src python3 -m unittest discover -s tests -v
+	PYTHONPATH=src python3 -m pytest tests -v
 
 lint:
 	ruff check src tests

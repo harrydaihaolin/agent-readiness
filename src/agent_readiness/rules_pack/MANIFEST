@@ -1,14 +1,6 @@
-# Vendored from harrydaihaolin/agent-readiness-rules@feat/q1-migration-yamls
+# Vendored from harrydaihaolin/agent-readiness-rules@v1.4.0
 # Do not edit by hand; regenerate via scripts/vendor_rules.sh <tag>.
-#
-# NOTE: This snapshot is intentionally taken from the unreleased
-# `feat/q1-migration-yamls` branch (commit e80aa29) so the OSS scan
-# stays at full coverage during the Q1 migration. Phase 4 of the
-# migration replaces this vendored directory with a `git+https`
-# dependency on agent-readiness-rules and `importlib.resources`
-# resolution, after which this MANIFEST and the surrounding directory
-# are deleted.
 vendored_from = "harrydaihaolin/agent-readiness-rules"
-vendored_tag  = "feat/q1-migration-yamls@e80aa29"
-vendored_at   = "2026-04-29T22:30:00Z"
-tarball_sha256 = "phase3-q1-snapshot"
+vendored_tag  = "v1.4.0"
+vendored_at   = "2026-05-02T03:47:30Z"
+tarball_sha256 = "363a46dba3e21509566b6defc4e74d3e87184be1e29314b2fb943b98f6fbcc89"
