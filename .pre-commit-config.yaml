@@ -3,12 +3,22 @@ repos:
     rev: v4.6.0
     hooks:
       - id: trailing-whitespace
+        # Fixture trees intentionally include malformed/whitespace-y
+        # files (that's the point of the fixture). Don't auto-fix them.
+        exclude: ^tests/fixtures/
       - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
       - id: check-yaml
+        exclude: ^tests/fixtures/
       - id: check-added-large-files
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+    # Keep this aligned with whatever ruff CI runs (currently latest
+    # via `pip install -e ".[dev]"`). When CI's ruff bumps, bump this
+    # rev so local hooks can't lag and let new lint rules slip past.
+    rev: v0.6.9
     hooks:
       - id: ruff
         args: [--fix]
-      - id: ruff-format
+      # Note: ruff-format is intentionally disabled until we do a
+      # codebase-wide reformat. Enabling it on PRs that touch unrelated
+      # files would produce churn-noise diffs.

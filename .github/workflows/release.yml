@@ -13,9 +13,9 @@ jobs:
     name: Build distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
         with:
           python-version: "3.12"
 
@@ -28,7 +28,7 @@ jobs:
       - name: Verify dist contents
         run: ls -lh dist/
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # pin to v7
         with:
           name: dist
           path: dist/
@@ -45,13 +45,13 @@ jobs:
       id-token: write   # Required for OIDC trusted publishing
 
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin to v8
         with:
           name: dist
           path: dist/
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # pin to release/v1
         with:
           skip-existing: true   # idempotent: safe to re-run if tag is re-pushed
 
@@ -63,15 +63,15 @@ jobs:
       contents: write   # Required to create releases and upload assets
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin to v8
         with:
           name: dist
           path: dist/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # pin to v3
         with:
           generate_release_notes: true
           files: dist/*
@@ -84,15 +84,15 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # pin to v8
         with:
           name: dist
           path: dist/
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # pin to v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -111,3 +111,65 @@ jobs:
           DOCKERFILE
           docker push "$TAG"
           docker push "$LATEST"
+
+  smoke-pypi:
+    name: Smoke-test published wheel
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
+        with:
+          python-version: "3.12"
+      - name: Wait for PyPI to surface the new release
+        run: sleep 30
+      - name: Install published wheel by exact tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Strip leading "v" from tag (v1.2.3 -> 1.2.3) for PEP 440.
+          VER="${TAG#v}"
+          # Retry: PyPI's CDN can take a minute to surface a fresh release.
+          for attempt in 1 2 3 4 5 6; do
+            if pip install --no-cache-dir "agent-readiness==${VER}"; then
+              echo "Installed agent-readiness==${VER} on attempt ${attempt}"; exit 0
+            fi
+            echo "PyPI does not yet have ${VER}, retrying in 20s..."; sleep 20
+          done
+          echo "::error::Could not install agent-readiness==${VER} after 6 attempts"
+          exit 1
+      - name: Verify --version matches tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VER="${TAG#v}"
+          OUT=$(agent-readiness --version)
+          echo "$OUT"
+          echo "$OUT" | grep -q "$VER"
+      - name: Smoke scan against fixture
+        run: |
+          set -euo pipefail
+          agent-readiness scan tests/fixtures/good --json > /tmp/scan.json
+          python3 -c "import json; d=json.load(open('/tmp/scan.json')); assert 'overall_score' in d or 'score' in d, d"
+
+  smoke-ghcr:
+    name: Smoke-test published container
+    needs: publish-github-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for GHCR to surface the new image
+        run: sleep 15
+      - name: Pull and run published image
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if docker pull "$IMAGE"; then
+              echo "Pulled $IMAGE on attempt $attempt"; break
+            fi
+            echo "GHCR does not yet have $IMAGE, retrying in 15s..."; sleep 15
+          done
+          docker run --rm "$IMAGE" --version

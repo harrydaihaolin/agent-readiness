@@ -446,10 +446,20 @@ class TestVendoredPackSmoke(unittest.TestCase):
     def test_vendored_pack_loads_q1_snapshot(self):
         rd = default_rules_dir()
         loaded = load_rules_from_dir(rd)
-        # The vendored snapshot ships 34 rules. The exact number is part of the
-        # vendoring contract — bumping it is a deliberate change to the
-        # snapshot in src/agent_readiness/rules_pack/.
-        self.assertEqual(len(loaded), 34)
+        # The exact rule count is part of the vendoring contract; we
+        # derive it from the on-disk yaml files rather than hardcoding
+        # a number that drifts with every rule addition (IL7).
+        # `loaded` should equal the number of *.yaml files under the
+        # vendored pack — anything else means a rule failed to parse.
+        on_disk = sorted(p for p in rd.rglob("*.yaml"))
+        # Exclude manifest.toml (it's `.toml`) and any vendored MANIFEST
+        # (no extension); both are non-rule files.
+        self.assertEqual(
+            len(loaded),
+            len(on_disk),
+            f"loaded {len(loaded)} rules but found {len(on_disk)} *.yaml "
+            f"files under {rd}; some rule failed to parse silently.",
+        )
 
     def test_vendored_pack_evaluates_on_self(self):
         rd = default_rules_dir()

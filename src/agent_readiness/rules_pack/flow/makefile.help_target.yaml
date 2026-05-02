@@ -1,0 +1,34 @@
+rules_version: 1
+id: makefile.help_target
+pillar: flow
+title: Makefile exposes a `help:` target
+weight: 0.3
+severity: info
+explanation: |
+  Many AI coding agents (and new human contributors) try `make help`
+  first to discover what a repo can do. A Makefile with multiple
+  targets and no `help:` target forces every onboarding agent to read
+  the Makefile by hand. Cheap to add, surprisingly load-bearing for
+  first-touch ergonomics. Demo rule for the `insert_after` fix kind.
+match:
+  type: command_in_makefile
+  target: help
+  fire_when: missing
+fix_hint: |
+  Add a `help:` target that prints each target with its inline `##`
+  comment. Inserting after `.PHONY:` keeps the canonical declaration
+  block tidy.
+fix_template:
+  # `insert_after` (not `append_to_file`) so the new target lands at
+  # the top of the file, next to .PHONY, rather than at the bottom.
+  # If the Makefile has no `.PHONY:` line the regex won't match and
+  # the engine treats this template as a no-op for that scan target.
+  kind: insert_after
+  path: Makefile
+  after_pattern: '^\.PHONY:\s.*$'
+  content: |2
+
+    help: ## Print this help.
+    	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
+    	  awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
+insight_query: makefile help target onboarding agents discoverability

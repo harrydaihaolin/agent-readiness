@@ -28,4 +28,20 @@ fix_hint: |
   Add a `.gitleaks.toml` (or `.secrets.baseline` for detect-secrets) and
   wire it into pre-commit or a GitHub Actions workflow. Example:
   https://github.com/gitleaks/gitleaks-action.
+fix_template:
+  kind: create_file
+  path: .gitleaks.toml
+  content: |
+    # Minimal gitleaks config. Wire into pre-commit or run from CI via
+    # https://github.com/gitleaks/gitleaks-action so secrets get caught
+    # before they hit git history. Customize the allowlist per repo.
+    title = "gitleaks config"
+
+    [allowlist]
+    description = "Per-repo false-positive allowlist"
+    paths = [
+      '''(.*?)(\.lock|\.snap)$''',
+      '''node_modules/''',
+      '''vendor/''',
+    ]
 insight_query: gitleaks trufflehog detect-secrets secret scanning agent push

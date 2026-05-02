@@ -43,7 +43,12 @@ def cli() -> None:
 @click.option("--baseline", "baseline_file", type=click.Path(path_type=Path),
               default=None, help="Path to a previous JSON report for delta display.")
 @click.option("--fail-below", "fail_below", type=int, default=0,
-              help="Exit 1 if overall score is below N (0 = disabled).")
+              help=(
+                  "Exit 1 if overall score is below N (0 = disabled). "
+                  "Use this in CI to gate merges on the readiness score; "
+                  "see ML7 in the leaderboard scan envelope for the same "
+                  "convention applied to fleet scans."
+              ))
 @click.option("--report", "report_file", type=click.Path(path_type=Path),
               default=None, help="Write an HTML report to FILE.")
 @click.option("--badge", "badge_file", type=click.Path(path_type=Path),
@@ -246,6 +251,20 @@ def scan(
             )
         click.echo(output)
 
+    # Exit-code contract (consumed by CI in this repo's
+    # `.github/workflows/ci.yml`, by `agent-readiness-leaderboard/scripts/
+    # scan.py`, and by downstream tooling that calls the CLI):
+    #
+    #   0 = scan completed and (if --fail-below was set) the overall
+    #       score met or exceeded the threshold.
+    #   1 = scan completed but the overall score fell below
+    #       --fail-below; treat as a gate failure, not a runtime error.
+    #
+    # Non-zero exits from earlier in the pipeline (e.g. unhandled
+    # exceptions, click usage errors) are *not* part of this contract;
+    # callers that want to distinguish "score regressed" from "scanner
+    # crashed" should also check stderr or run with --json and look at
+    # the envelope. (ML7)
     if fail_below > 0 and report.overall_score < fail_below:
         sys.exit(1)
 

@@ -36,4 +36,24 @@ fix_hint: |
   `.pre-commit-config.yaml` with at least ruff + the language formatter.
   For JS, install husky + lint-staged. The goal is "every commit gets
   formatted and linted before it touches a branch."
+fix_template:
+  kind: create_file
+  path: .pre-commit-config.yaml
+  content: |
+    # Run `pre-commit install` once after committing this file so the
+    # hooks fire on every commit. Tune the language hooks for your stack.
+    repos:
+      - repo: https://github.com/pre-commit/pre-commit-hooks
+        rev: v4.6.0
+        hooks:
+          - id: trailing-whitespace
+          - id: end-of-file-fixer
+          - id: check-yaml
+          - id: check-merge-conflict
+      - repo: https://github.com/astral-sh/ruff-pre-commit
+        rev: v0.6.9
+        hooks:
+          - id: ruff
+            args: [--fix]
+          - id: ruff-format
 insight_query: pre-commit husky lefthook lint-staged git hooks pre-commit-config

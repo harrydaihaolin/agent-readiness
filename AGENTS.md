@@ -5,10 +5,15 @@ Conventions for AI coding agents working in this repository.
 ## Canonical commands
 
 - Install dev deps: `make dev`
-- Run tests:        `make test`
+- Run tests:        `make test` (pytest under `PYTHONPATH=src`)
 - Lint:             `make lint`
 - Run the CLI:      `PYTHONPATH=src python3 -m agent_readiness.cli scan .`
   (or `agent-readiness scan .` after `make install`)
+
+The test runner is **pytest** (declared in `[project.optional-dependencies].dev`
+and invoked by `make test`). The unittest-style classes in `tests/` continue
+to work because pytest discovers them; new tests should prefer plain
+function-style or pytest fixtures.
 
 The tool itself is fully headless: stable JSON via `--json`, tab-separated
 `list-checks`, prose `explain <check_id>`, and exit codes that mean

@@ -35,4 +35,23 @@ fix_hint: |
   a wizard), a `.github/PULL_REQUEST_TEMPLATE.md` with a checklist,
   and a `CODEOWNERS` file mapping `*` to the team that should review
   agent-opened PRs.
+fix_template:
+  # The PR template is the highest-leverage of the three signals — it
+  # changes the shape of every PR, including agent-opened ones — so we
+  # patch it. Issue templates and CODEOWNERS still need separate PRs.
+  kind: create_file
+  path: .github/PULL_REQUEST_TEMPLATE.md
+  content: |
+    ## Summary
+
+    <!-- One or two sentences: what changed and why. -->
+
+    ## Test plan
+
+    - [ ] Ran the canonical test command from `AGENTS.md`.
+    - [ ] Manually verified the change end-to-end (describe how).
+
+    ## Risk / rollback
+
+    <!-- Any feature flags, migrations, or rollback steps reviewers should know. -->
 insight_query: issue template PR template CODEOWNERS GitHub repository scaffolding
