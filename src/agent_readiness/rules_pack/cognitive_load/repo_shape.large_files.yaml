@@ -6,19 +6,34 @@ title: Large source files
 # accounted for 56% of all WARN findings in the closed-loop scan over
 # 141 repos. Until per-rule firing volume drops below 25%, keep it light
 # so it does not dominate the overall pillar score.
+#
+# v1.5.0 (2026-05): IL3-V31-A. The v3.1 cohort scan put this rule at
+# 88.1% fire (988/1110), which is high enough that the check has
+# stopped discriminating — a check that fires on nine in ten repos is
+# closer to a property of "large active codebase" than "this repo has
+# a problematic large file." The rule's exclude_globs already cover
+# the obvious non-source noise, so the remaining lever is threshold
+# height: bump threshold_lines 500 → 1500 and threshold_bytes 50 KB →
+# 150 KB to land fire rate inside the calibration target band of
+# 30–60% (which is where git.churn_hotspots already sits and where the
+# rule discriminates again). Validation gate is enforced by
+# scripts/validate_proposed_checks.py against a 15-repo stratified
+# sample; the v3.2 cohort re-snapshot is the production confirmation.
 weight: 0.5
 severity: warn
 explanation: |
-  Files over 500 lines or 50 KB exceed an agent's working memory in a
-  single read and force a chunked-reading pattern that loses context
-  across chunk boundaries. This rule excludes lock files, generated
-  data, binary assets, long-form tests, vendored third-party code, and
-  build/template artefacts — which are large but not "source" files an
-  agent would meaningfully edit.
+  Files over 1500 lines or 150 KB exceed an agent's working memory in
+  a single read and force a chunked-reading pattern that loses
+  context across chunk boundaries. This rule excludes lock files,
+  generated data, binary assets, long-form tests, vendored
+  third-party code, and build/template artefacts — which are large
+  but not "source" files an agent would meaningfully edit. Threshold
+  recalibrated in v1.5.0 from the 500-line / 50 KB v1.4.0 setting;
+  see the rule comment block for v3.1 cohort calibration data.
 match:
   type: file_size
-  threshold_lines: 500
-  threshold_bytes: 51200
+  threshold_lines: 1500
+  threshold_bytes: 153600
   exclude_globs:
     # Lock files of every flavour
     - "*.lock"
@@ -113,3 +128,7 @@ fix_hint: |
   exclusion in `.agent-readiness.toml` if the file is truly intentional
   (large generated tables, etc.).
 insight_query: large file false positive lock files generated assets
+# Calibration band for v1.5.0 release: target fire rate 0.30–0.60 on
+# the v3 cohort (ideas.md IL3-V31-A). Production confirmation lives
+# in agent-readiness-leaderboard/data/releases/scores_v3_*.json from
+# the v3.2 snapshot run.
