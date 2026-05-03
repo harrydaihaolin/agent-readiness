@@ -23,8 +23,11 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # The loader supports this set of rules_version integers. Bumping
-# this is a coordinated change with the protocol package.
-SUPPORTED_RULES_VERSIONS: frozenset[int] = frozenset({1})
+# this is a coordinated change with the protocol package. v2 adds
+# the deterministic action contract (action + verify blocks); v1
+# rules continue to load during the transition window so a stale
+# rules-pack pin doesn't break consumers the day v2 ships.
+SUPPORTED_RULES_VERSIONS: frozenset[int] = frozenset({1, 2})
 
 
 class RuleLoadError(ValueError):
@@ -33,7 +36,13 @@ class RuleLoadError(ValueError):
 
 @dataclass(frozen=True)
 class LoadedRule:
-    """A rule that loaded successfully and is safe to evaluate."""
+    """A rule that loaded successfully and is safe to evaluate.
+
+    For ``rules_version >= 2`` rules, ``action`` and ``verify`` are
+    populated dicts (matching the protocol's ``Action`` and
+    ``VerifyStep`` shapes). For v1 rules they are ``None`` and
+    consumers fall back to ``fix_hint`` text only.
+    """
 
     rule_id: str
     pillar: str
@@ -45,6 +54,9 @@ class LoadedRule:
     fix_hint: str | None
     insight_query: str | None
     source_path: Path
+    rules_version: int = 1
+    action: dict[str, Any] | None = None
+    verify: dict[str, Any] | None = None
 
     @property
     def match_type(self) -> str:
@@ -119,6 +131,13 @@ def load_rule_file(path: Path) -> LoadedRule | None:
     if not isinstance(match, dict):
         raise RuleLoadError(f"{path}: 'match' must be a mapping")
 
+    action = data.get("action")
+    if action is not None and not isinstance(action, dict):
+        raise RuleLoadError(f"{path}: 'action' must be a mapping or null")
+    verify = data.get("verify")
+    if verify is not None and not isinstance(verify, dict):
+        raise RuleLoadError(f"{path}: 'verify' must be a mapping or null")
+
     return LoadedRule(
         rule_id=str(data["id"]),
         pillar=str(data["pillar"]),
@@ -130,6 +149,9 @@ def load_rule_file(path: Path) -> LoadedRule | None:
         fix_hint=data.get("fix_hint"),
         insight_query=data.get("insight_query"),
         source_path=path,
+        rules_version=rules_version,
+        action=action,
+        verify=verify,
     )
 
 

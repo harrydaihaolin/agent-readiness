@@ -68,6 +68,8 @@ def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
                 file=Path(file_str) if file_str else None,
                 line=line,
                 fix_hint=rule.fix_hint,
+                action=rule.action,
+                verify=rule.verify,
             )
         )
 
