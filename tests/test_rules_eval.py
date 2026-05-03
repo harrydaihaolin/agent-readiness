@@ -332,12 +332,180 @@ class TestLoaderVersionGating(unittest.TestCase):
             rules = load_rules_from_dir(Path(td))
             self.assertEqual(rules, [])
 
+    def test_v2_action_contract_loads(self):
+        """A rules_version=2 rule with action+verify must round-trip
+        through the loader and surface action/verify on the LoadedRule.
+        """
+        with TemporaryDirectory() as td:
+            yaml_text = textwrap.dedent("""
+                rules_version: 2
+                id: x.action_contract
+                pillar: feedback
+                title: t
+                weight: 1.0
+                severity: warn
+                explanation: e
+                match:
+                  type: path_glob
+                  require_globs: [AGENTS.md]
+                fix_hint: hint
+                action:
+                  kind: create_file
+                  path: AGENTS.md
+                  template: "# Hi\\n"
+                verify:
+                  command: "test -f AGENTS.md"
+                  description: AGENTS.md must exist.
+            """)
+            (Path(td) / "x.yaml").write_text(yaml_text)
+            rules = load_rules_from_dir(Path(td))
+            self.assertEqual(len(rules), 1)
+            r = rules[0]
+            self.assertEqual(r.rules_version, 2)
+            self.assertIsNotNone(r.action)
+            self.assertEqual(r.action["kind"], "create_file")
+            self.assertEqual(r.action["path"], "AGENTS.md")
+            self.assertIsNotNone(r.verify)
+            self.assertEqual(r.verify["command"], "test -f AGENTS.md")
+
+    def test_v2_finding_carries_action_and_verify(self):
+        """When a v2 rule fires, every emitted Finding must carry the
+        rule's `action` and `verify` so downstream consumers don't have
+        to re-load the rule."""
+        with TemporaryDirectory() as td:
+            yaml_text = textwrap.dedent("""
+                rules_version: 2
+                id: x.fires
+                pillar: feedback
+                title: t
+                weight: 1.0
+                severity: warn
+                explanation: e
+                match:
+                  type: path_glob
+                  require_globs: [AGENTS.md]
+                fix_hint: hint
+                action:
+                  kind: create_file
+                  path: AGENTS.md
+                  template: "# Hi\\n"
+                verify:
+                  command: "test -f AGENTS.md"
+                  description: AGENTS.md must exist.
+            """)
+            (Path(td) / "x.yaml").write_text(yaml_text)
+            rules = load_rules_from_dir(Path(td))
+            ctx = _make_ctx(Path(td), {"README.md": ""})
+            results = evaluate_rules(rules, ctx)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(len(results[0].findings), 1)
+            f = results[0].findings[0]
+            self.assertIsNotNone(f.action)
+            self.assertEqual(f.action["kind"], "create_file")
+            self.assertIsNotNone(f.verify)
+            self.assertEqual(f.verify["command"], "test -f AGENTS.md")
+
+    def test_v1_finding_has_no_action_or_verify(self):
+        """v1 rules continue to load and produce findings without the
+        new fields (transition window)."""
+        with TemporaryDirectory() as td:
+            yaml_text = textwrap.dedent("""
+                rules_version: 1
+                id: x.legacy
+                pillar: flow
+                title: t
+                weight: 1.0
+                severity: warn
+                explanation: e
+                match:
+                  type: path_glob
+                  require_globs: [X]
+            """)
+            (Path(td) / "x.yaml").write_text(yaml_text)
+            rules = load_rules_from_dir(Path(td))
+            self.assertEqual(rules[0].rules_version, 1)
+            self.assertIsNone(rules[0].action)
+            self.assertIsNone(rules[0].verify)
+            ctx = _make_ctx(Path(td), {"README.md": ""})
+            results = evaluate_rules(rules, ctx)
+            f = results[0].findings[0]
+            self.assertIsNone(f.action)
+            self.assertIsNone(f.verify)
+            d = f.to_dict()
+            self.assertNotIn("action", d)
+            self.assertNotIn("verify", d)
+
     def test_missing_version_raises(self):
         with TemporaryDirectory() as td:
             yaml_text = "id: x\npillar: flow\nmatch: {type: path_glob}\n"
             (Path(td) / "x.yaml").write_text(yaml_text)
             with self.assertRaises(RuleLoadError):
                 load_rule_file(Path(td) / "x.yaml")
+
+    def test_context_probe_substitutes_into_action_template(self):
+        """EXP-3: a v2 rule with action.context_probe must have its
+        action.template substituted with the resolved probe values
+        before the Finding goes on the wire. No `{variable}` should
+        leak through."""
+        with TemporaryDirectory() as td:
+            yaml_text = textwrap.dedent("""
+                rules_version: 2
+                id: x.context_probe
+                pillar: feedback
+                title: t
+                weight: 1.0
+                severity: warn
+                explanation: e
+                match:
+                  type: command_in_makefile
+                  target: test
+                  fire_when: missing
+                fix_hint: add a test target
+                action:
+                  kind: append_to_file
+                  path: Makefile
+                  template: |
+                    .PHONY: test
+                    test:
+                    \t{language_test_command}
+                  context_probe:
+                    - detect: primary_language
+                verify:
+                  command: "make -n test"
+                  description: ok
+            """)
+            (Path(td) / "x.yaml").write_text(yaml_text)
+            rules = load_rules_from_dir(Path(td))
+            # Repo with no Makefile (rule fires) and a pyproject.toml so
+            # primary_language probe resolves to python.
+            ctx = _make_ctx(Path(td), {"pyproject.toml": "[project]\nname='x'\n"})
+            results = evaluate_rules(rules, ctx)
+            self.assertEqual(len(results[0].findings), 1)
+            template = results[0].findings[0].action["template"]
+            self.assertIn("python -m pytest tests/", template)
+            self.assertNotIn("{language_test_command}", template)
+
+    def test_context_probe_missing_var_renders_empty(self):
+        """A probe that doesn't resolve must render the empty string,
+        not raise — no half-rendered templates on the wire."""
+        from agent_readiness.rules_eval.context_probe import render_action
+
+        rendered = render_action(
+            {"kind": "run_command", "command": "{primary_language} test {nope}"},
+            {"primary_language": "go"},
+        )
+        self.assertEqual(rendered["command"], "go test ")
+
+    def test_context_probe_no_probes_passes_through(self):
+        """v2 rule without a context_probe block: action passes through
+        untouched."""
+        from agent_readiness.rules_eval.context_probe import render_action, run_probes
+
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td), {})
+            self.assertEqual(run_probes(None, ctx), {})
+            action = {"kind": "create_file", "path": "X", "template": "literal\n"}
+            self.assertEqual(render_action(action, {}), action)
 
 
 class TestEvaluatorUnknownMatchType(unittest.TestCase):

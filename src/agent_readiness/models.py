@@ -40,6 +40,13 @@ class Finding:
     """A single observation from a check.
 
     Findings are evidence; the scorer aggregates them per pillar.
+
+    The ``action`` and ``verify`` fields surface the deterministic
+    action contract introduced in protocol v0.2.0 / rules_version 2.
+    They are dicts (not strongly-typed dataclasses) so the engine can
+    pass through any of the six action kinds without recompilation —
+    consumers already know how to dispatch on ``action.kind``. Both
+    fields are None for legacy v1 rules.
     """
     check_id: str
     pillar: Pillar
@@ -48,12 +55,21 @@ class Finding:
     file: Path | None = None
     line: int | None = None
     fix_hint: str | None = None
+    action: dict[str, Any] | None = None
+    verify: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["pillar"] = self.pillar.value
         d["severity"] = self.severity.value
         d["file"] = _path_to_str(self.file)
+        # Strip the optional v2 fields when null so v1-only consumers
+        # don't see schema-noise; they reappear automatically once a
+        # rule populates them.
+        if d.get("action") is None:
+            d.pop("action", None)
+        if d.get("verify") is None:
+            d.pop("verify", None)
         return d
 
 

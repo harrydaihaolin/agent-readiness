@@ -1,5 +1,15 @@
 name: CI
 on: [push, pull_request]
+
+env:
+  # NOTE: temporarily pinned to the v0.2.0-prep feature branch HEAD
+  # while protocol PR #10 (action contract) is in review. Engine v2
+  # depends on protocol >= 0.2 which isn't on PyPI yet; install it
+  # from the feature branch so this PR's CI doesn't deadlock waiting
+  # on the upstream release. Repoint to a tagged 0.2.0 once that PR
+  # lands.
+  PROTOCOL_REF: 5300bd78e4d98a9a9f8fc406cc916af9d23bd9a9
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -10,6 +20,11 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
         with:
           python-version: "3.12"
+      - name: Install agent-readiness-insights-protocol from feature branch
+        # Pre-installs the protocol from the EXP-1 feature branch so the
+        # subsequent ".[dev]" install can satisfy `>=0.2` without the
+        # 0.2.0 PyPI release being cut yet.
+        run: pip install "agent-readiness-insights-protocol @ git+https://github.com/harrydaihaolin/agent-readiness-insights-protocol@${PROTOCOL_REF}"
       - run: pip install -e ".[dev]"
       - run: make lint
       - run: make test
