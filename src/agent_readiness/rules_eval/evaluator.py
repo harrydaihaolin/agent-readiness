@@ -13,6 +13,7 @@ from pathlib import Path
 from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
+from .context_probe import render_action, run_probes
 from .loader import LoadedRule
 from .matchers import OssMatchTypeRegistry
 
@@ -58,6 +59,15 @@ def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
 
     raw = matcher(ctx, rule.match)
     findings: list[Finding] = []
+    # EXP-3: resolve context-probe variables once per rule (probes are
+    # repo-scoped, not per-finding) and render the action template so
+    # every emitted Finding carries a fully-substituted, agent-applicable
+    # action object — no `{variable}` left in the wire output.
+    probe_vars: dict[str, str] = {}
+    rendered_action: dict | None = rule.action
+    if rule.action and isinstance(rule.action, dict):
+        probe_vars = run_probes(rule.action.get("context_probe"), ctx)
+        rendered_action = render_action(rule.action, probe_vars)
     for file_str, line, message in raw:
         findings.append(
             Finding(
@@ -68,7 +78,7 @@ def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
                 file=Path(file_str) if file_str else None,
                 line=line,
                 fix_hint=rule.fix_hint,
-                action=rule.action,
+                action=rendered_action,
                 verify=rule.verify,
             )
         )

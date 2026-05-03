@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-readiness"
-version = "2.0.0"
+version = "2.1.0"
 description = "Benchmark how agent-ready a code repository is for LLM coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
