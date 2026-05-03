@@ -123,6 +123,12 @@ class Report:
       schema=1 was established in v0.1 and is the stable contract.
       schema=2 will be bumped on the next intentional breaking change.
       Consumers should check `schema` before parsing.
+
+    The ``top_action`` field is the EXP-4 per-repo action pin: a single
+    deterministic "Start here" for each repo, computed from the priority
+    sort `severity=error first > pillar [flow > feedback > safety >
+    cognitive_load] > weight desc`. None when the repo has zero
+    findings. See ``scorer.compute_top_action``.
     """
     repo_path: Path
     overall_score: float                                    # 0..100, after safety cap
@@ -132,6 +138,7 @@ class Report:
     delta: float | None = None                              # overall score delta vs baseline (--baseline)
     languages: list[str] = field(default_factory=list)     # detected programming languages
     monorepo_tools: list[str] = field(default_factory=list) # detected monorepo tooling
+    top_action: dict[str, Any] | None = None               # EXP-4 per-repo pinned action
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -149,4 +156,6 @@ class Report:
             }
         if self.delta is not None:
             d["delta"] = self.delta
+        if self.top_action is not None:
+            d["top_action"] = self.top_action
         return d
