@@ -82,6 +82,12 @@ def _render_plain(report: Report) -> str:
         label = _PILLAR_LABEL[ps.pillar]
         lines.append(f"  {label:<20s} {ps.score:>5.1f}  {_bar(ps.score)}")
     lines.append("")
+    if report.top_action:
+        ta = report.top_action
+        lines.append(
+            f"Start here:  {ta['check_id']} — {ta['message']}"
+        )
+        lines.append("")
     friction = _top_friction(report)
     if friction:
         lines.append("Top friction (fix these first):")
@@ -127,6 +133,13 @@ def _render_rich(report: Report) -> str:
             Text(_bar(ps.score), style="dim"),
         )
     console.print(table)
+
+    if report.top_action:
+        ta = report.top_action
+        console.print()
+        console.print(
+            f"[bold]Start here:[/bold] [cyan]{ta['check_id']}[/cyan] — {ta['message']}"
+        )
 
     friction = _top_friction(report)
     if friction:
