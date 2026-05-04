@@ -107,3 +107,10 @@ All phases implemented (v0.1–v0.9). 22 checks across 4 pillars, Docker
 sandbox, HTML + SARIF renderers, CLI surface, plugin API. See
 [`docs/PLAN.md`](./docs/PLAN.md) for the full roadmap and
 [`CHANGELOG.md`](./CHANGELOG.md) for per-phase release notes.
+
+## License
+
+MIT for the code; see [`LICENSE`](LICENSE). The project name and
+logo are governed separately by [`TRADEMARK.md`](TRADEMARK.md):
+forks are welcome, "agent-readiness" the brand is reserved for the
+canonical project.
