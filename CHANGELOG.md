@@ -5,6 +5,70 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-05-04
+
+The "action contract" release. Every `Finding` now carries an
+agent-runnable command and a verify step, not just human-readable
+prose. This was Phase 1 / EXP-1 of the rules-quality experiment
+([rules_quality_research_plan.md][rqrp]) — D3 (agent-applicable)
+recommendation coverage went from 0% to 100% on the v3 1000-repo
+cohort.
+
+[rqrp]: https://github.com/harrydaihaolin/agent-readiness-research/blob/main/research/rules_quality_research_plan.md
+
+### Added
+- **Action contract** ([#64]): `Finding.action` (`kind`, `command`,
+  `path`, `template`, `preconditions`, `context_probe`) and
+  `Finding.verify` (`command`, `description`) are first-class
+  fields on every finding. Rules with `rules_version=2` populate
+  these from their YAML; rules at `rules_version=1` continue to
+  load and surface findings without action/verify, which preserves
+  backwards compatibility for downstream scanners.
+- **Context-probe instantiation** ([#64], EXP-3 in the experiment
+  series): `{variable}` placeholders in `action.command` /
+  `action.template` are resolved from probes at scan time.
+  Example: `pnpm install --frozen-lockfile` is rendered with the
+  actual package manager detected from the manifest, lockfile, and
+  CI config — cross-validated by `Context Probe v2`. When no probe
+  matches, the placeholder is replaced with the empty string so
+  the printed line stays parseable rather than emitting a
+  templated string an agent can't run.
+- **Top-action pinning** (EXP-4): `Finding.top_action` is set
+  deterministically per repo by the rule of severity → pillar
+  order → weight, so consumers (the leaderboard, the public ROI
+  view) can render "the one thing to fix next" without sorting
+  themselves.
+- `TRADEMARK.md` ([#67]): trademark policy reserving the
+  `agent-readiness` and `ar` names, logos, and official surface
+  names. Forks are MIT-allowed for code; rebrand or attribute
+  per the policy. README "License" now points readers to both
+  `LICENSE` and `TRADEMARK.md`.
+
+### Changed
+- `SUPPORTED_RULES_VERSIONS` now includes `2`. The loader keeps
+  the old permissive path: a v0.3.0 protocol pin that rejects a
+  rule for a missing `provenance:` field still falls through to
+  `LoadedRule` so v1.5.0-vendored rules don't break the scan.
+- Vendored rules pack stays at `agent-readiness-rules@v1.5.0`
+  (38 checks). The next vendor refresh will pick up the v2.0.x
+  pack with `provenance:` baked in (companion releases:
+  `agent-readiness-insights-protocol` v0.3.0 +
+  `agent-readiness-rules` v2.0.2).
+
+### Notes for downstream
+- `agent-readiness-leaderboard` and `agent-readiness-pro` should
+  bump their pin to `agent-readiness>=2.1,<3` once they want the
+  action contract surfaced in their scan output. Existing
+  `>=1.4,<2` pins keep working until then; the wheel still
+  ships the same 38-check vendored pack.
+- JSON Report schema: `Finding` gains two new optional fields
+  (`action`, `verify`). v1 consumers that ignore unknown fields
+  stay compatible; consumers that hard-validate the schema
+  should bump to schema v2.
+
+[#64]: https://github.com/harrydaihaolin/agent-readiness/pull/64
+[#67]: https://github.com/harrydaihaolin/agent-readiness/pull/67
+
 ## [1.5.0] - 2026-05-02
 
 ### Changed
@@ -227,7 +291,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Good and bare test fixtures
 - Safety cap behaviour tests
 
-[Unreleased]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/harrydaihaolin/agent-readiness/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.5.0...v2.1.0
+[1.5.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.4.0...v1.5.0
+[1.4.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.1.0...v1.4.0
+[1.1.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v0.7.0...v0.8.0
