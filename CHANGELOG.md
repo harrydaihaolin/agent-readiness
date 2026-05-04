@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-05-04
+
+### Fixed
+- Relax `agent-readiness-insights-protocol` pin from `>=0.2,<1.0`
+  to `>=0.1,<1.0`. The 0.2 floor was aspirational (protocol v0.2.0
+  / v0.3.0 exist as git tags but were never published to PyPI),
+  so `pip install agent-readiness==2.1.0` from a clean environment
+  failed with `Could not find a version that satisfies the
+  requirement agent-readiness-insights-protocol<1.0,>=0.2`. The
+  engine only imports `Rule` for best-effort validation in
+  `rules_eval/loader.py`; that import is wrapped in a try/except
+  and degrades gracefully to a permissive `LoadedRule` path, so
+  protocol v0.1.0 is sufficient. The next protocol release that
+  actually lands on PyPI will let us re-tighten this pin in a
+  future minor.
+
 ## [2.1.0] - 2026-05-04
 
 The "action contract" release. Every `Finding` now carries an
@@ -291,7 +307,8 @@ cohort.
 - Good and bare test fixtures
 - Safety cap behaviour tests
 
-[Unreleased]: https://github.com/harrydaihaolin/agent-readiness/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/harrydaihaolin/agent-readiness/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/harrydaihaolin/agent-readiness/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.5.0...v2.1.0
 [1.5.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/harrydaihaolin/agent-readiness/compare/v1.1.0...v1.4.0
