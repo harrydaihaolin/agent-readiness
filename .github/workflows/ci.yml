@@ -13,13 +13,20 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Matches `requires-python = ">=3.11"` and the classifiers in
+        # pyproject.toml. Bump in lock-step when the floor changes.
+        python-version: ["3.11", "3.12", "3.13"]
+    name: test (py${{ matrix.python-version }})
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin to v6
         with:
           fetch-depth: 0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - name: Install agent-readiness-insights-protocol from feature branch
         # Pre-installs the protocol from the EXP-1 feature branch so the
         # subsequent ".[dev]" install can satisfy `>=0.2` without the

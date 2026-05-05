@@ -30,6 +30,20 @@ Top friction (fix these first):
      during setup; agents can't traverse this
 ```
 
+## Install
+
+```bash
+pip install agent-readiness
+```
+
+Requires Python 3.11+. From source:
+
+```bash
+git clone https://github.com/<org>/agent-readiness.git
+cd agent-readiness
+pip install -e ".[dev]"   # or: make dev
+```
+
 ## Design principles
 
 **Agents are headless.** We assume the agent has stdin / stdout / files /
