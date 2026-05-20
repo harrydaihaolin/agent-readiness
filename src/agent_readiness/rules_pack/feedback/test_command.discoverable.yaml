@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: test_command.discoverable
+provenance: agent-readiness/test_command.discoverable
 pillar: feedback
 title: Test command is statically discoverable
 weight: 2.0
@@ -61,3 +62,33 @@ fix_template:
     test:
     	python -m pytest tests/
 insight_query: test command discoverable makefile pyproject scripts pytest tox
+action:
+  kind: append_to_file
+  path: Makefile
+  template: |2
+
+    .PHONY: test
+    test:
+    	{language_test_command}
+  preconditions:
+    - not_exists: Makefile
+  context_probe:
+    - detect: primary_language
+verify:
+  command: "make -n test"
+  description: |
+    `make -n test` must resolve to a runnable command (dry-run; does
+    not actually execute the tests).
+fix_prompt: |
+  Without this, an agent has to guess the test invocation from shell
+  history and often picks the wrong one.
+
+  Append a `test:` target to your `Makefile` for this {primary_language}
+  project. The body should be `{language_test_command}` so it works
+  headlessly without any TTY or prompt. If you don't want to add a
+  Makefile, the next-best signals are `[tool.pytest.ini_options]` in
+  `pyproject.toml` (Python), `"test"` in `package.json` `scripts` (JS),
+  or a conventional `tests/` directory. Make is the universal headless
+  contract; the rest are fallbacks.
+
+  Verify with: `make -n test`

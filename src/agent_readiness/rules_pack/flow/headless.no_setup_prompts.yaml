@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: headless.no_setup_prompts
+provenance: agent-readiness/headless.no_setup_prompts
 pillar: flow
 title: Setup is reachable headlessly
 weight: 1.0
@@ -39,3 +40,29 @@ fix_hint: |
   Move any GUI step into a one-time human bootstrap section clearly
   separated from the headless install / run flow.
 insight_query: headless setup GUI authorization browser OAuth interactive prompts
+action:
+  kind: run_command
+  command: |
+    # Audit setup scripts for interactive prompts (read, $1 unset, etc.).
+    grep -rE '(read -p|read [A-Z]+|\$\{1\?)' scripts/ Makefile 2>/dev/null
+  description: |
+    Replace each interactive prompt with an environment variable or
+    a CLI flag default so headless agents don't hang.
+verify:
+  command: "true"
+  description: Manual; re-scan is the closed loop.
+fix_prompt: |
+  Without this, an agent's setup hits "click here to authorize" or
+  "open the dashboard" and dead-ends — there's no human at a browser.
+
+  Audit `README.md` and any setup scripts for phrases like "click here",
+  "open the dashboard", "sign in with Google", "authorize the
+  application", "oauth callback". Replace each interactive step with an
+  env-var-or-flag equivalent: instead of "open the dashboard to copy
+  your API key", write "set `$APP_API_KEY` (get one at
+  https://example.com/settings/api)". Move any genuine GUI bootstrap
+  into a clearly-marked one-time human section, separate from the
+  headless flow.
+
+  Verify with: re-scan; no GUI/OAuth phrases should remain in the
+  setup section of README.

@@ -57,6 +57,7 @@ class Finding:
     fix_hint: str | None = None
     action: dict[str, Any] | None = None
     verify: dict[str, Any] | None = None
+    fix_prompt: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -70,6 +71,8 @@ class Finding:
             d.pop("action", None)
         if d.get("verify") is None:
             d.pop("verify", None)
+        if d.get("fix_prompt") is None:
+            d.pop("fix_prompt", None)
         return d
 
 

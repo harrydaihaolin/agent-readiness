@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: manifest.detected
+provenance: agent-readiness/manifest.detected
 pillar: feedback
 title: Project manifest detected
 weight: 1.0
@@ -20,3 +21,42 @@ fix_hint: |
   at the repo root with at least name + version + dependencies. For
   monorepos, every package directory should have its own manifest.
 insight_query: project manifest pyproject package.json Cargo.toml go.mod monorepo
+action:
+  kind: create_file
+  path: pyproject.toml
+  template: |
+    [project]
+    name = "{primary_language}-project"
+    version = "0.1.0"
+    requires-python = ">=3.11"
+
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+  preconditions:
+    - not_exists: pyproject.toml
+    - not_exists: package.json
+    - not_exists: go.mod
+    - not_exists: Cargo.toml
+  context_probe:
+    - detect: primary_language
+    - detect: primary_manifest
+verify:
+  command: |
+    test -f pyproject.toml || test -f package.json || \
+      test -f go.mod || test -f Cargo.toml
+  description: A primary manifest must exist.
+fix_prompt: |
+  Without this, an agent has no contract telling it what the project is,
+  how to install it, or what depends on what — every action becomes
+  guesswork.
+
+  Create a manifest at the repo root matching your {primary_language}:
+  `pyproject.toml` for Python, `package.json` for JS/TS, `Cargo.toml`
+  for Rust, `go.mod` for Go. Include name, version, and at least one
+  declared dependency. For monorepos, drop a manifest in each package
+  directory too (depth ≤ 2). If `{primary_manifest}` already exists
+  elsewhere, move it to the root or document its location in `AGENTS.md`.
+
+  Verify with: `test -f pyproject.toml || test -f package.json || test
+  -f go.mod || test -f Cargo.toml`

@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: gitignore.covers_junk
+provenance: agent-readiness/gitignore.covers_junk
 pillar: safety
 title: .gitignore covers build artifacts and secrets
 weight: 1.0
@@ -68,3 +69,36 @@ fix_template:
     .env
     .env.*
 insight_query: .gitignore build artifacts secrets node_modules pycache .env coverage
+action:
+  kind: edit_gitignore
+  entries:
+    - .env
+    - .env.*
+    - "!.env.example"
+    - .venv/
+    - venv/
+    - node_modules/
+    - dist/
+    - build/
+    - "*.log"
+    - .DS_Store
+    - "*.pyc"
+    - __pycache__/
+verify:
+  command: |
+    grep -E '^(\.env|node_modules|\.venv|dist|__pycache__)' .gitignore >/dev/null
+  description: .gitignore must cover the standard junk groups.
+fix_prompt: |
+  Without this, an agent that runs `pip install` / `npm install` / a
+  build accidentally commits artefact directories and pollutes every
+  future diff — and worse, `.env` files can leak secrets into history.
+
+  Append these groups to `.gitignore` (creating the file if needed):
+  `__pycache__/`, `*.py[cod]`, `.venv/`, `venv/`, `node_modules/`,
+  `dist/`, `build/`, `target/`, `.idea/`, `.vscode/`, `.DS_Store`,
+  `coverage/`, `htmlcov/`, `*.log`, `.env`, `.env.*`, `!.env.example`.
+  The negation on `.env.example` keeps the placeholder file tracked
+  while ignoring real `.env` files.
+
+  Verify with: `grep -E '^(\.env|node_modules|\.venv|dist|__pycache__)'
+  .gitignore`

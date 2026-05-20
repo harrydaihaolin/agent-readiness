@@ -25,8 +25,8 @@ def _bar(score: float, width: int = 20) -> str:
     return "█" * filled + "·" * (width - filled)
 
 
-def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str, float]]:
-    """Return up to *n* (check_id, pillar, message, score_impact) for the worst issues.
+def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str, float, str | None]]:
+    """Return up to *n* (check_id, pillar, message, score_impact, fix_prompt) for the worst issues.
 
     A "friction" item is either:
       - a check with at least one WARN or ERROR finding (use the worst one), or
@@ -34,12 +34,15 @@ def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str, float
     INFO findings on partial-credit checks are explicitly excluded — they
     describe the situation, not friction the maintainer should fix.
 
+    The ``fix_prompt`` is the worst finding's rendered, copy-paste agent
+    instruction (None for v1 rules and synthetic-low-score rows).
+
     Sort key: score_impact descending (highest potential gain first),
     then severity (error > warn > "low score, no findings") as tiebreaker,
     then (100 - score) descending.
     """
     sev_rank = {Severity.ERROR: 0, Severity.WARN: 1, Severity.INFO: 2}
-    rows: list[tuple[float, int, float, str, str, str, float]] = []
+    rows: list[tuple[float, int, float, str, str, str, float, str | None]] = []
     for ps in report.pillar_scores:
         for cr in ps.check_results:
             impact = cr.score_impact or 0.0
@@ -49,15 +52,15 @@ def _top_friction(report: Report, n: int = 5) -> list[tuple[str, str, str, float
                 worst = min(actionable, key=lambda f: sev_rank[f.severity])
                 rows.append((-impact, sev_rank[worst.severity], 100.0 - cr.score,
                              cr.check_id, _PILLAR_LABEL[cr.pillar],
-                             worst.message, impact))
+                             worst.message, impact, worst.fix_prompt))
             elif cr.score < 60.0 and not cr.not_measured:
                 rows.append((-impact, sev_rank[Severity.WARN] + 1,
                              100.0 - cr.score, cr.check_id,
                              _PILLAR_LABEL[cr.pillar],
-                             f"score {cr.score:.0f}/100", impact))
+                             f"score {cr.score:.0f}/100", impact, None))
     rows.sort(key=lambda r: (r[0], r[1], -r[2]))
-    return [(check_id, pillar, msg, imp)
-            for _, _, _, check_id, pillar, msg, imp in rows[:n]]
+    return [(check_id, pillar, msg, imp, prompt)
+            for _, _, _, check_id, pillar, msg, imp, prompt in rows[:n]]
 
 
 def render(report: Report, use_rich: bool | None = None) -> str:
@@ -91,9 +94,13 @@ def _render_plain(report: Report) -> str:
     friction = _top_friction(report)
     if friction:
         lines.append("Top friction (fix these first):")
-        for i, (check_id, pillar, msg, impact) in enumerate(friction, start=1):
+        for i, (check_id, _pillar, msg, impact, fix_prompt) in enumerate(friction, start=1):
             suffix = f"  (+{impact:.1f} pts)" if impact > 0 else ""
             lines.append(f"  {i}. {check_id} — {msg}{suffix}")
+            if fix_prompt:
+                for j, prompt_line in enumerate(fix_prompt.strip().splitlines()):
+                    prefix = "     prompt> " if j == 0 else "             "
+                    lines.append(f"{prefix}{prompt_line}")
     else:
         lines.append("No findings. Looking good.")
     return "\n".join(lines)
@@ -145,9 +152,20 @@ def _render_rich(report: Report) -> str:
     if friction:
         console.print()
         console.print("[bold]Top friction (fix these first):[/bold]")
-        for i, (check_id, _, msg, impact) in enumerate(friction, start=1):
+        for i, (check_id, _, msg, impact, fix_prompt) in enumerate(friction, start=1):
             suffix = f"  [dim](+{impact:.1f} pts)[/dim]" if impact > 0 else ""
             console.print(f"  [bold]{i}.[/bold] [cyan]{check_id}[/cyan] — {msg}{suffix}")
+            if fix_prompt:
+                for j, prompt_line in enumerate(fix_prompt.strip().splitlines()):
+                    # Prompts can legitimately contain bracketed text like
+                    # ``[project.scripts]`` or ``[tool.ruff]`` that rich
+                    # would otherwise consume as markup. Print the body
+                    # with markup disabled; only the prefix carries style.
+                    if j == 0:
+                        console.print("     [dim]prompt>[/dim] ", end="")
+                    else:
+                        console.print("             ", end="")
+                    console.print(prompt_line, markup=False, highlight=False)
     else:
         console.print("\n[green]No findings. Looking good.[/green]")
     return buf.getvalue()

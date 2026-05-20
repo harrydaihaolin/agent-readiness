@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: hooks.configured
+provenance: agent-readiness/hooks.configured
 pillar: feedback
 title: Git or agent hooks configured
 weight: 0.7
@@ -57,3 +58,32 @@ fix_template:
             args: [--fix]
           - id: ruff-format
 insight_query: pre-commit husky lefthook lint-staged git hooks pre-commit-config
+action:
+  kind: create_file
+  path: .pre-commit-config.yaml
+  template: |
+    repos:
+      - repo: https://github.com/pre-commit/pre-commit-hooks
+        rev: v4.6.0
+        hooks:
+          - id: trailing-whitespace
+          - id: end-of-file-fixer
+          - id: check-yaml
+          - id: check-merge-conflict
+  preconditions:
+    - not_exists: .pre-commit-config.yaml
+verify:
+  command: "test -f .pre-commit-config.yaml"
+  description: .pre-commit-config.yaml must exist.
+fix_prompt: |
+  Without this, an agent's edit/wait/fix loop runs at CI speed (minutes)
+  instead of pre-commit speed (seconds).
+
+  Create `.pre-commit-config.yaml` at the repo root with at least
+  `pre-commit-hooks` (trailing-whitespace, end-of-file-fixer,
+  check-yaml, check-merge-conflict) plus your stack's formatter and
+  linter (`ruff` for Python, `eslint` + `prettier` for JS/TS,
+  `gofmt` for Go). After committing the file, run `pre-commit install`
+  once so the hooks fire on every commit.
+
+  Verify with: `test -f .pre-commit-config.yaml`

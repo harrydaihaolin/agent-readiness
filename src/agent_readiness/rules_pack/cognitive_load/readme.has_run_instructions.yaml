@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: readme.has_run_instructions
+provenance: agent-readiness/readme.has_run_instructions
 pillar: cognitive_load
 title: README documents install / run / test
 weight: 1.0
@@ -25,3 +26,34 @@ fix_hint: |
   (one fenced block). Three fenced blocks is the floor; if your
   project genuinely needs more, write more.
 insight_query: README install run test fenced code instructions agent orientation
+action:
+  kind: append_to_file
+  path: README.md
+  template: |2
+
+    ## Run
+
+    ```
+    {package_manager} install
+    {language_test_command}
+    ```
+  context_probe:
+    - detect: package_manager
+    - detect: primary_language
+  preconditions:
+    - exists: README.md
+verify:
+  command: "grep -E '(make|npm|pip|cargo|go) ' README.md >/dev/null"
+  description: README.md must contain a runnable command.
+fix_prompt: |
+  Without this, an agent reading the README finds prose but no copy-able
+  commands and falls back to guessing from manifests.
+
+  Append three short sections to `README.md`: **Install**, **Test**, and
+  **Run**. Each section must contain exactly one fenced code block with
+  the canonical command. For a {primary_language} project the install
+  block typically uses `{package_manager}` and the test block uses
+  `{language_test_command}`. Three fenced blocks is the floor; add more
+  only if the project genuinely needs them.
+
+  Verify with: `grep -E '(make|npm|pip|cargo|go) ' README.md`

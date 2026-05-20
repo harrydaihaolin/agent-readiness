@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: setup.command_count
+provenance: agent-readiness/setup.command_count
 pillar: flow
 title: Setup requires few commands
 weight: 0.7
@@ -27,3 +28,28 @@ fix_hint: |
   instead of five. The script can still do five things — it just
   hides the noise from the agent.
 insight_query: setup command count fewer steps installation make setup script
+action:
+  kind: run_command
+  command: |
+    # Collapse multi-step setup into a single `make install` target so
+    # an agent can run one command instead of 5+.
+    grep -E '^(install|setup|bootstrap):' Makefile 2>/dev/null
+  description: |
+    Reduce setup to one command. Wrap multi-step flows under a single
+    `make install` (or `npm run setup`) target.
+verify:
+  command: "make -n install"
+  description: "`make install` (or equivalent single command) must work."
+fix_prompt: |
+  Without this, the agent has to chain 5+ setup commands and fails at
+  near-100% above command 3.
+
+  Bundle every step under a single `make setup` (or `scripts/setup`)
+  target. The README then documents one command instead of five — the
+  script can still do five things, but the agent sees one. Append the
+  target to your `Makefile`: `.PHONY: setup` then `setup:` with the
+  chained commands underneath, one per line with `-e` so failures
+  abort. Update `README.md` Setup section to reference only `make
+  setup`.
+
+  Verify with: `make -n setup`

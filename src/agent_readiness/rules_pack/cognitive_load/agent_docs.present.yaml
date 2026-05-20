@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: agent_docs.present
+provenance: agent-readiness/agent_docs.present
 pillar: cognitive_load
 title: Any agent-targeted docs present
 # Downgraded warn → info (and weight 1.5 → 0.5) after empirical analysis:
@@ -43,3 +44,27 @@ fix_hint: |
   Alternatively, document agent-targeted material under .ai/ or
   .cursor/rules/. See agent-readiness/AGENTS.md for an example.
 insight_query: AGENTS.md CLAUDE.md cursor rules adoption
+action:
+  kind: create_file
+  path: AGENTS.md
+  template: |
+    # Agents guide
+
+    Single-page orientation for AI coding agents. Spell out the setup
+    command, the test command, and the entry point. Keep it short.
+  preconditions:
+    - not_exists: AGENTS.md
+verify:
+  command: "test -f AGENTS.md"
+  description: An AGENTS.md (or AGENTS.txt) file must exist.
+fix_prompt: |
+  Without this, an agent has nowhere to find canonical commands or
+  do-not-touch lists and must reverse-engineer them from CI.
+
+  Create `AGENTS.md` at the repo root with: a one-line repo description,
+  the single setup command, the single test command, and the entry-point
+  file path. Keep it short — under 60 lines. If your team uses a different
+  agent-docs convention (`CLAUDE.md`, `.cursor/rules/`, `.github/copilot-instructions.md`),
+  either of those satisfies the rule, but `AGENTS.md` is the most portable.
+
+  Verify with: `test -f AGENTS.md`

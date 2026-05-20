@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: code.complexity
+provenance: agent-readiness/code.complexity
 pillar: cognitive_load
 title: Code cyclomatic complexity is bounded
 weight: 0.7
@@ -26,3 +27,31 @@ fix_hint: |
   separate helper functions named for the branch's intent. Aim for
   CC ≤ 10 per function as a steady-state.
 insight_query: cyclomatic complexity function CC AST agent error rate refactor
+action:
+  kind: run_command
+  command: |
+    # Run a complexity audit and split the highest-complexity functions
+    # below the configured threshold. Then re-scan to confirm the rule
+    # no longer fires.
+    radon cc src/ -s -n B && echo "Refactor any functions above CC threshold."
+  description: |
+    Run radon (Python) / eslint complexity / similar in your stack to
+    identify high-complexity functions and split them by responsibility.
+verify:
+  command: "true"
+  description: |
+    No deterministic verify exists for complexity refactors; the rule
+    re-scan is the closed loop. Marked offline-safe so the agent can
+    proceed without networked tools.
+fix_prompt: |
+  Without this, an agent editing a high-CC function has to reason across
+  every branch and ships more wrong-branch edits than a human would.
+
+  Audit functions over cyclomatic complexity 15 with your stack's tool
+  (`radon cc src/ -s -n B` for Python, ESLint complexity rule for JS/TS,
+  `gocyclo` for Go). For each over-budget function, extract independent
+  branches into helpers named for the branch's intent. Target CC ≤ 10
+  per function as steady state. Re-run the audit after each split.
+
+  Verify with: re-run the complexity audit and confirm no function
+  exceeds the threshold.

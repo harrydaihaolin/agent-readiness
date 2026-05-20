@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: agent_docs.canonical
+provenance: agent-readiness/agent_docs.canonical
 pillar: cognitive_load
 title: Canonical AGENTS.md present
 weight: 1.0
@@ -53,3 +54,38 @@ fix_template:
 
     **CI is part of the feedback loop.** After you push or update a PR, **monitor GitHub Actions / workflow runs and check results**. When **CI fails**, read the logs, **fix the root cause**, and push follow-up commits. Do not stop while checks are red or ignore failing workflows.
 insight_query: AGENTS.md canonical contract agent docs convention
+action:
+  kind: create_file
+  path: AGENTS.md
+  template: |
+    # Agents guide
+
+    A concise (<2 KB) orientation document for autonomous coding agents
+    working in this repository. Document, in order:
+
+    1. What this repo does in one sentence.
+    2. The single command an agent runs to set up the environment.
+    3. The single command to run tests.
+    4. The single command to lint.
+    5. Where the entry point lives (file path + function/binary name).
+
+    Keep it < 60 lines so it fits in any agent's context window.
+  preconditions:
+    - not_exists: AGENTS.md
+  context_probe:
+    - detect: primary_language
+verify:
+  command: "test -f AGENTS.md"
+  description: AGENTS.md must exist at the repo root.
+fix_prompt: |
+  Without this, an agent landing in the repo has no canonical command list
+  and will guess install/test/lint by reading shell history.
+
+  Create `AGENTS.md` at the repo root for a {primary_language} project.
+  Include, in order: (1) one sentence on what this repo does, (2) the
+  single install command, (3) the single test command, (4) the single
+  lint command, (5) the entry-point file path. Keep it under 60 lines so
+  it fits any agent's context window. Mirror the canonical commands into
+  the Makefile so they're executable, not just documented.
+
+  Verify with: `test -f AGENTS.md`

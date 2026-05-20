@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: meta.consistency
+provenance: agent-readiness/meta.consistency
 pillar: cognitive_load
 title: README claims match repo contents
 weight: 0.5
@@ -33,3 +34,29 @@ fix_hint: |
   be backed by the corresponding target/script/manifest. Agent docs
   should be ≥ 100 bytes of real content, not a stub.
 insight_query: README repo drift consistency placeholder pytest npm AGENTS.md make target npm run pip editable
+action:
+  kind: run_command
+  command: |
+    # Audit the README/AGENTS.md/CONTRIBUTING setup commands for
+    # consistency. Any drift between them confuses agents.
+    grep -E '(make install|pip install|npm install|setup)' \
+      README.md AGENTS.md CONTRIBUTING.md 2>/dev/null
+  description: |
+    Reconcile setup / test commands across README.md, AGENTS.md, and
+    CONTRIBUTING.md so all three documents reference the same flow.
+verify:
+  command: "true"
+  description: Manual reconciliation; re-scan is the closed loop.
+fix_prompt: |
+  Without this, an agent that follows the README will hit a missing tool
+  or undefined target and either revert or invent a workaround.
+
+  Reconcile every command mentioned in `README.md`, `AGENTS.md`, and
+  `CONTRIBUTING.md` so they all reference the same flow. Specifically:
+  every `make X` line must correspond to a target in your Makefile;
+  every `npm run X` must exist in `package.json` `scripts`; every
+  `pytest` mention requires `[tool.pytest.ini_options]` in
+  `pyproject.toml`; every `pip install -e .` requires a manifest. Don't
+  let agent-targeted docs ship as stubs (< 100 bytes of real content).
+
+  Verify with: re-run the scan; the rule should no longer flag drift.

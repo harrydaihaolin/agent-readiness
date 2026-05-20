@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: deploy.smoke_check
+provenance: agent-readiness/deploy.smoke_check
 pillar: feedback
 title: Deploy workflow has a post-deploy smoke check
 weight: 0.9
@@ -95,3 +96,37 @@ fix_template:
               # GitHub Pages SPA fallback: 404 with redirect HTML is fine.
               test "$code" = "200" -o "$code" = "404"
 insight_query: post-deploy smoke test deployed site verification curl playwright lighthouse SPA pages 404 fallback
+action:
+  kind: create_file
+  path: .github/workflows/deploy-smoke.yml
+  template: |
+    name: deploy-smoke
+    on:
+      deployment_status:
+    jobs:
+      smoke:
+        if: github.event.deployment_status.state == 'success'
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: curl -fsSL "$DEPLOY_URL/healthz"
+            env:
+              DEPLOY_URL: ${{ github.event.deployment_status.target_url }}
+  preconditions:
+    - not_exists: .github/workflows/deploy-smoke.yml
+verify:
+  command: "test -f .github/workflows/deploy-smoke.yml"
+  description: deploy-smoke workflow must exist.
+fix_prompt: |
+  Without this, "deploy exited 0" is the only feedback an agent gets —
+  silent regressions (broken base paths, asset 404s, missing data) ship
+  green and the agent declares done.
+
+  Create `.github/workflows/deploy-smoke.yml` that triggers on
+  `deployment_status` (or `workflow_run` after your deploy workflow) and
+  runs a `curl --fail` against the deployed URL plus a `grep` for an
+  expected marker (e.g. the SPA root element). For SPA-on-Pages, also
+  probe a deep route and accept 200 or 404 (the SPA fallback). Wire it
+  to fail the workflow on any non-2xx.
+
+  Verify with: `test -f .github/workflows/deploy-smoke.yml`

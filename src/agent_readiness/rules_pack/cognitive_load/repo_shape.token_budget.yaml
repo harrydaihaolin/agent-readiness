@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: repo_shape.token_budget
+provenance: agent-readiness/repo_shape.token_budget
 pillar: cognitive_load
 title: Orientation fits in agent context window
 weight: 0.7
@@ -25,3 +26,28 @@ fix_hint: |
   The orientation budget is fixed; the only variable is how much
   signal you fit into it.
 insight_query: token budget orientation context window AGENTS README size
+action:
+  kind: run_command
+  command: |
+    # Trim AGENTS.md / README.md to the essentials so the orientation
+    # cost fits in an agent's context window.
+    wc -l AGENTS.md README.md 2>/dev/null
+  description: |
+    Trim AGENTS.md and README.md so total orientation cost is < 2k
+    tokens; split monolithic source files so the largest is < 500 lines.
+verify:
+  command: "true"
+  description: Manual; re-scan is the closed loop.
+fix_prompt: |
+  Without this, an agent's first session truncates the orientation bundle
+  and works from incomplete knowledge of the project.
+
+  Trim `AGENTS.md` and `README.md` so the combined orientation cost stays
+  under 32k tokens. Move detail into linked sub-pages under `docs/`
+  rather than inlining. Split monolithic source files so the largest
+  representative file an agent would read on entry is under 500 lines.
+  The orientation budget is fixed — the lever is signal density, not
+  length.
+
+  Verify with: `wc -l AGENTS.md README.md` and confirm the total fits
+  your stack's token budget.

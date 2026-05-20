@@ -13,7 +13,7 @@ from pathlib import Path
 from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
-from .context_probe import render_action, run_probes
+from .context_probe import render_action, render_fix_prompt, run_probes
 from .loader import LoadedRule
 from .matchers import OssMatchTypeRegistry
 
@@ -68,6 +68,7 @@ def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
     if rule.action and isinstance(rule.action, dict):
         probe_vars = run_probes(rule.action.get("context_probe"), ctx)
         rendered_action = render_action(rule.action, probe_vars)
+    rendered_fix_prompt = render_fix_prompt(rule.fix_prompt, probe_vars)
     for file_str, line, message in raw:
         findings.append(
             Finding(
@@ -80,6 +81,7 @@ def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
                 fix_hint=rule.fix_hint,
                 action=rendered_action,
                 verify=rule.verify,
+                fix_prompt=rendered_fix_prompt,
             )
         )
 

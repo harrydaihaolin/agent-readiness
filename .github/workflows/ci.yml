@@ -2,13 +2,10 @@ name: CI
 on: [push, pull_request]
 
 env:
-  # NOTE: temporarily pinned to the v0.2.0-prep feature branch HEAD
-  # while protocol PR #10 (action contract) is in review. Engine v2
-  # depends on protocol >= 0.2 which isn't on PyPI yet; install it
-  # from the feature branch so this PR's CI doesn't deadlock waiting
-  # on the upstream release. Repoint to a tagged 0.2.0 once that PR
-  # lands.
-  PROTOCOL_REF: 5300bd78e4d98a9a9f8fc406cc916af9d23bd9a9
+  # Pinned to the protocol release that adds the optional `fix_prompt`
+  # field on `Rule` and `Finding`. Bump deliberately when protocol cuts
+  # a new tag and a consumer change in this repo needs it.
+  PROTOCOL_REF: v0.4.0
 
 jobs:
   test:
@@ -27,10 +24,10 @@ jobs:
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # pin to v6
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install agent-readiness-insights-protocol from feature branch
-        # Pre-installs the protocol from the EXP-1 feature branch so the
-        # subsequent ".[dev]" install can satisfy `>=0.2` without the
-        # 0.2.0 PyPI release being cut yet.
+      - name: Install agent-readiness-insights-protocol from pinned tag
+        # Pre-installs the protocol from the tag in PROTOCOL_REF so the
+        # subsequent ".[dev]" install can satisfy `>=0.4` without
+        # depending on protocol being on PyPI.
         run: pip install "agent-readiness-insights-protocol @ git+https://github.com/harrydaihaolin/agent-readiness-insights-protocol@${PROTOCOL_REF}"
       - run: pip install -e ".[dev]"
       - run: make lint
