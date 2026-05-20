@@ -5,6 +5,56 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-05-20
+
+### Fixed
+- Relax `agent-readiness-insights-protocol` pin from `>=0.4,<1.0`
+  back to `>=0.1,<1.0`. Same root cause as the 2.1.1 fix: protocol
+  v0.4.0 (which adds the optional `fix_prompt` property the engine
+  now renders) exists as a git tag and GitHub release but is not
+  yet on PyPI, so `pip install agent-readiness==2.3.0` from a fresh
+  environment failed dependency resolution. The engine only imports
+  `Rule` for best-effort validation in `rules_eval/loader.py`
+  (wrapped in try/except, debug-logs and continues on rejection),
+  so protocol v0.1.0 is sufficient at runtime. Re-tighten this pin
+  once protocol v0.4.0 is on PyPI.
+
+## [2.3.0] - 2026-05-20
+
+The "paste-ready friction-fix" release. Every `Finding` that
+matches a v2 rule with an authored `fix_prompt:` block now carries
+the rendered natural-language instruction inline, so a user can
+paste it into Cursor / Claude Code / ChatGPT without leaving the
+scan report. Also lands the EXP-4 top_action pin (cherry-picked
+from the never-merged 2.2.0 chain).
+
+### Added
+- **fix_prompt rendering**: `Finding.fix_prompt: str | None` is
+  populated from the rule's `fix_prompt:` YAML body with
+  `{variable}` placeholders resolved against the same
+  `context_probe` set as `action.template`. `_PromptDefaultingDict`
+  + `_PROMPT_FALLBACKS` substitute a stack-agnostic phrase
+  ("your test command", "your project's primary language", ...)
+  when a probe didn't resolve, so the rendered prose stays readable
+  on repos where no manifest was detected. `render_action` is
+  untouched — Makefile bodies still want empty-string substitution
+  for unresolved keys.
+- **Top action pin** (EXP-4, cherry-picked): `scorer.compute_top_action`
+  ranks findings by severity → pillar → weight → check_id and
+  attaches the winner to `Report.top_action`. Both rich and plain
+  renderers print a "Start here:" line above "Top friction".
+  +13 tests in `tests/test_top_action.py`.
+
+### Changed
+- `renderers/terminal.py` prints the rendered `fix_prompt` line
+  with `markup=False, highlight=False` so bracketed strings like
+  `[project.scripts]` and `[tool.ruff]` render verbatim instead of
+  being consumed as rich markup tags.
+- Vendored rules pack refreshed from `agent-readiness-rules@v2.1.0`
+  (was v1.5.0). All 38 rules now ship with authored `fix_prompt:`
+  blocks. `manifest.toml`: `rules_version` 1 → 2,
+  `pack_version` 1.5.0 → 2.1.0.
+
 ## [2.1.1] - 2026-05-04
 
 ### Fixed
