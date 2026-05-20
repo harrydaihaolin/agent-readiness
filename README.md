@@ -44,6 +44,37 @@ cd agent-readiness
 pip install -e ".[dev]"   # or: make dev
 ```
 
+## Use from your coding agent
+
+The scanner is also packaged as a Claude Code
+[plugin](https://code.claude.com/docs/en/discover-plugins) and a portable
+[Agent Skill](https://agentskills.io/specification). Ask your agent
+*"score this repo for agent readiness"* and it scans + fixes via the
+same scoring engine as the CLI.
+
+**Claude Code (recommended):** the plugin bundles the MCP server config
+— no manual JSON paste.
+
+```
+/plugin marketplace add harrydaihaolin/agent-readiness-skill
+/plugin install agent-readiness@agent-readiness-skill
+```
+
+Prerequisite: `pip install agent-readiness-mcp` once.
+
+**Cursor / Claude Desktop:** clone the skill repo and run its installer
+for the bare SKILL.md path, then paste the MCP config it prints into
+your harness:
+
+```bash
+git clone https://github.com/harrydaihaolin/agent-readiness-skill.git
+cd agent-readiness-skill
+./scripts/install.sh
+```
+
+See the [skill repo](https://github.com/harrydaihaolin/agent-readiness-skill)
+for per-harness install details and the community marketplace status.
+
 ## Design principles
 
 **Agents are headless.** We assume the agent has stdin / stdout / files /
