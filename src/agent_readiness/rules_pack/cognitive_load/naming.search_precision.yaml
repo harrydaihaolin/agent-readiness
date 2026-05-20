@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: naming.search_precision
+provenance: agent-readiness/naming.search_precision
 pillar: cognitive_load
 title: File names are search-precise (no vague utils/helpers)
 weight: 0.6
@@ -40,3 +41,30 @@ fix_hint: |
   helpers, that's the signal to split it into five files named for
   what they do.
 insight_query: vague names utils helpers search precision rename intent
+action:
+  kind: run_command
+  command: |
+    # Identify ambiguous identifiers (e.g. `util`, `helper`, `manager`)
+    # and rename them to domain-specific names so an agent's grep query
+    # converges on a single match.
+    rg -t py 'def (util|helper|manager|do_)' src/ || true
+  description: |
+    Rename generic identifiers to domain-specific names so codebase
+    search returns a single, unambiguous result for each concept.
+verify:
+  command: "true"
+  description: Manual rename; re-scan is the closed loop.
+fix_prompt: |
+  Without this, an agent searching for "the function that retries failed
+  HTTP calls" can't `grep utils.py` because every project has one — the
+  search radius is unbounded.
+
+  For each top-level file or module under `src/` named `utils`, `helpers`,
+  `manager`, `common`, `shared`, `misc`, `lib`, `base`, `core`, or
+  `abstract`, rename it to something that describes what it actually
+  does (`string_normalisation.py`, `http_retry.py`, `auth_session.py`).
+  If the file holds five unrelated helpers, split it into five files
+  named after their purpose.
+
+  Verify with: `rg -l '(^|/)(utils|helpers|manager|common)\.[a-z]+$' src/`
+  should return empty.

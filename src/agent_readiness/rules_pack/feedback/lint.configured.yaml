@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: lint.configured
+provenance: agent-readiness/lint.configured
 pillar: feedback
 title: Linter is configured
 weight: 0.9
@@ -57,3 +58,29 @@ fix_hint: |
   config is fine — what matters is that the rules are explicit, not
   inherited from the agent's defaults.
 insight_query: linter eslint ruff pylint biome stylelint config
+action:
+  kind: modify_manifest_field
+  manifest: pyproject.toml
+  field_path: tool.ruff
+  value: |
+    line-length = 100
+    target-version = "py311"
+  preconditions:
+    - exists: pyproject.toml
+    - manifest_language: python
+verify:
+  command: "grep -E '(\\[tool\\.ruff\\]|eslint|tslint|golangci)' pyproject.toml package.json .golangci.yml 2>/dev/null"
+  description: A lint configuration must exist.
+fix_prompt: |
+  Without this, an agent's edits silently drift from house style and CI
+  reviewers spend cycles on cosmetic feedback instead of logic.
+
+  Add a linter config. For Python: append `[tool.ruff]` to
+  `pyproject.toml` with `line-length = 100` and `target-version =
+  "py311"`. For JS/TS: run `npm i -D eslint && npx eslint --init` to
+  generate `eslint.config.js`. The minimal config is fine — what
+  matters is that the rules are explicit so agents inherit them
+  instead of falling back to defaults.
+
+  Verify with: `grep -E '(\[tool\.ruff\]|eslint|biome)' pyproject.toml
+  package.json eslint.config.* 2>/dev/null`

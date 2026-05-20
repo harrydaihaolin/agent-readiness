@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: entry_points.detected
+provenance: agent-readiness/entry_points.detected
 pillar: flow
 title: Entry point detected
 weight: 1.0
@@ -57,3 +58,28 @@ fix_hint: |
   package.json. The goal: an agent running `--help` on the package
   should find a command that works.
 insight_query: entry point manifest scripts main bin __main__ cmd cli
+action:
+  kind: modify_manifest_field
+  manifest: pyproject.toml
+  field_path: project.scripts
+  value: |
+    main = "package.cli:main"
+  preconditions:
+    - exists: pyproject.toml
+    - manifest_language: python
+verify:
+  command: "grep -E '(project\\.scripts|\"bin\"|main\\.go|cmd/)' pyproject.toml package.json 2>/dev/null"
+  description: An entry point must be declared.
+fix_prompt: |
+  Without this, an agent that wants to run the project has to guess from
+  filenames and fails on non-trivial layouts.
+
+  Declare an entry point in your manifest. For Python: add a
+  `[project.scripts]` table to `pyproject.toml` mapping a CLI name to
+  `package.cli:main`. For Node: set `"bin"` or `"main"` in `package.json`.
+  For Go: create `cmd/<name>/main.go` (conventional layout). After
+  declaring it, an agent running `--help` on the package should find a
+  command that works.
+
+  Verify with: `grep -E '(project\.scripts|"bin"|main\.go)'
+  pyproject.toml package.json 2>/dev/null`

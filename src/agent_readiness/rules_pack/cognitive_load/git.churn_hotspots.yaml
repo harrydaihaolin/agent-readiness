@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: git.churn_hotspots
+provenance: agent-readiness/git.churn_hotspots
 pillar: cognitive_load
 title: No high-churn large files (hotspots)
 weight: 0.6
@@ -13,10 +14,18 @@ explanation: |
   size thresholds; gives `not_measured` on shallow clones and
   repos with very few commits.
 match:
+  # v2.0.1 (EXP-2): bumped min_commits_touching_file 10 → 25 and
+  # min_file_lines 200 → 500. The v1.4 thresholds caught any file
+  # touched twice a quarter, which over a 1000-repo cohort hit 80.8%
+  # of repos and stopped discriminating. The new pair reserves
+  # "hotspot" for files that really are both heavily-touched (>= a
+  # touch every other week over a quarter) and large enough that the
+  # touch involves real surface (>= 500 lines). Target band: 30-60%
+  # on the v3.3 dispatch.
   type: git_log_query
   mode: churn_hotspots
-  min_commits_touching_file: 10
-  min_file_lines: 200
+  min_commits_touching_file: 25
+  min_file_lines: 500
   max_findings: 5
   neutral_on_shallow: true
 fix_hint: |
@@ -24,3 +33,32 @@ fix_hint: |
   file holds both API routing and validation logic) and split along
   those lines. After the split, both halves see lower per-file churn.
 insight_query: churn hotspot large file frequently edited refactor split
+action:
+  kind: run_command
+  command: |
+    # Identify the highest-churn files over the last 90 days and split
+    # them along their dominant axis of change (feature, layer, domain).
+    git log --since='90 days ago' --name-only --pretty=format: \
+      | sort | uniq -c | sort -rn | head -20
+  description: |
+    No deterministic file-edit fixes a churn hotspot — they require a
+    human refactor decision. The command above identifies the top-20
+    hotspots so the agent can propose a targeted split.
+verify:
+  command: "true"
+  description: |
+    Manual refactor; verification is the next scan no longer flagging
+    the file.
+fix_prompt: |
+  Without this, every agent change to a churn-hotspot file pays the
+  full re-read cost — these files concentrate edit risk.
+
+  Run `git log --since='90 days ago' --name-only --pretty=format: | sort
+  | uniq -c | sort -rn | head -20` to list the highest-churn files. For
+  each file over 500 lines that also tops the churn list, identify the
+  dominant axis of change (routing vs validation, IO vs logic, etc.) and
+  split along that axis. Both halves of the split should see lower
+  per-file churn afterward.
+
+  Verify with: re-scan; the rule should drop the file from its hotspot
+  list once the split lands.

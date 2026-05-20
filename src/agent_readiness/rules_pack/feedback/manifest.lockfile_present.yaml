@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: manifest.lockfile_present
+provenance: agent-readiness/manifest.lockfile_present
 pillar: feedback
 title: Dependency lockfile present
 weight: 1.0
@@ -46,3 +47,32 @@ fix_hint: |
   Python projects, freezing `requirements.txt` to exact versions or
   switching to `uv` / `poetry` is acceptable.
 insight_query: lockfile dependency pinning poetry npm cargo reproducible install
+action:
+  kind: run_command
+  command: |
+    # Generate a lockfile using the language's package manager.
+    {package_manager} lock || {package_manager} install --frozen-lockfile
+  description: |
+    Run the package manager's lock command (e.g. `uv lock`,
+    `npm install --package-lock-only`, `cargo generate-lockfile`).
+  context_probe:
+    - detect: package_manager
+verify:
+  command: |
+    test -f uv.lock || test -f poetry.lock || test -f package-lock.json || \
+      test -f yarn.lock || test -f pnpm-lock.yaml || test -f Cargo.lock
+  description: A lockfile must exist.
+fix_prompt: |
+  Without this, `pip install` / `npm install` resolves different
+  versions on different machines and the agent's green run on its laptop
+  can't predict CI's outcome.
+
+  Generate and commit a lockfile using your package manager. Run
+  `{package_manager} lock` (or `{package_manager} install
+  --frozen-lockfile` to verify an existing one). For bare-pip Python
+  projects, switch to `uv` or `poetry` for a real lockfile, or pin
+  `requirements.txt` to exact versions with `pip freeze > requirements.txt`.
+
+  Verify with: `test -f uv.lock || test -f poetry.lock || test -f
+  package-lock.json || test -f yarn.lock || test -f pnpm-lock.yaml ||
+  test -f Cargo.lock`

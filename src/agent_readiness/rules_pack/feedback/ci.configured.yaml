@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: ci.configured
+provenance: agent-readiness/ci.configured
 pillar: feedback
 title: CI pipeline configured
 weight: 0.9
@@ -77,3 +78,37 @@ fix_template:
               # Replace with the canonical test command from AGENTS.md.
               echo "TODO: run tests"
 insight_query: continuous integration GitHub Actions CircleCI GitLab CI workflow
+action:
+  kind: create_file
+  path: .github/workflows/ci.yml
+  template: |
+    name: CI
+    on:
+      pull_request:
+      push:
+        branches: [main]
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: {language_test_command}
+  preconditions:
+    - not_exists: .github/workflows/ci.yml
+  context_probe:
+    - detect: primary_language
+verify:
+  command: "test -f .github/workflows/ci.yml"
+  description: A CI workflow must exist under .github/workflows/.
+fix_prompt: |
+  Without this, an agent's "tests pass on my laptop" never gets
+  challenged by a clean-checkout run and silent regressions ship.
+
+  Create `.github/workflows/ci.yml` with three steps: `actions/checkout@v4`,
+  install dependencies for your {primary_language} project, then run
+  `{language_test_command}`. Trigger on `pull_request` and on `push` to
+  `main`. Even a 20-line workflow is worth more than nothing. If you use
+  a hosted CI provider with no in-repo config (BuildKite, TeamCity), add
+  a status badge to `README.md` so the loop is visible to agents.
+
+  Verify with: `test -f .github/workflows/ci.yml`

@@ -298,10 +298,45 @@ def run_probes(probes: list[dict[str, Any]] | None, ctx: RepoContext) -> dict[st
 class _DefaultingDict(dict):
     """str.format-style mapping that maps missing keys to the empty
     string instead of raising. Keeps action templates renderable even
-    when a probe didn't resolve."""
+    when a probe didn't resolve. Used only for ``action.template``
+    rendering — for prose ``fix_prompt`` use ``_PromptDefaultingDict``
+    so unresolved keys become a human-readable phrase, not an empty
+    gap mid-sentence."""
 
     def __missing__(self, key: str) -> str:  # type: ignore[override]
         return ""
+
+
+# Human-readable fallbacks for prose ``fix_prompt`` rendering when the
+# probe couldn't resolve a key (e.g. ``primary_language`` on a repo
+# with no detectable manifest). Empty string is wrong here — it
+# produces sentences like "for your  project" — so we substitute a
+# stack-agnostic phrase the agent can still act on.
+_PROMPT_FALLBACKS: dict[str, str] = {
+    "primary_language": "your project's primary language",
+    "primary_manifest": "your project's manifest",
+    "package_manager": "your package manager",
+    "language_test_command": "your test command",
+    "language_install_command": "your install command",
+    "language_lint_command": "your lint command",
+    "makefile_targets": "the available Makefile targets",
+    "existing_entry_points": "your project's existing entry points",
+    "test_directory": "your tests directory",
+    "ci_present": "your CI configuration",
+    "lockfile_present": "your lockfile",
+}
+
+
+class _PromptDefaultingDict(dict):
+    """str.format-style mapping used for prose ``fix_prompt`` rendering.
+
+    Falls back to a human-readable phrase from ``_PROMPT_FALLBACKS``
+    when a key is missing, so the agent reads a coherent sentence
+    instead of one with empty gaps where a probe didn't fire.
+    """
+
+    def __missing__(self, key: str) -> str:  # type: ignore[override]
+        return _PROMPT_FALLBACKS.get(key, "{" + key + "}")
 
 
 def render_action(action: dict[str, Any] | None, vars: dict[str, str]) -> dict[str, Any] | None:
@@ -325,3 +360,31 @@ def render_action(action: dict[str, Any] | None, vars: dict[str, str]) -> dict[s
                 # so downstream debugging surfaces the original string.
                 logger.debug("template render failed on key %s; leaving raw", key, exc_info=True)
     return out
+
+
+def render_fix_prompt(template: str | None, vars: dict[str, str]) -> str | None:
+    """Substitute ``{variable}`` placeholders in a free-text prompt.
+
+    Mirrors the action-template rendering but for prose. Unlike
+    ``render_action`` which collapses missing keys to ``""`` (right
+    for Makefile bodies), this path substitutes a stack-agnostic
+    fallback phrase from ``_PROMPT_FALLBACKS`` so the rendered prose
+    stays readable when a probe didn't resolve. Unknown keys (not in
+    the fallback map) are left as literal ``{key}`` so the failure is
+    visible to whoever reviews the report.
+
+    ``run_probes`` writes empty strings into ``vars`` for declared
+    probes that didn't resolve (e.g. ``primary_language`` on a repo
+    with no manifest); we strip those before formatting so the
+    fallback dict's ``__missing__`` actually fires. Otherwise we'd
+    interpolate ``""`` mid-sentence and get gaps like "for your
+    project".
+    """
+    if not template or "{" not in template:
+        return template
+    pruned = {k: v for k, v in vars.items() if v}
+    try:
+        return string.Formatter().vformat(template, (), _PromptDefaultingDict(pruned))
+    except (IndexError, ValueError):
+        logger.debug("fix_prompt render failed; leaving raw", exc_info=True)
+        return template

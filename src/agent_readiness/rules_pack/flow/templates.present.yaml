@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: templates.present
+provenance: agent-readiness/templates.present
 pillar: flow
 title: Issue / PR templates and CODEOWNERS present
 weight: 0.7
@@ -55,3 +56,34 @@ fix_template:
 
     <!-- Any feature flags, migrations, or rollback steps reviewers should know. -->
 insight_query: issue template PR template CODEOWNERS GitHub repository scaffolding
+action:
+  kind: create_file
+  path: .github/PULL_REQUEST_TEMPLATE.md
+  template: |
+    ## Summary
+
+    What does this change do, in 1-2 sentences?
+
+    ## Test plan
+
+    - [ ] Unit tests
+    - [ ] Manual verification
+  preconditions:
+    - not_exists: .github/PULL_REQUEST_TEMPLATE.md
+verify:
+  command: "test -f .github/PULL_REQUEST_TEMPLATE.md"
+  description: .github/PULL_REQUEST_TEMPLATE.md must exist.
+fix_prompt: |
+  Without this, every agent-opened PR looks the same, has no obvious
+  reviewer, and the project picks up routing cost.
+
+  Create three artefacts: (1)
+  `.github/PULL_REQUEST_TEMPLATE.md` with a checklist (Summary, Test
+  plan, Risk/rollback); (2) `.github/ISSUE_TEMPLATE/bug_report.md` (use
+  GitHub's wizard via Settings → Features → Issues → Set up templates);
+  (3) `CODEOWNERS` at the repo root mapping `*` to the team that should
+  review agent-opened PRs. The PR template is highest-leverage —
+  prioritise that one if you can only land one.
+
+  Verify with: `test -f .github/PULL_REQUEST_TEMPLATE.md && test -f
+  CODEOWNERS`

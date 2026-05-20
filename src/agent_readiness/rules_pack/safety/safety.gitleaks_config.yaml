@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: safety.gitleaks_config
+provenance: agent-readiness/safety.gitleaks_config
 pillar: safety
 title: Secret-scanning config present
 weight: 1.0
@@ -45,3 +46,33 @@ fix_template:
       '''vendor/''',
     ]
 insight_query: gitleaks trufflehog detect-secrets secret scanning agent push
+action:
+  kind: create_file
+  path: .gitleaks.toml
+  template: |
+    # gitleaks configuration: tunes which paths and rules are scanned
+    # for secrets in pre-commit hooks and CI.
+    title = "gitleaks config"
+
+    [[allowlist.regexes]]
+    description = "Allow .env.example placeholder values"
+    regex = '''EXAMPLE_VAR\s*='''
+  preconditions:
+    - not_exists: .gitleaks.toml
+verify:
+  command: "test -f .gitleaks.toml"
+  description: .gitleaks.toml must exist.
+fix_prompt: |
+  Without this, an agent one copy-paste away from leaking a credential
+  has no automated catch — the leak makes it into git history before
+  review.
+
+  Create `.gitleaks.toml` at the repo root with a minimal config: a
+  `title` string and one `[allowlist]` block listing your known
+  false-positive paths (lockfiles, vendor/, node_modules/). Then wire
+  gitleaks into pre-commit (add a `gitleaks` hook to
+  `.pre-commit-config.yaml`) AND CI (add `.github/workflows/gitleaks.yml`
+  using `gitleaks/gitleaks-action@v2`). Detect-secrets via
+  `.secrets.baseline` is an acceptable alternative.
+
+  Verify with: `test -f .gitleaks.toml`

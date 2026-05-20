@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: git.has_history
+provenance: agent-readiness/git.has_history
 pillar: flow
 title: Repository has meaningful commit history
 weight: 1.0
@@ -22,3 +23,28 @@ fix_hint: |
   history (`git filter-repo` or a fresh clone of the source). For new
   projects, just keep committing — agents need the trail.
 insight_query: git history commit count shallow squash provenance
+action:
+  kind: run_command
+  command: |
+    # Initialize the repo and stage an initial commit so agents can
+    # see a baseline diff.
+    git init && git add -A && git commit -m 'initial commit'
+  description: |
+    Initialize a git repo (or commit at least 5 changes). Required for
+    agents that diff against the merge base.
+verify:
+  command: "test $(git rev-list --count HEAD 2>/dev/null) -ge 5"
+  description: Repo must have ≥ 5 commits.
+fix_prompt: |
+  Without this, an agent that needs to backport, revert, or bisect has
+  no commit trail — every change is a mystery.
+
+  If the repo was imported as a single squash, re-import preserving
+  history with `git filter-repo` or a fresh clone of the source. For a
+  genuinely new project, just keep committing in small logical chunks
+  (one logical change per commit, imperative-mood messages) until you
+  have at least 5 real commits. For shallow clones the rule emits
+  `not_measured` rather than firing — re-clone with full depth to get
+  a real signal.
+
+  Verify with: `test $(git rev-list --count HEAD) -ge 5`

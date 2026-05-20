@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: safety.dependency_automation
+provenance: agent-readiness/safety.dependency_automation
 pillar: safety
 title: Automated dependency / vulnerability scanning configured
 weight: 1.0
@@ -64,3 +65,35 @@ fix_template:
         schedule:
           interval: "weekly"
 insight_query: dependabot renovate snyk fossa codeql dependency vuln scan automated
+action:
+  kind: create_file
+  path: .github/dependabot.yml
+  template: |
+    version: 2
+    updates:
+      - package-ecosystem: "{primary_language}"
+        directory: "/"
+        schedule:
+          interval: weekly
+  preconditions:
+    - not_exists: .github/dependabot.yml
+    - not_exists: renovate.json
+  context_probe:
+    - detect: primary_language
+verify:
+  command: "test -f .github/dependabot.yml || test -f renovate.json"
+  description: A dependency automation config must exist.
+fix_prompt: |
+  Without this, transitive deps drift, CVEs accumulate, and "agent
+  merged a small change" silently becomes "merged a CVE".
+
+  Create `.github/dependabot.yml` with three blocks at minimum:
+  `package-ecosystem: github-actions`, `package-ecosystem:
+  {primary_language}` (e.g. `pip`, `npm`, `cargo`), and any others your
+  stack uses, each scheduled `interval: weekly` rooted at `/`. If you
+  prefer Renovate, drop `renovate.json` with `"extends":
+  ["config:recommended"]` instead. For supported languages, also add a
+  CodeQL workflow under `.github/workflows/codeql.yml` (GitHub's "Set up
+  code scanning" wizard generates this).
+
+  Verify with: `test -f .github/dependabot.yml || test -f renovate.json`

@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: repo_shape.top_level_count
+provenance: agent-readiness/repo_shape.top_level_count
 pillar: cognitive_load
 title: Few non-meta files at repo root
 weight: 0.8
@@ -41,3 +42,26 @@ fix_hint: |
   into `docs/`. The root should contain manifest + README + license
   + maybe a Makefile, and that's it.
 insight_query: repo shape top level files root flat structure src package
+action:
+  kind: run_command
+  command: |
+    # Reduce top-level directory count to ≤ 12 by grouping related
+    # subtrees under a parent (e.g. apps/, packages/, services/).
+    ls -1 . | wc -l
+  description: |
+    A flat top level confuses agents; group subtrees under parents.
+verify:
+  command: "true"
+  description: Manual; re-scan is the closed loop.
+fix_prompt: |
+  Without this, an agent's first `ls` returns 30+ items and finding
+  anything requires reading every filename.
+
+  Move source files under a single subtree: `src/<package>/` for Python,
+  `pkg/` or `internal/` for Go, `apps/` and `packages/` for monorepos.
+  Move scripts under `scripts/`, docs under `docs/`. The root should hold
+  manifest + README + LICENSE + maybe Makefile and that's it — typically
+  ≤ 12 entries when you list with `ls -1 .`. Don't move dotfiles or
+  license/changelog files; those are expected at root.
+
+  Verify with: `ls -1 . | wc -l` returns ≤ 20 non-dotfile entries.

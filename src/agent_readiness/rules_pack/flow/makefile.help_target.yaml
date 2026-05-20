@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: makefile.help_target
+provenance: agent-readiness/makefile.help_target
 pillar: flow
 title: Makefile exposes a `help:` target
 weight: 0.3
@@ -32,3 +33,30 @@ fix_template:
     	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
     	  awk 'BEGIN {FS = ":.*?## "}; {printf "  %-20s %s\n", $$1, $$2}'
 insight_query: makefile help target onboarding agents discoverability
+action:
+  kind: append_to_file
+  path: Makefile
+  template: |2
+
+    .PHONY: help
+    help:
+    	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
+    	  | awk 'BEGIN {FS = ":.*?## "}; {printf "%-20s %s\n", $$1, $$2}'
+  preconditions:
+    - exists: Makefile
+verify:
+  command: "make -n help"
+  description: "`make help` must resolve to a runnable target."
+fix_prompt: |
+  Without this, an agent's first `make help` prints an error and the
+  agent must read the entire Makefile by hand to discover what targets
+  exist.
+
+  Insert a `help:` target into your `Makefile` right after the
+  `.PHONY:` declaration block. Use the standard idiom: `@grep -E
+  '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "};
+  {printf "  %-20s %s\n", $$1, $$2}'`. Then go through each existing
+  target and add an inline `## Short description` comment so `make help`
+  prints a useful catalogue.
+
+  Verify with: `make -n help`

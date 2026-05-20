@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: security.policy_present
+provenance: agent-readiness/security.policy_present
 pillar: safety
 title: Security policy (SECURITY.md) present
 weight: 0.6
@@ -45,3 +46,32 @@ fix_template:
     We aim to acknowledge reports within 2 business days and to ship a
     fix or mitigation within 30 days for high-severity issues.
 insight_query: SECURITY.md security policy disclosure vulnerability reporting
+action:
+  kind: create_file
+  path: SECURITY.md
+  template: |
+    # Security policy
+
+    ## Reporting a vulnerability
+
+    Email security@example.com or open a GitHub Security Advisory.
+    We respond within 48 hours and aim to ship a fix within 14 days.
+  preconditions:
+    - not_exists: SECURITY.md
+verify:
+  command: "test -f SECURITY.md"
+  description: SECURITY.md must exist at the repo root.
+fix_prompt: |
+  Without this, an agent that finds a security issue has no documented
+  escalation path and may default to opening a public issue, leaking the
+  vulnerability before a fix lands.
+
+  Create `SECURITY.md` at the repo root with three sections: (1)
+  **Reporting a vulnerability** — explicitly tell reporters NOT to open
+  a public issue; give a private channel (`security@<your-domain>` or
+  GitHub's private vulnerability reporting if enabled). (2) **Supported
+  versions** — a small table showing which versions you patch. (3)
+  **Response window** — your acknowledgement and fix SLAs (e.g. 2
+  business days to ack, 30 days for high-severity).
+
+  Verify with: `test -f SECURITY.md`

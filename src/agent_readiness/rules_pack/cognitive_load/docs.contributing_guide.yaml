@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: docs.contributing_guide
+provenance: agent-readiness/docs.contributing_guide
 pillar: cognitive_load
 title: CONTRIBUTING.md present
 weight: 0.5
@@ -48,3 +49,36 @@ fix_template:
     - Fill in the PR template; describe what changed and how to verify.
     - Expect a review within ~1 business day; ping if stuck.
 insight_query: contributing guide PR conventions branch naming
+action:
+  kind: create_file
+  path: CONTRIBUTING.md
+  template: |
+    # Contributing
+
+    ## Setup
+    `make install`
+
+    ## Test
+    `make test`
+
+    ## Lint
+    `make lint`
+
+    ## Submitting changes
+    Fork, branch, PR. CI must be green before review.
+  preconditions:
+    - not_exists: CONTRIBUTING.md
+verify:
+  command: "test -f CONTRIBUTING.md"
+  description: CONTRIBUTING.md must exist at the repo root.
+fix_prompt: |
+  Without this, an agent has to infer branch naming, commit style, and
+  PR conventions from `git log` and gets them wrong on small repos.
+
+  Create `CONTRIBUTING.md` at the repo root. Document: (1) branch naming
+  (e.g. `feat/<slug>`, `fix/<slug>`), (2) commit message style (imperative
+  mood, one logical change per commit), (3) the local checks that must
+  pass before pushing (cite your canonical lint and test commands), and
+  (4) the PR review flow. Keep it under 80 lines.
+
+  Verify with: `test -f CONTRIBUTING.md`

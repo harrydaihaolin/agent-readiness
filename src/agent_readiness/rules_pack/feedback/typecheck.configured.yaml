@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: typecheck.configured
+provenance: agent-readiness/typecheck.configured
 pillar: feedback
 title: Type checker is configured
 weight: 0.9
@@ -43,3 +44,31 @@ fix_hint: |
   with `strict: true`. Type checking pays for itself within ~3
   agent-driven changes.
 insight_query: type checker mypy pyright tsconfig type checking config
+action:
+  kind: modify_manifest_field
+  manifest: pyproject.toml
+  field_path: tool.mypy
+  value: |
+    python_version = "3.11"
+    strict = false
+  preconditions:
+    - exists: pyproject.toml
+    - manifest_language: python
+verify:
+  command: "grep -E '(\\[tool\\.mypy\\]|tsconfig|tsc)' pyproject.toml tsconfig.json 2>/dev/null"
+  description: A typecheck configuration must exist.
+fix_prompt: |
+  Without this, an agent's edits ship missing fields, wrong arg shapes,
+  or stale imports that runtime would catch only after a partial test
+  run.
+
+  Add a type-checker config. For Python: append `[tool.mypy]` (or
+  `[tool.pyright]`) to `pyproject.toml` with `python_version = "3.11"`
+  and `strict = false` for incremental adoption; drop a `py.typed`
+  marker in your package directory. For TypeScript: create
+  `tsconfig.json` with `"strict": true`. Statically-typed-language repos
+  (Rust, Go) pass automatically; verify by ensuring the manifest is
+  detected.
+
+  Verify with: `grep -E '(\[tool\.mypy\]|tsconfig)' pyproject.toml
+  tsconfig.json 2>/dev/null`

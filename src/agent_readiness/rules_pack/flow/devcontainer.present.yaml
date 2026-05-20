@@ -1,5 +1,6 @@
-rules_version: 1
+rules_version: 2
 id: devcontainer.present
+provenance: agent-readiness/devcontainer.present
 pillar: flow
 title: Dev container or reproducible workspace configured
 weight: 0.8
@@ -55,3 +56,32 @@ fix_template:
       }
     }
 insight_query: devcontainer Nix Gitpod reproducible environment workspace
+action:
+  kind: create_file
+  path: .devcontainer/devcontainer.json
+  template: |
+    {
+      "name": "{primary_language} dev",
+      "image": "mcr.microsoft.com/devcontainers/{primary_language}:1",
+      "postCreateCommand": "make install"
+    }
+  preconditions:
+    - not_exists: .devcontainer/devcontainer.json
+  context_probe:
+    - detect: primary_language
+verify:
+  command: "test -f .devcontainer/devcontainer.json"
+  description: .devcontainer/devcontainer.json must exist.
+fix_prompt: |
+  Without this, an agent in a fresh sandbox hits "wrong Python version"
+  / "missing libssl-dev" within minutes of bring-up and can't recover
+  headlessly.
+
+  Create `.devcontainer/devcontainer.json` for this {primary_language}
+  project. Use a Microsoft base image (`mcr.microsoft.com/devcontainers/{primary_language}:1`)
+  and set `postCreateCommand` to your canonical install command (mirror
+  what's in `AGENTS.md`). Add the VS Code extensions you actually use to
+  `customizations.vscode.extensions`. For Nix shops, `flake.nix` with a
+  `devShell` is the equivalent.
+
+  Verify with: `test -f .devcontainer/devcontainer.json`
