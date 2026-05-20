@@ -65,6 +65,21 @@ def cli() -> None:
               default=None,
               help="Override the vendored rules pack with rules from DIR. "
                    "Useful when working on rule changes locally.")
+@click.option("--apply-top-action", "apply_top_action_flag", is_flag=True,
+              help=(
+                  "After scanning, apply the single highest-priority "
+                  "structured fix (the report's `top_action`) to the "
+                  "repo in place. Skips cleanly when no top_action has "
+                  "a structured `action` (e.g. v1 rules with only "
+                  "fix_hint). Exits 1 if the apply itself fails."
+              ))
+@click.option("--verify", "verify_flag", is_flag=True,
+              help=(
+                  "Only meaningful with --apply-top-action. When set, "
+                  "run the action's verify command after applying and "
+                  "exit 1 if verify fails. No-op without "
+                  "--apply-top-action."
+              ))
 def scan(
     path: Path,
     json_output: bool,
@@ -79,6 +94,8 @@ def scan(
     sarif_file: Path | None,
     no_progress: bool,
     rules_dir: Path | None,
+    apply_top_action_flag: bool,
+    verify_flag: bool,
 ) -> None:
     """Scan a repository and print an AI-readiness report.
 
@@ -250,6 +267,46 @@ def scan(
                 f"{report.overall_score:.1f} / 100  ({sign}{delta_overall})",
             )
         click.echo(output)
+
+    if apply_top_action_flag:
+        from agent_readiness.apply_action import apply_top_action as _apply
+
+        apply_result = _apply(
+            report.top_action,
+            path,
+            run_verify=verify_flag,
+        )
+        result_dict = apply_result.to_dict()
+        if json_output:
+            import json as _json
+            click.echo(
+                _json.dumps({"apply_top_action": result_dict}, indent=2)
+            )
+        else:
+            click.echo("")
+            if apply_result.applied:
+                written = ", ".join(apply_result.written) or "(no file paths)"
+                click.echo(f"Applied top action; wrote: {written}")
+                if verify_flag and apply_result.verify is not None:
+                    if apply_result.verified:
+                        click.echo("Verify command: PASSED")
+                    else:
+                        click.echo(
+                            f"Verify command: FAILED "
+                            f"(exit {apply_result.verify.get('exit_code')})"
+                        )
+            elif apply_result.error:
+                click.echo(f"Apply failed: {apply_result.error}", err=True)
+            else:
+                click.echo(
+                    f"Apply skipped: {apply_result.skipped_reason}",
+                    err=True,
+                )
+
+        if apply_result.error is not None:
+            sys.exit(1)
+        if verify_flag and apply_result.verified is False:
+            sys.exit(1)
 
     # Exit-code contract (consumed by CI in this repo's
     # `.github/workflows/ci.yml`, by `agent-readiness-leaderboard/scripts/

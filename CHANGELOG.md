@@ -5,6 +5,90 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-05-20
+
+The "actually-apply-the-pin" release. Closes the loop on EXP-4
+(top_action pin) by restoring the executor side of the contract:
+`apply_top_action()` materialises one structured fix in the working
+copy and optionally runs the rule's `verify` command. The CLI
+exposes this as `agent-readiness scan --apply-top-action [--verify]`,
+which is the contract the dogfood workflows in
+`agent-readiness-mcp`, `agent-readiness-pro`, and
+`agent-readiness-action` template against.
+
+### Added
+- **`agent_readiness.apply_action` module.** A new top-level module
+  exposing `apply_top_action(top_action, repo, *, run_verify=True)
+  -> ApplyResult`. Dispatches on `top_action["action"]["kind"]` to
+  six handlers covering every action kind defined in
+  `agent_readiness_insights_protocol.models`:
+  - `create_file` — write a brand-new file from `template`; refuses
+    to overwrite an existing path so retries are safe.
+  - `append_to_file` — append `template`, creating the file if
+    absent; inserts a separator when the existing file ends without
+    a newline.
+  - `insert_after` — match `after_pattern` with `re.MULTILINE` and
+    inject `template` right after the matched line.
+  - `edit_gitignore` — append missing entries to `.gitignore`;
+    idempotent when every entry is already present
+    (returns an empty `written` list).
+  - `modify_manifest_field` — set a dotted field inside a
+    structured manifest. JSON and YAML are parse-edit-rewrite; TOML
+    follows the protocol's "append a fresh table if the field is
+    missing" contract so we don't need a TOML writer dep.
+  - `run_command` — execute the structured shell command in the
+    repo root with a 60 s timeout.
+  Each handler returns the list of repo-relative paths it touched
+  (or `[]` for `run_command` and idempotent no-ops). All handlers
+  run through a path-escape guard that refuses absolute paths and
+  `..` traversal.
+- **`ApplyResult` envelope.** `dataclass` with `applied`, `written`,
+  `verified`, `verify`, `skipped_reason`, `error`. `to_dict()`
+  strips `None`/empty fields so the emitted JSON matches the
+  convention `report.to_dict()` already uses. Handlers never raise
+  out of `apply_top_action` — every error path returns an envelope
+  with `applied=False` and `error="ExcClass: message"`.
+- **Verify subprocess runner.** When `run_verify=True` and the
+  top_action ships a non-empty `verify.command`, the engine runs it
+  via `subprocess.run(shell=True, cwd=repo, timeout=...)`. The
+  envelope captures `command`, `exit_code`, and the trailing 2 KB
+  of stdout/stderr; `verified` is set to `proc.returncode == 0`.
+  Timeouts surface as `verify={"timed_out": True, ...}, verified=False`.
+- **`scan --apply-top-action [--verify]` CLI flags.** Adds two
+  flags to `agent_readiness.cli scan`:
+  - `--apply-top-action` runs the executor on `report.top_action`
+    after rendering the scan report. JSON output gains an
+    `apply_top_action` key in a separate envelope (printed after
+    the report) so consumers can tell scan output from apply
+    output. Plain output prints `Applied top action; wrote: …` or
+    `Apply skipped: …` / `Apply failed: …` on stderr.
+  - `--verify` is only meaningful with `--apply-top-action`. When
+    set, exits 1 if the verify command fails. Together with
+    `--fail-below`, this gives CI a single command that gates on
+    "scan passes AND top fix lands AND verify confirms the rule
+    stops firing".
+- **`tests/test_apply_action.py`** (29 cases). Covers every action
+  kind, the path-escape guard, the verify-pass/verify-fail/verify-
+  skipped paths, idempotency for `edit_gitignore` and TOML
+  `modify_manifest_field`, and `ApplyResult.to_dict()`
+  serialisation.
+
+### Notes
+- Restores parity with the contract the dogfood workflows were
+  templated against in 2026-04 — they have shipped with
+  `--apply-top-action --verify` referenced in comments since
+  Phase C8 even though the engine did not actually expose those
+  flags. Workflows that disabled the flags as a workaround
+  (agent-readiness-mcp's dogfood, agent-readiness-pro v2.1.0's
+  dogfood) can re-enable them once they bump their engine pin to
+  `>=2.4.0`.
+- MCP server: `agent_readiness_mcp.server.apply_top_action`'s
+  lazy `from agent_readiness.apply_action import apply_top_action`
+  now succeeds. The xfail in `agent-readiness-mcp/tests/test_server.py`
+  on `test_apply_top_action_returns_result_envelope` should now
+  flip to xpass; the MCP repo will drop the xfail in a follow-up.
+- Tracking issue: `harrydaihaolin/agent-readiness-mcp#1`.
+
 ## [2.3.1] - 2026-05-20
 
 ### Fixed
