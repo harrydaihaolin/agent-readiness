@@ -33,10 +33,11 @@ match:
       file_globs:
         - package.json
 fix_hint: |
-  For Python projects, run `pre-commit install` after dropping a
-  `.pre-commit-config.yaml` with at least ruff + the language formatter.
-  For JS, install husky + lint-staged. The goal is "every commit gets
-  formatted and linted before it touches a branch."
+  Drop a hook configuration that runs format + lint on every commit.
+  The framework doesn't matter — pre-commit, husky+lint-staged,
+  lefthook, simple-git-hooks, .claude/settings, .cursor/settings all
+  count. The goal is "every commit gets formatted and linted before
+  it touches a branch."
 fix_template:
   kind: create_file
   path: .pre-commit-config.yaml
@@ -79,11 +80,25 @@ fix_prompt: |
   Without this, an agent's edit/wait/fix loop runs at CI speed (minutes)
   instead of pre-commit speed (seconds).
 
-  Create `.pre-commit-config.yaml` at the repo root with at least
-  `pre-commit-hooks` (trailing-whitespace, end-of-file-fixer,
-  check-yaml, check-merge-conflict) plus your stack's formatter and
-  linter (`ruff` for Python, `eslint` + `prettier` for JS/TS,
-  `gofmt` for Go). After committing the file, run `pre-commit install`
-  once so the hooks fire on every commit.
+  Pick a hook framework appropriate to your stack and check in its
+  config. Any of these counts:
+  - **pre-commit** (universal, Python-runtime but language-agnostic
+    hooks): create `.pre-commit-config.yaml` at the repo root with
+    `pre-commit-hooks` (trailing-whitespace, end-of-file-fixer,
+    check-yaml, check-merge-conflict) plus your stack's formatter and
+    linter. Run `pre-commit install` once after committing.
+  - **husky + lint-staged** (Node-native): `npm i -D husky lint-staged`,
+    then `npx husky init` to create `.husky/pre-commit`.
+  - **lefthook** (single-binary, fast): `lefthook install` after
+    dropping `lefthook.yml`.
+  - **simple-git-hooks** (zero-dep, JS): add `"simple-git-hooks"` block
+    to `package.json`.
+  - **agent IDE settings**: `.claude/settings.json` /
+    `.cursor/settings.json` for IDE-side automation.
 
-  Verify with: `test -f .pre-commit-config.yaml`
+  For the formatter/linter step the hook runs, pick what matches your
+  {primary_language} (see lint.configured / hooks docs): ruff for
+  Python, eslint+prettier for JS/TS, gofmt+golangci-lint for Go,
+  rustfmt+clippy for Rust, rubocop for Ruby, etc.
+
+  Verify with: `test -f .pre-commit-config.yaml || test -d .husky || test -f lefthook.yml || grep -qE '"(husky|lint-staged|simple-git-hooks|lefthook)"\\s*:' package.json 2>/dev/null`

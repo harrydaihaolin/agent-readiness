@@ -507,6 +507,58 @@ class TestLoaderVersionGating(unittest.TestCase):
             action = {"kind": "create_file", "path": "X", "template": "literal\n"}
             self.assertEqual(render_action(action, {}), action)
 
+    def test_language_tables_cover_long_tail(self):
+        """v2.4.1 broadened the language tables to ~20 entries. This
+        test pins the contract: every language that has a manifest
+        entry must have at least an install + test command, so
+        downstream prompts can lead with concrete values rather than
+        falling back to the generic "your install command" phrase."""
+        from agent_readiness.rules_eval.context_probe import (
+            _LANGUAGE_BY_MANIFEST,
+            _LANGUAGE_INSTALL_COMMAND,
+            _LANGUAGE_TEST_COMMAND,
+        )
+
+        languages_with_manifest = {lang for _, lang in _LANGUAGE_BY_MANIFEST}
+        missing_install = languages_with_manifest - _LANGUAGE_INSTALL_COMMAND.keys()
+        missing_test = languages_with_manifest - _LANGUAGE_TEST_COMMAND.keys()
+        self.assertEqual(
+            missing_install,
+            set(),
+            f"Languages with a manifest entry but no install command: {missing_install}",
+        )
+        self.assertEqual(
+            missing_test,
+            set(),
+            f"Languages with a manifest entry but no test command: {missing_test}",
+        )
+
+    def test_primary_language_extension_fallback_picks_long_tail(self):
+        """No manifest, file-extension fallback: the picker must
+        recognise scala / swift / dart / elixir / haskell / clojure /
+        julia / erlang / ocaml / cpp / perl files so the long-tail
+        ecosystems don't degrade to an empty primary_language."""
+        from agent_readiness.rules_eval.context_probe import _detect_primary_language
+
+        ext_to_expected = {
+            "scala": "scala",
+            "swift": "swift",
+            "dart": "dart",
+            "ex": "elixir",
+            "hs": "haskell",
+            "clj": "clojure",
+            "jl": "julia",
+            "erl": "erlang",
+            "ml": "ocaml",
+            "cpp": "cpp",
+            "pl": "perl",
+        }
+        for ext, expected in ext_to_expected.items():
+            with self.subTest(ext=ext):
+                with TemporaryDirectory() as td:
+                    ctx = _make_ctx(Path(td), {f"main.{ext}": "// content\n"})
+                    self.assertEqual(_detect_primary_language(ctx), expected)
+
 
 class TestEvaluatorUnknownMatchType(unittest.TestCase):
     def test_unknown_match_type_marks_not_measured(self):

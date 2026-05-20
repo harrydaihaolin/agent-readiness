@@ -58,6 +58,7 @@ _LANGUAGE_BY_MANIFEST = (
     ("setup.py", "python"),
     ("setup.cfg", "python"),
     ("requirements.txt", "python"),
+    ("Pipfile", "python"),
     ("package.json", "javascript"),
     ("tsconfig.json", "typescript"),
     ("Cargo.toml", "rust"),
@@ -67,9 +68,21 @@ _LANGUAGE_BY_MANIFEST = (
     ("pom.xml", "java"),
     ("build.gradle", "java"),
     ("build.gradle.kts", "kotlin"),
+    ("build.sbt", "scala"),
     ("Package.swift", "swift"),
     ("mix.exs", "elixir"),
+    ("pubspec.yaml", "dart"),
+    ("stack.yaml", "haskell"),
+    ("cabal.project", "haskell"),
     ("project.clj", "clojure"),
+    ("deps.edn", "clojure"),
+    ("rebar.config", "erlang"),
+    ("dune-project", "ocaml"),
+    ("Project.toml", "julia"),
+    ("DESCRIPTION", "r"),
+    ("CMakeLists.txt", "cpp"),
+    ("Makefile.PL", "perl"),
+    ("cpanfile", "perl"),
 )
 
 # Priority order for primary_manifest. Python's pyproject is the modern
@@ -77,6 +90,12 @@ _LANGUAGE_BY_MANIFEST = (
 _MANIFEST_PRIORITY = [m for m, _ in _LANGUAGE_BY_MANIFEST]
 
 
+# The defaults below are intentionally the *most boring* invocation for
+# each ecosystem — i.e. the one a human would write into a fresh
+# Makefile or README without thinking. Projects on more exotic
+# toolchains (uv, pnpm, gradle wrapper, etc.) typically have an
+# AGENTS.md / `make` target the rule renderer will lead with anyway;
+# these fallbacks are the safety net.
 _LANGUAGE_TEST_COMMAND = {
     "python": "python -m pytest tests/",
     "javascript": "npm test",
@@ -84,10 +103,21 @@ _LANGUAGE_TEST_COMMAND = {
     "go": "go test ./...",
     "rust": "cargo test",
     "ruby": "bundle exec rspec",
+    "php": "vendor/bin/phpunit",
     "java": "mvn test",
     "kotlin": "./gradlew test",
+    "scala": "sbt test",
     "swift": "swift test",
     "elixir": "mix test",
+    "dart": "dart test",
+    "haskell": "stack test",
+    "clojure": "clojure -X:test",
+    "erlang": "rebar3 eunit",
+    "ocaml": "dune runtest",
+    "julia": "julia --project -e 'using Pkg; Pkg.test()'",
+    "r": "Rscript -e 'devtools::test()'",
+    "cpp": "ctest",
+    "perl": "prove -l t/",
 }
 
 _LANGUAGE_LINT_COMMAND = {
@@ -97,7 +127,15 @@ _LANGUAGE_LINT_COMMAND = {
     "go": "go vet ./...",
     "rust": "cargo clippy",
     "ruby": "bundle exec rubocop",
+    "php": "vendor/bin/phpstan analyse",
     "java": "mvn checkstyle:check",
+    "kotlin": "./gradlew ktlintCheck",
+    "scala": "sbt scalafmtCheckAll",
+    "swift": "swiftlint",
+    "elixir": "mix credo",
+    "dart": "dart analyze",
+    "haskell": "hlint .",
+    "clojure": "clojure -M:clj-kondo",
 }
 
 _LANGUAGE_INSTALL_COMMAND = {
@@ -107,23 +145,52 @@ _LANGUAGE_INSTALL_COMMAND = {
     "go": "go mod download",
     "rust": "cargo build",
     "ruby": "bundle install",
+    "php": "composer install",
     "java": "mvn install",
+    "kotlin": "./gradlew build",
+    "scala": "sbt compile",
+    "swift": "swift build",
+    "elixir": "mix deps.get",
+    "dart": "dart pub get",
+    "haskell": "stack build",
+    "clojure": "clojure -P",
+    "erlang": "rebar3 compile",
+    "ocaml": "dune build",
+    "julia": "julia --project -e 'using Pkg; Pkg.instantiate()'",
+    "r": "Rscript -e 'devtools::install()'",
+    "cpp": "cmake -B build && cmake --build build",
+    "perl": "cpanm --installdeps .",
 }
 
 
 _LOCKFILE_PACKAGE_MANAGER = (
+    # JS/TS — order matters: pnpm/yarn/bun/npm preference inferred
+    # from lockfile presence.
     ("pnpm-lock.yaml", "pnpm"),
     ("yarn.lock", "yarn"),
     ("bun.lock", "bun"),
     ("bun.lockb", "bun"),
     ("package-lock.json", "npm"),
+    ("npm-shrinkwrap.json", "npm"),
+    # Python — modern tools first.
     ("uv.lock", "uv"),
     ("poetry.lock", "poetry"),
+    ("pdm.lock", "pdm"),
     ("Pipfile.lock", "pipenv"),
+    ("conda-lock.yml", "conda"),
+    ("pixi.lock", "pixi"),
+    # Rust / Go / Ruby / PHP / Elixir / Dart / Swift / Haskell.
     ("Cargo.lock", "cargo"),
     ("go.sum", "go"),
     ("Gemfile.lock", "bundler"),
     ("composer.lock", "composer"),
+    ("mix.lock", "mix"),
+    ("pubspec.lock", "pub"),
+    ("Package.resolved", "swift"),
+    ("stack.yaml.lock", "stack"),
+    ("cabal.project.freeze", "cabal"),
+    # Nix lock (project-level).
+    ("flake.lock", "nix"),
 )
 
 
@@ -148,19 +215,44 @@ def _detect_primary_language(ctx: RepoContext) -> str:
     for manifest, lang in _LANGUAGE_BY_MANIFEST:
         if (ctx.root / manifest).is_file():
             return lang
-    # Fall back to file-extension scan.
+    # Fall back to file-extension scan. Order doesn't matter (max-count
+    # wins); the list just needs to cover the ecosystems we have
+    # _LANGUAGE_*_COMMAND fallbacks for so that downstream prompts can
+    # still render with sensible language-specific values.
     counts: dict[str, int] = {}
-    for ext_lang in (
+    for ext, lang in (
         ("py", "python"),
         ("js", "javascript"),
+        ("mjs", "javascript"),
+        ("cjs", "javascript"),
         ("ts", "typescript"),
+        ("tsx", "typescript"),
         ("go", "go"),
         ("rs", "rust"),
         ("rb", "ruby"),
         ("java", "java"),
+        ("kt", "kotlin"),
+        ("kts", "kotlin"),
+        ("scala", "scala"),
+        ("swift", "swift"),
+        ("ex", "elixir"),
+        ("exs", "elixir"),
+        ("erl", "erlang"),
+        ("php", "php"),
+        ("dart", "dart"),
+        ("hs", "haskell"),
+        ("ml", "ocaml"),
+        ("clj", "clojure"),
+        ("jl", "julia"),
+        ("r", "r"),
+        ("cpp", "cpp"),
+        ("cc", "cpp"),
+        ("cxx", "cpp"),
+        ("pl", "perl"),
+        ("pm", "perl"),
     ):
-        counts[ext_lang[1]] = counts.get(ext_lang[1], 0) + sum(
-            1 for _ in ctx.root.rglob(f"*.{ext_lang[0]}")
+        counts[lang] = counts.get(lang, 0) + sum(
+            1 for _ in ctx.root.rglob(f"*.{ext}")
         )
     if not any(counts.values()):
         return ""

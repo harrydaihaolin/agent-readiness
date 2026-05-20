@@ -30,13 +30,14 @@ insight_query: cyclomatic complexity function CC AST agent error rate refactor
 action:
   kind: run_command
   command: |
-    # Run a complexity audit and split the highest-complexity functions
-    # below the configured threshold. Then re-scan to confirm the rule
-    # no longer fires.
-    radon cc src/ -s -n B && echo "Refactor any functions above CC threshold."
+    # No deterministic auto-refactor exists; print a hint message and
+    # rely on the engine's re-scan as the closed loop. This avoids
+    # running a Python-specific tool on a non-Python repo.
+    echo "code.complexity: refactor functions above CC=15; re-scan to confirm."
   description: |
-    Run radon (Python) / eslint complexity / similar in your stack to
-    identify high-complexity functions and split them by responsibility.
+    Identify high-complexity functions with your stack's audit tool
+    and split them by responsibility (see fix_prompt for per-language
+    choices). No autofix; the rule re-scan is the closed loop.
 verify:
   command: "true"
   description: |
@@ -47,11 +48,22 @@ fix_prompt: |
   Without this, an agent editing a high-CC function has to reason across
   every branch and ships more wrong-branch edits than a human would.
 
-  Audit functions over cyclomatic complexity 15 with your stack's tool
-  (`radon cc src/ -s -n B` for Python, ESLint complexity rule for JS/TS,
-  `gocyclo` for Go). For each over-budget function, extract independent
-  branches into helpers named for the branch's intent. Target CC ≤ 10
-  per function as steady state. Re-run the audit after each split.
+  Audit functions over cyclomatic complexity 15 with your stack's
+  conventional tool, then for each over-budget function extract
+  independent branches into helpers named for the branch's intent.
+  Target CC ≤ 10 per function as steady state. Re-run the audit after
+  each split.
+
+  Per-language audit commands ({primary_language} suggested):
+  - Python: `radon cc src/ -s -n B`
+  - JS/TS: ESLint `complexity` rule, or `npx jscpd`
+  - Go: `gocyclo -over 15 .`
+  - Rust: `cargo clippy -- -W clippy::cognitive_complexity`
+  - Ruby: `rubocop --only Metrics/CyclomaticComplexity`
+  - Java/Kotlin: SonarQube / detekt `ComplexMethod`
+  - PHP: `phpmd src/ text codesize` (cyclomatic_complexity rule)
+  - Swift: SwiftLint `cyclomatic_complexity`
+  - C#: SonarAnalyzer / Roslyn analyzer `S1541`
 
   Verify with: re-run the complexity audit and confirm no function
   exceeds the threshold.

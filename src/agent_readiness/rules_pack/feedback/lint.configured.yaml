@@ -18,11 +18,13 @@ match:
   clauses:
     - type: path_glob
       require_globs:
+        # Python
         - ruff.toml
         - .ruff.toml
         - .flake8
         - .pylintrc
         - pylintrc
+        # JS/TS
         - .eslintrc
         - .eslintrc.js
         - .eslintrc.cjs
@@ -32,14 +34,44 @@ match:
         - eslint.config.js
         - eslint.config.mjs
         - eslint.config.cjs
+        - eslint.config.ts
         - biome.json
         - biome.jsonc
+        # Go / Rust / C-family
+        - .golangci.yml
+        - .golangci.yaml
+        - .golangci.toml
         - rustfmt.toml
         - .rustfmt.toml
+        - clippy.toml
+        - .clippy.toml
         - .clang-format
+        - .clang-tidy
+        # Ruby / PHP / Elixir / Kotlin / Swift / Dart
+        - .rubocop.yml
+        - .rubocop.yaml
+        - .standard.yml
+        - phpcs.xml
+        - phpcs.xml.dist
+        - phpstan.neon
+        - phpstan.neon.dist
+        - psalm.xml
+        - .credo.exs
+        - detekt.yml
+        - detekt.yaml
+        - .swiftlint.yml
+        - .swiftlint.yaml
+        - analysis_options.yaml
+        # CSS / Markdown / YAML helpers
         - .stylelintrc
         - .stylelintrc.json
         - .stylelintrc.js
+        - .markdownlint.json
+        - .markdownlint.yaml
+        - .markdownlint.yml
+        - .yamllint
+        - .yamllint.yml
+        - .yamllint.yaml
     - type: regex_in_files
       pattern: '\[tool\.(ruff|black|pylint|isort)\]'
       file_globs:
@@ -53,10 +85,15 @@ match:
       file_globs:
         - package.json
 fix_hint: |
-  For Python: `pip install ruff` + drop `[tool.ruff]` in pyproject.toml.
-  For JS/TS: `npm i -D eslint` + run `eslint --init`. The minimal
-  config is fine — what matters is that the rules are explicit, not
-  inherited from the agent's defaults.
+  Add a linter config in whatever form your language ecosystem
+  prefers. The minimal config is fine — what matters is that the
+  rules are explicit so agents inherit them instead of falling back
+  to defaults. Common choices: Python → ruff (`[tool.ruff]` in
+  pyproject.toml); JS/TS → eslint or biome; Go → golangci-lint
+  (`.golangci.yml`); Rust → clippy + rustfmt (`.clippy.toml`,
+  `rustfmt.toml`); Ruby → rubocop or standard; PHP → phpcs/phpstan;
+  Swift → swiftlint; Kotlin → detekt; Dart → analyzer
+  (`analysis_options.yaml`).
 insight_query: linter eslint ruff pylint biome stylelint config
 action:
   kind: modify_manifest_field
@@ -69,18 +106,32 @@ action:
     - exists: pyproject.toml
     - manifest_language: python
 verify:
-  command: "grep -E '(\\[tool\\.ruff\\]|eslint|tslint|golangci)' pyproject.toml package.json .golangci.yml 2>/dev/null"
-  description: A lint configuration must exist.
+  command: "grep -lE '(\\[tool\\.(ruff|black|pylint)\\]|eslint|biome|golangci|rubocop|swiftlint|detekt|phpstan|analyzer)' pyproject.toml package.json eslint.config.* .golangci.yml .rubocop.yml .swiftlint.yml detekt.yml phpstan.neon analysis_options.yaml 2>/dev/null"
+  description: A lint configuration must exist (any language).
 fix_prompt: |
   Without this, an agent's edits silently drift from house style and CI
   reviewers spend cycles on cosmetic feedback instead of logic.
 
-  Add a linter config. For Python: append `[tool.ruff]` to
-  `pyproject.toml` with `line-length = 100` and `target-version =
-  "py311"`. For JS/TS: run `npm i -D eslint && npx eslint --init` to
-  generate `eslint.config.js`. The minimal config is fine — what
-  matters is that the rules are explicit so agents inherit them
-  instead of falling back to defaults.
+  Add a linter config for your {primary_language} project. The minimal
+  config is fine — what matters is that the rules are explicit so
+  agents inherit them instead of falling back to defaults.
 
-  Verify with: `grep -E '(\[tool\.ruff\]|eslint|biome)' pyproject.toml
-  package.json eslint.config.* 2>/dev/null`
+  Common choices by language:
+  - Python: append `[tool.ruff]` to `pyproject.toml` with
+    `line-length = 100` and `target-version = "py311"`; install with
+    `pip install ruff`. Run `{language_lint_command}` (typically
+    `ruff check .`).
+  - JS/TS: `npm i -D eslint && npx eslint --init` to generate
+    `eslint.config.js`. Or use biome (`biome.json`) for a faster
+    single-binary toolchain.
+  - Go: `golangci-lint` with `.golangci.yml`; run
+    `{language_lint_command}` (typically `go vet ./...`).
+  - Rust: clippy + rustfmt (`.clippy.toml`, `rustfmt.toml`). Run
+    `{language_lint_command}` (typically `cargo clippy`).
+  - Ruby: rubocop (`.rubocop.yml`) or standard.
+  - PHP: phpstan (`phpstan.neon`) or phpcs (`phpcs.xml`).
+  - Swift: swiftlint (`.swiftlint.yml`).
+  - Kotlin: detekt (`detekt.yml`).
+  - Dart/Flutter: analyzer (`analysis_options.yaml`).
+
+  Verify with: `grep -lE '(\\[tool\\.(ruff|black|pylint)\\]|eslint|biome|golangci|rubocop|swiftlint|detekt|phpstan|analyzer)' pyproject.toml package.json eslint.config.* .golangci.yml .rubocop.yml .swiftlint.yml detekt.yml phpstan.neon analysis_options.yaml 2>/dev/null`

@@ -57,11 +57,22 @@ fix_prompt: |
   Without this, an agent's first `ls` returns 30+ items and finding
   anything requires reading every filename.
 
-  Move source files under a single subtree: `src/<package>/` for Python,
-  `pkg/` or `internal/` for Go, `apps/` and `packages/` for monorepos.
-  Move scripts under `scripts/`, docs under `docs/`. The root should hold
-  manifest + README + LICENSE + maybe Makefile and that's it — typically
-  ≤ 12 entries when you list with `ls -1 .`. Don't move dotfiles or
-  license/changelog files; those are expected at root.
+  Move source files under a single subtree using your stack's
+  conventional layout. Common choices:
+  - Python: `src/<package>/` (PEP 517 src-layout) or `<package>/`
+  - JS/TS: `src/`, plus `apps/` + `packages/` for monorepos
+  - Go: `cmd/<name>/`, `pkg/`, `internal/`
+  - Rust: `src/`, plus `crates/` for workspaces
+  - Java/Kotlin/Scala: `src/main/<lang>/`, `src/test/<lang>/`
+  - Ruby: `lib/`, `app/` (Rails)
+  - PHP: `src/`, `tests/` (PSR-4 autoload)
+  - Swift: `Sources/`, `Tests/`
+  - Elixir: `lib/`, `test/`
+  - Dart/Flutter: `lib/`, `bin/`, `test/`
+
+  Move scripts under `scripts/`, docs under `docs/`. The root should
+  hold manifest + README + LICENSE + maybe Makefile and that's it —
+  typically ≤ 12 entries when you list with `ls -1 .`. Don't move
+  dotfiles or license/changelog files; those are expected at root.
 
   Verify with: `ls -1 . | wc -l` returns ≤ 20 non-dotfile entries.

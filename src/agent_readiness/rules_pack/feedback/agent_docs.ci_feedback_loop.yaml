@@ -56,9 +56,12 @@ action:
 
     ## Feedback loop
 
-    - To preview locally: `make ci-local`
-    - To re-run the failing CI step: `gh run rerun --failed`
-    - CI artifacts are uploaded to the run page.
+    - Preview locally: `make ci-local` (or your project's equivalent)
+    - Re-run the failing CI step from CLI:
+      - GitHub Actions: `gh run rerun --failed`
+      - GitLab CI: `glab ci retry`
+      - CircleCI: `circleci local execute`
+    - CI artifacts are uploaded to the provider's run page.
   preconditions:
     - not_exists: AGENTS.md
 verify:
@@ -69,10 +72,17 @@ fix_prompt: |
   whether CI went red — the feedback loop is open-circuited.
 
   Append a `## CI and the feedback loop` section to `AGENTS.md`. State
-  explicitly: "After you push or update a PR, monitor GitHub Actions /
-  workflow runs and check results. When CI fails, read the logs, fix the
+  explicitly: "After you push or update a PR, monitor your CI provider's
+  run/check results (GitHub Actions, GitLab CI, CircleCI, Jenkins,
+  BuildKite, or whatever your repo uses) and treat failing checks as
+  signal to act on, not noise. When CI fails, read the logs, fix the
   root cause, and push follow-up commits. Do not stop while checks are
-  red." Cite the canonical command an agent should run to inspect runs
-  (e.g. `gh run watch`).
+  red."
+
+  Cite the canonical command an agent should run to inspect runs. For
+  GitHub Actions: `gh run watch`. For GitLab: `glab ci status`. For
+  CircleCI: `circleci local execute` (preview) or the PR's checks tab.
+  For Jenkins: the build URL in the PR. Pick whichever matches the CI
+  provider this repo uses.
 
   Verify with: `grep -i 'feedback\|ci\|workflow' AGENTS.md`

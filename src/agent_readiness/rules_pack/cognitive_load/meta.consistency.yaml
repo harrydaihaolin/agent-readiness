@@ -27,12 +27,13 @@ match:
     - package_json_script_referenced_in_readme
     - pip_editable_requires_manifest
 fix_hint: |
-  If your README says "run `pytest`", drop a `[tool.pytest.ini_options]`
-  table in pyproject.toml so a fresh checkout actually runs tests
-  with `pytest`. Same logic for any other tool you mention: every
-  `make X`, `npm run X`, or `pip install -e .` line in the README must
-  be backed by the corresponding target/script/manifest. Agent docs
-  should be ≥ 100 bytes of real content, not a stub.
+  Every command mentioned in README.md / AGENTS.md / CONTRIBUTING.md
+  must be backed by a real target/script/manifest. Examples: a `make X`
+  line requires a `X:` target in the Makefile; an `npm run X` line
+  requires the script in `package.json`; a `pytest` mention requires
+  `[tool.pytest.ini_options]` in `pyproject.toml`; a `cargo test`
+  mention requires `Cargo.toml`. Agent docs must be ≥ 100 bytes of
+  real content, not a stub.
 insight_query: README repo drift consistency placeholder pytest npm AGENTS.md make target npm run pip editable
 action:
   kind: run_command
@@ -52,11 +53,22 @@ fix_prompt: |
   or undefined target and either revert or invent a workaround.
 
   Reconcile every command mentioned in `README.md`, `AGENTS.md`, and
-  `CONTRIBUTING.md` so they all reference the same flow. Specifically:
-  every `make X` line must correspond to a target in your Makefile;
-  every `npm run X` must exist in `package.json` `scripts`; every
-  `pytest` mention requires `[tool.pytest.ini_options]` in
-  `pyproject.toml`; every `pip install -e .` requires a manifest. Don't
-  let agent-targeted docs ship as stubs (< 100 bytes of real content).
+  `CONTRIBUTING.md` so they all reference the same flow. Each command
+  must be backed by a real target/script/manifest:
+  - `make X` line → `X:` target in `Makefile`
+  - `npm run X` / `yarn X` / `pnpm X` → `X` in `package.json` `scripts`
+  - `pytest` mention → `[tool.pytest.ini_options]` in `pyproject.toml`
+    or `pytest.ini`
+  - `pip install -e .` / `uv pip install -e .` → manifest at root
+    (`pyproject.toml` or `setup.py`)
+  - `cargo X` → matching subcommand in `Cargo.toml`
+  - `go test ./...` → `go.mod` at root
+  - `bundle exec X` → matching gem dep in `Gemfile`
+  - `mix X` → matching task in `mix.exs`
+  - `composer X` → matching script in `composer.json`
+  - `gradle X` / `./gradlew X` → matching task in `build.gradle[.kts]`
+
+  Don't let agent-targeted docs ship as stubs (< 100 bytes of real
+  content) — agents read AGENTS.md and CLAUDE.md first.
 
   Verify with: re-run the scan; the rule should no longer flag drift.

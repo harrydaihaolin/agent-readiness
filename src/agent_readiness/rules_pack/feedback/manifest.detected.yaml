@@ -44,19 +44,34 @@ action:
 verify:
   command: |
     test -f pyproject.toml || test -f package.json || \
-      test -f go.mod || test -f Cargo.toml
-  description: A primary manifest must exist.
+      test -f go.mod || test -f Cargo.toml || test -f Gemfile || \
+      test -f composer.json || test -f pom.xml || \
+      test -f build.gradle || test -f build.gradle.kts || \
+      test -f Package.swift || test -f mix.exs || \
+      test -f pubspec.yaml || test -f project.clj
+  description: A primary manifest must exist (any supported language).
 fix_prompt: |
   Without this, an agent has no contract telling it what the project is,
   how to install it, or what depends on what — every action becomes
   guesswork.
 
-  Create a manifest at the repo root matching your {primary_language}:
-  `pyproject.toml` for Python, `package.json` for JS/TS, `Cargo.toml`
-  for Rust, `go.mod` for Go. Include name, version, and at least one
-  declared dependency. For monorepos, drop a manifest in each package
-  directory too (depth ≤ 2). If `{primary_manifest}` already exists
-  elsewhere, move it to the root or document its location in `AGENTS.md`.
+  Create a manifest at the repo root matching your {primary_language}.
+  Pick the canonical file for your ecosystem:
+  - Python: `pyproject.toml`
+  - JS/TS (npm/yarn/pnpm/bun): `package.json`
+  - Rust: `Cargo.toml`
+  - Go: `go.mod`
+  - Ruby: `Gemfile` (+ optional `*.gemspec`)
+  - PHP: `composer.json`
+  - Java/Kotlin/Scala: `pom.xml`, `build.gradle`, or `build.gradle.kts`
+  - Swift: `Package.swift`
+  - Elixir: `mix.exs`
+  - Dart/Flutter: `pubspec.yaml`
+  - Clojure: `project.clj` or `deps.edn`
 
-  Verify with: `test -f pyproject.toml || test -f package.json || test
-  -f go.mod || test -f Cargo.toml`
+  Include name, version, and at least one declared dependency. For
+  monorepos, drop a manifest in each package directory too (depth ≤ 2).
+  If `{primary_manifest}` already exists elsewhere, move it to the
+  root or document its location in `AGENTS.md`.
+
+  Verify with: `test -f pyproject.toml || test -f package.json || test -f Cargo.toml || test -f go.mod || test -f Gemfile || test -f composer.json || test -f pom.xml || test -f build.gradle || test -f build.gradle.kts || test -f Package.swift || test -f mix.exs || test -f pubspec.yaml`

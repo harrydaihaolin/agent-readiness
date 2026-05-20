@@ -34,15 +34,41 @@ match:
         - package.json
     - type: path_glob
       require_globs:
+        # Python test entry points
         - pytest.ini
         - tox.ini
         - noxfile.py
         - conftest.py
+        # Generic test directory conventions (most languages)
         - tests/**
         - test/**
+        - __tests__/**
+        - spec/**
         - "**/*_test.go"
+        - "**/*_test.rs"
         - "**/test_*.py"
+        # Static manifests whose presence implies a test runner is wired
         - Cargo.toml
+        - go.mod
+        - mix.exs
+        - Gemfile
+        - Package.swift
+        # JS/TS test runners
+        - jest.config.js
+        - jest.config.ts
+        - vitest.config.js
+        - vitest.config.ts
+        - karma.conf.js
+        - playwright.config.js
+        - playwright.config.ts
+        # Java/Kotlin/Scala
+        - build.gradle
+        - build.gradle.kts
+        - pom.xml
+        # PHP
+        - phpunit.xml
+        - phpunit.xml.dist
+        - pest.xml
 fix_hint: |
   Add a `test:` target to your Makefile that runs your test suite
   non-interactively. Example: `test:\n\tpython -m pytest tests/`.
@@ -85,10 +111,24 @@ fix_prompt: |
 
   Append a `test:` target to your `Makefile` for this {primary_language}
   project. The body should be `{language_test_command}` so it works
-  headlessly without any TTY or prompt. If you don't want to add a
-  Makefile, the next-best signals are `[tool.pytest.ini_options]` in
-  `pyproject.toml` (Python), `"test"` in `package.json` `scripts` (JS),
-  or a conventional `tests/` directory. Make is the universal headless
+  headlessly without any TTY or prompt. Make is the universal headless
+  contract.
+
+  If you'd rather use your language's native runner, the equivalent
+  signals are:
+  - Python: `[tool.pytest.ini_options]` in `pyproject.toml` (or
+    `pytest.ini` / `tox.ini` / `noxfile.py`)
+  - JS/TS: `"test"` in `package.json` `scripts`; or `jest.config.*` /
+    `vitest.config.*` / `playwright.config.*`
+  - Go: any `*_test.go` next to the code; `go test ./...` always works
+  - Rust: any `[[test]]` in `Cargo.toml` or `tests/*.rs`
+  - Ruby: `spec/` directory + `Gemfile` (rspec convention)
+  - PHP: `phpunit.xml` or `pest.xml`
+  - Java/Kotlin: `build.gradle[.kts]` or `pom.xml` with `test` task
+  - Swift: `swift test` on `Package.swift`
+  - Elixir: `mix test` on `mix.exs`
+
+  Any one of these is enough. Make is the universal headless
   contract; the rest are fallbacks.
 
   Verify with: `make -n test`

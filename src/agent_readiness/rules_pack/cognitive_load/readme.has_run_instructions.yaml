@@ -31,11 +31,23 @@ action:
   path: README.md
   template: |2
 
+    ## Install
+
+    ```
+    {language_install_command}
+    ```
+
+    ## Test
+
+    ```
+    {language_test_command}
+    ```
+
     ## Run
 
     ```
-    {package_manager} install
-    {language_test_command}
+    # Replace with this project's canonical entry-point command
+    # (see AGENTS.md). For language defaults, see entry_points.detected.
     ```
   context_probe:
     - detect: package_manager
@@ -43,17 +55,23 @@ action:
   preconditions:
     - exists: README.md
 verify:
-  command: "grep -E '(make|npm|pip|cargo|go) ' README.md >/dev/null"
-  description: README.md must contain a runnable command.
+  command: "grep -qE '(make|npm|pnpm|yarn|bun|pip|uv|poetry|cargo|go|bundle|composer|mix|gradle|swift|dart|flutter) ' README.md"
+  description: README.md must contain at least one runnable command (any ecosystem).
 fix_prompt: |
   Without this, an agent reading the README finds prose but no copy-able
   commands and falls back to guessing from manifests.
 
   Append three short sections to `README.md`: **Install**, **Test**, and
   **Run**. Each section must contain exactly one fenced code block with
-  the canonical command. For a {primary_language} project the install
-  block typically uses `{package_manager}` and the test block uses
-  `{language_test_command}`. Three fenced blocks is the floor; add more
-  only if the project genuinely needs them.
+  the canonical command for your {primary_language} project. Three
+  fenced blocks is the floor; add more only if the project genuinely
+  needs them.
 
-  Verify with: `grep -E '(make|npm|pip|cargo|go) ' README.md`
+  Suggested commands (matched to your detected ecosystem):
+  - Install: `{language_install_command}`
+  - Test:    `{language_test_command}`
+  - Run:     project-specific; see your manifest's scripts/entry-points
+             (e.g. `[project.scripts]` in pyproject, `"scripts"` in
+             package.json, `cargo run`, `go run ./cmd/...`).
+
+  Verify with: `grep -qE '(make|npm|pnpm|yarn|bun|pip|uv|poetry|cargo|go|bundle|composer|mix|gradle|swift|dart|flutter) ' README.md`
