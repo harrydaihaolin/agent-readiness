@@ -5,6 +5,66 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-05-20
+
+The "language tables catch up to the prompt prose" release. Pairs the
+engine probe tables and the freshly-vendored rules pack so the
+rendered `fix_prompt` prose stays correct on non-Python/non-JS repos.
+No behaviour change for projects already covered by the v2.4.0
+tables.
+
+### Added (engine)
+
+- `_LANGUAGE_BY_MANIFEST` expanded from 16 → 27 manifest -> language
+  entries: now covers Pipfile, build.sbt (Scala), pubspec.yaml (Dart),
+  stack.yaml + cabal.project (Haskell), deps.edn (Clojure modern),
+  rebar.config (Erlang), dune-project (OCaml), Project.toml (Julia),
+  DESCRIPTION (R), CMakeLists.txt (C++), Makefile.PL + cpanfile (Perl).
+- `_LANGUAGE_TEST_COMMAND` / `_LINT` / `_INSTALL` tables expanded to
+  cover ~20 languages (was 10/7/7). Adds php, scala, dart, haskell,
+  clojure, erlang, ocaml, julia, r, cpp, perl + fills in lint/install
+  gaps for kotlin and swift.
+- `_LOCKFILE_PACKAGE_MANAGER` expanded from 12 → 22 entries: adds pdm,
+  conda-lock, pixi, mix.lock, pubspec.lock, Package.resolved,
+  stack.yaml.lock, cabal.project.freeze, flake.lock, npm-shrinkwrap.
+- File-extension fallback in `_detect_primary_language` expanded from
+  7 → 27 extensions, so non-manifest repos (e.g. a vendored Erlang
+  script collection) still get a language pick that downstream
+  `{language_*_command}` placeholders can render against.
+
+### Changed (vendored rules)
+
+- Re-vendored `agent-readiness-rules` from **v2.1.0 → v2.2.0**
+  (`scripts/vendor_rules.sh v2.2.0`). Highlights of the upstream change:
+  - `ci.configured` detection list grew from 19 to 50+ provider
+    config paths (AWS CodeBuild, Codemagic, Wercker, Screwdriver,
+    Concourse, Argo Workflows, Harness, Tekton, Skaffold, Garden,
+    plus Forgejo/Gitea workflow paths).
+  - 14 rule `fix_prompt` bodies refactored from "For Python: X. For
+    JS/TS: Y." → "For your {primary_language} project: ..." plus a
+    bulleted enumeration of 7-13 language choices.
+  - `manifest.lockfile_present` action.command is now a guarded shell
+    `case` over `{package_manager}` that no-ops on undetectable
+    repos instead of executing the broken `lock` / `install
+    --frozen-lockfile` tokens that crashed v2.1.0 dogfood runs.
+
+### Why
+
+The rules pack v2.2.0 renders fix_prompts that lead with
+`{primary_language}` + `{language_test_command}` /
+`{language_install_command}` / `{package_manager}`. Before this
+release those placeholders fell back to a generic phrase on anything
+that wasn't already in the engine's 10-language table; this release
+lets them resolve concretely on the long tail (Swift, Kotlin,
+Scala, Elixir, Dart, Haskell, OCaml, Clojure, Erlang, Julia, R,
+C++, Perl, PHP).
+
+### Not changed
+
+- Protocol pin (`>=0.1,<1.0`). Still relaxed; will re-tighten once
+  protocol v0.4.x lands on PyPI (currently blocked on trusted-publisher
+  registration).
+
 ## [2.4.0] - 2026-05-20
 
 The "actually-apply-the-pin" release. Closes the loop on EXP-4

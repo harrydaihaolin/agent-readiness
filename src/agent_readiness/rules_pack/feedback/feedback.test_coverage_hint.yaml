@@ -12,13 +12,43 @@ explanation: |
   isn't tested before making a change, so they can target tests
   appropriately. Community-contributed demo rule.
 match:
-  type: path_glob
-  require_globs:
-    - .coveragerc
-    - codecov.yml
-    - .codecov.yml
-    - coveralls.yml
-    - .coveralls.yml
+  type: composite
+  op: or
+  summary: Coverage tooling is configured (any ecosystem).
+  clauses:
+    - type: path_glob
+      require_globs:
+        # Cross-language reporters
+        - .coveragerc
+        - codecov.yml
+        - .codecov.yml
+        - coveralls.yml
+        - .coveralls.yml
+        - sonar-project.properties
+        # Python
+        - .coverage
+        # JS/TS
+        - jest.config.js
+        - jest.config.ts
+        - jest.config.cjs
+        - jest.config.mjs
+        - vitest.config.ts
+        - vitest.config.js
+        - karma.conf.js
+        # Go / Rust / Ruby
+        - .simplecov
+        - .simplecov.yml
+        # Java / Kotlin / Scala
+        - jacoco.xml
+        - .jacoco/**
+    - type: regex_in_files
+      pattern: '\[tool\.coverage(\.|\s|\])'
+      file_globs:
+        - pyproject.toml
+    - type: regex_in_files
+      pattern: '"coverage"\s*:'
+      file_globs:
+        - package.json
 fix_hint: |
   Add a coverage config (`.coveragerc` for pytest-cov, `codecov.yml` for
   Codecov) so coverage signal is visible to both humans and agents.
@@ -38,11 +68,24 @@ fix_prompt: |
   Without this, an agent making a change has no signal about which lines
   are tested and may add behaviour into an untested path.
 
-  Add a coverage configuration. For Python with pytest-cov, add a
-  `[tool.coverage.report]` table to `pyproject.toml` with `fail_under =
-  80`. For JS, add `codecov.yml` with `coverage.status.project.target:
-  80%`. The exact threshold matters less than its presence — what an
-  agent needs is a visible signal that coverage is tracked.
+  Add a coverage configuration for your {primary_language} project. The
+  exact threshold matters less than its presence — what an agent needs
+  is a visible signal that coverage is tracked.
 
-  Verify with: `grep -E 'fail_under|coverage' pyproject.toml codecov.yml
-  2>/dev/null`
+  Common choices by ecosystem:
+  - Python (pytest-cov / coverage.py): append `[tool.coverage.report]`
+    to `pyproject.toml` with `fail_under = 80`.
+  - JS/TS (jest / vitest): set `coverageThreshold` in `jest.config.js`
+    or `coverage.thresholds` in `vitest.config.ts`.
+  - Go: track via `go test -coverprofile` + a `make coverage` target;
+    publish with Codecov / Coveralls (`codecov.yml`).
+  - Rust: tarpaulin (`.tarpaulin.toml`) or grcov in CI.
+  - Ruby: simplecov (`.simplecov`).
+  - Java/Kotlin: jacoco (`jacoco.xml` or build-tool plugin).
+  - PHP: phpunit's `--coverage-clover`.
+
+  As a generic option, drop a top-level `codecov.yml` with
+  `coverage.status.project.target: 80%` — it works for any language
+  Codecov supports.
+
+  Verify with: `grep -E 'fail_under|coverageThreshold|coverage' pyproject.toml codecov.yml jest.config.* vitest.config.* 2>/dev/null`

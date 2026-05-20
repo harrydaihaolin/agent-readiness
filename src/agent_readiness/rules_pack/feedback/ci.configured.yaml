@@ -19,41 +19,99 @@ match:
   op: or
   summary: At least one CI provider config is present.
   clauses:
+    # Hosted-Git native CI (the common case for OSS in 2026)
     - type: path_glob
       require_globs:
         - .github/workflows/*.yml
         - .github/workflows/*.yaml
-        - .circleci/config.yml
         - .gitlab-ci.yml
-        - .travis.yml
-        - azure-pipelines.yml
+        - .gitea/workflows/*.yml
+        - .gitea/workflows/*.yaml
+        - .forgejo/workflows/*.yml
+        - .forgejo/workflows/*.yaml
         - bitbucket-pipelines.yml
+        - .gitea-ci.yml
+    # Cloud-hosted CI SaaS
+    - type: path_glob
+      require_globs:
+        - .circleci/config.yml
+        - .circleci/config.yaml
+        - .travis.yml
+        - .travis.yaml
+        - azure-pipelines.yml
+        - azure-pipelines.yaml
+        - .azure-pipelines.yml
+        - .azure-pipelines/**
         - .buildkite/**
+        - buildkite.yml
+        - buildkite.yaml
         - .drone.yml
+        - .drone.yaml
         - .woodpecker.yml
+        - .woodpecker.yaml
         - .woodpecker/**
-        - Jenkinsfile
         - appveyor.yml
         - .appveyor.yml
         - cloudbuild.yaml
+        - cloudbuild.yml
         - .semaphore/**
+        - semaphore.yml
         - codefresh.yaml
+        - codefresh.yml
+        - .codefresh/**
         - .teamcity/**
+        - codemagic.yaml
+        - codemagic.yml
+        - wercker.yml
+        - .wercker.yml
+        - screwdriver.yaml
+        - screwdriver.yml
+        - .nevercode.yml
+    # Self-hosted / on-prem (long tail)
     - type: path_glob
       require_globs:
+        - Jenkinsfile
+        - jenkinsfile
+        - Jenkinsfile.groovy
+        - jenkins/**
+        - .jenkins/**
         - tekton/**
+        - .tekton/**
+        - argo/**
+        - .argo/**
+        - .argo-ci/**
+        - .harness/**
+        - .concourse/**
+        - concourse/pipeline.yml
+        - concourse/pipeline.yaml
+    # AWS / GCP / build-tool-driven CI
+    - type: path_glob
+      require_globs:
+        - buildspec.yml          # AWS CodeBuild
+        - buildspec.yaml
+        - .buildspec.yml
+        - .buildspec.yaml
         - dagger.json
         - dagger.cue
         - earthly.yml
+        - earthly.yaml
         - Earthfile
         - .prow.yaml
+        - .prow.yml
+        - garden.yml
+        - garden.yaml
+        - skaffold.yaml
+        - skaffold.yml
 fix_hint: |
-  Drop a `.github/workflows/ci.yml` that installs deps, runs the test
-  command, and reports status to PRs. Even a 20-line workflow is
-  worth more than nothing — the agent gets red/green feedback per
-  push. If you use a hosted CI system (BuildKite, TeamCity, Jenkins),
-  add a status badge to your README so the loop is visible to agents
-  even without an in-repo config file.
+  Drop a CI workflow that installs deps, runs the test command, and
+  reports status to PRs. The default scaffold writes
+  `.github/workflows/ci.yml`, but any of the 25+ providers detected
+  by this rule counts — pick whatever your hosting platform supports
+  natively. Even a 20-line config is worth more than nothing: the
+  agent gets red/green feedback per push. If you use a hosted CI
+  with no in-repo file (BuildKite cloud, TeamCity hosted, Jenkins on
+  a remote server), add a status badge to your README so the loop is
+  visible to agents.
 fix_template:
   kind: create_file
   path: .github/workflows/ci.yml
@@ -77,7 +135,7 @@ fix_template:
             run: |
               # Replace with the canonical test command from AGENTS.md.
               echo "TODO: run tests"
-insight_query: continuous integration GitHub Actions CircleCI GitLab CI workflow
+insight_query: continuous integration GitHub Actions GitLab CI CircleCI Jenkins Buildkite Drone Tekton Travis Azure Pipelines CodeBuild Codemagic
 action:
   kind: create_file
   path: .github/workflows/ci.yml
@@ -104,11 +162,25 @@ fix_prompt: |
   Without this, an agent's "tests pass on my laptop" never gets
   challenged by a clean-checkout run and silent regressions ship.
 
-  Create `.github/workflows/ci.yml` with three steps: `actions/checkout@v4`,
-  install dependencies for your {primary_language} project, then run
-  `{language_test_command}`. Trigger on `pull_request` and on `push` to
-  `main`. Even a 20-line workflow is worth more than nothing. If you use
-  a hosted CI provider with no in-repo config (BuildKite, TeamCity), add
-  a status badge to `README.md` so the loop is visible to agents.
+  Pick the CI provider that matches your hosting platform and check
+  in its config. The fastest path for most repos in 2026 is
+  `.github/workflows/ci.yml` (GitHub Actions) with three steps:
+  `actions/checkout@v4`, install dependencies for {primary_language}
+  with `{language_install_command}`, then run
+  `{language_test_command}`. Trigger on `pull_request` and on `push`
+  to `main`.
+
+  Equivalent canonical config paths in other providers (use whichever
+  matches your platform): `.gitlab-ci.yml` (GitLab CI), `.circleci/config.yml`
+  (CircleCI), `Jenkinsfile` (Jenkins), `azure-pipelines.yml` (Azure),
+  `bitbucket-pipelines.yml` (Bitbucket), `buildspec.yml` (AWS
+  CodeBuild), `.drone.yml` (Drone), `.woodpecker.yml` (Woodpecker),
+  `cloudbuild.yaml` (GCP Cloud Build), `codemagic.yaml` (Codemagic),
+  `.travis.yml` (Travis), `.buildkite/pipeline.yml` (BuildKite),
+  `tekton/*.yaml`, `Earthfile`. Any of these closes the loop.
+
+  Even a 20-line config is worth more than nothing. If you already
+  use a hosted CI without an in-repo file, add a status badge to
+  `README.md` so the loop is visible to agents.
 
   Verify with: `test -f .github/workflows/ci.yml`

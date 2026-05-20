@@ -17,19 +17,43 @@ match:
   clauses:
     - type: path_glob
       require_globs:
+        # Python type checkers
         - mypy.ini
         - .mypy.ini
         - pyrightconfig.json
+        - .pyre_configuration
+        # TypeScript
         - tsconfig.json
         - tsconfig.*.json
+        - jsconfig.json
+        # .NET / F# / VB
         - "*.csproj"
         - "*.fsproj"
         - "*.vbproj"
+        - global.json
+        # Statically-typed languages: manifest presence is sufficient
         - go.mod
         - Cargo.toml
         - build.gradle
         - build.gradle.kts
+        - Package.swift
+        - pom.xml
+        - mix.exs
+        # Python package marker (PEP 561)
         - "**/py.typed"
+        # Ruby
+        - sorbet/config
+        - Steepfile
+        # PHP
+        - phpstan.neon
+        - phpstan.neon.dist
+        - psalm.xml
+        - psalm.xml.dist
+        # Elixir / Dart / Haskell
+        - .dialyzer_ignore.exs
+        - analysis_options.yaml
+        - stack.yaml
+        - cabal.project
     - type: regex_in_files
       pattern: '\[tool\.(mypy|pyright|pyre)\]'
       file_globs:
@@ -55,20 +79,35 @@ action:
     - exists: pyproject.toml
     - manifest_language: python
 verify:
-  command: "grep -E '(\\[tool\\.mypy\\]|tsconfig|tsc)' pyproject.toml tsconfig.json 2>/dev/null"
-  description: A typecheck configuration must exist.
+  command: |
+    test -f mypy.ini || test -f .mypy.ini || test -f pyrightconfig.json || \
+      test -f tsconfig.json || test -f Cargo.toml || test -f go.mod || \
+      test -f build.gradle || test -f build.gradle.kts || \
+      test -f Package.swift || test -f pom.xml || test -f mix.exs || \
+      test -f phpstan.neon || test -f phpstan.neon.dist || \
+      test -f psalm.xml || test -f sorbet/config || \
+      test -f analysis_options.yaml || \
+      grep -qE '\[tool\.(mypy|pyright|pyre)\]' pyproject.toml 2>/dev/null
+  description: A typecheck configuration must exist (any supported language).
 fix_prompt: |
   Without this, an agent's edits ship missing fields, wrong arg shapes,
   or stale imports that runtime would catch only after a partial test
   run.
 
-  Add a type-checker config. For Python: append `[tool.mypy]` (or
-  `[tool.pyright]`) to `pyproject.toml` with `python_version = "3.11"`
-  and `strict = false` for incremental adoption; drop a `py.typed`
-  marker in your package directory. For TypeScript: create
-  `tsconfig.json` with `"strict": true`. Statically-typed-language repos
-  (Rust, Go) pass automatically; verify by ensuring the manifest is
-  detected.
+  Add a type-checker config for your {primary_language} project.
+  Common choices by language:
+  - Python: append `[tool.mypy]` (or `[tool.pyright]`) to `pyproject.toml`
+    with `python_version = "3.11"` and `strict = false` for incremental
+    adoption; drop a `py.typed` marker in your package directory.
+  - TypeScript: create `tsconfig.json` with `"strict": true`.
+    JavaScript: opt into `// @ts-check` plus `jsconfig.json`.
+  - Ruby: sorbet (`sorbet/config`) or Steep (`Steepfile`).
+  - PHP: phpstan (`phpstan.neon`) or psalm (`psalm.xml`).
+  - Dart/Flutter: tighten `analysis_options.yaml` with `strong-mode`.
+  - Elixir: dialyzer + `.dialyzer_ignore.exs`.
 
-  Verify with: `grep -E '(\[tool\.mypy\]|tsconfig)' pyproject.toml
-  tsconfig.json 2>/dev/null`
+  Statically-typed-language repos (Rust, Go, Swift, Kotlin, Java, .NET)
+  pass automatically — the manifest's presence implies the compiler IS
+  the type checker; ensure the manifest builds clean.
+
+  Verify with: `test -f mypy.ini || test -f pyrightconfig.json || test -f tsconfig.json || test -f Cargo.toml || test -f go.mod || test -f build.gradle || test -f Package.swift || test -f phpstan.neon || test -f sorbet/config || grep -qE '\\[tool\\.(mypy|pyright|pyre)\\]' pyproject.toml 2>/dev/null`

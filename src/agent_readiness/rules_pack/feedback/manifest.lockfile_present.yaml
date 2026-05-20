@@ -50,29 +50,67 @@ insight_query: lockfile dependency pinning poetry npm cargo reproducible install
 action:
   kind: run_command
   command: |
-    # Generate a lockfile using the language's package manager.
-    {package_manager} lock || {package_manager} install --frozen-lockfile
+    # Dispatch on the detected package manager. Each branch runs the
+    # canonical lockfile-generation command for its ecosystem. When
+    # the probe doesn't resolve (`{package_manager}` empty), we fall
+    # through and print a no-op message rather than running garbage
+    # tokens through `sh`. apply_top_action treats stderr-with-exit-0
+    # as success, so the workflow doesn't break on undetectable repos.
+    pm="{package_manager}"
+    case "$pm" in
+      uv)        uv lock ;;
+      poetry)    poetry lock ;;
+      pipenv)    pipenv lock ;;
+      pdm)       pdm lock ;;
+      npm)       npm install --package-lock-only ;;
+      pnpm)      pnpm install --lockfile-only ;;
+      yarn)      yarn install --mode=update-lockfile ;;
+      bun)       bun install --frozen-lockfile || bun install ;;
+      cargo)     cargo generate-lockfile ;;
+      bundler)   bundle lock ;;
+      composer)  composer update --lock ;;
+      go)        go mod tidy ;;
+      *)         echo "manifest.lockfile_present: package_manager not detected; skipping (no-op)" ;;
+    esac
   description: |
     Run the package manager's lock command (e.g. `uv lock`,
     `npm install --package-lock-only`, `cargo generate-lockfile`).
+    Dispatches on the detected package_manager probe.
   context_probe:
     - detect: package_manager
 verify:
   command: |
-    test -f uv.lock || test -f poetry.lock || test -f package-lock.json || \
-      test -f yarn.lock || test -f pnpm-lock.yaml || test -f Cargo.lock
-  description: A lockfile must exist.
+    test -f uv.lock || test -f poetry.lock || test -f Pipfile.lock || \
+      test -f pdm.lock || test -f package-lock.json || \
+      test -f npm-shrinkwrap.json || test -f yarn.lock || \
+      test -f pnpm-lock.yaml || test -f bun.lock || test -f bun.lockb || \
+      test -f Cargo.lock || test -f Gemfile.lock || \
+      test -f composer.lock || test -f go.sum || test -f mix.lock
+  description: A lockfile must exist (any supported ecosystem).
 fix_prompt: |
-  Without this, `pip install` / `npm install` resolves different
-  versions on different machines and the agent's green run on its laptop
-  can't predict CI's outcome.
+  Without this, `pip install` / `npm install` / `bundle install`
+  resolves different versions on different machines and the agent's
+  green run on its laptop can't predict CI's outcome.
 
-  Generate and commit a lockfile using your package manager. Run
-  `{package_manager} lock` (or `{package_manager} install
-  --frozen-lockfile` to verify an existing one). For bare-pip Python
-  projects, switch to `uv` or `poetry` for a real lockfile, or pin
-  `requirements.txt` to exact versions with `pip freeze > requirements.txt`.
+  Generate and commit a lockfile using your package manager
+  ({package_manager}). Canonical lock commands by ecosystem:
 
-  Verify with: `test -f uv.lock || test -f poetry.lock || test -f
-  package-lock.json || test -f yarn.lock || test -f pnpm-lock.yaml ||
-  test -f Cargo.lock`
+  - uv:      `uv lock`
+  - poetry:  `poetry lock`
+  - pipenv:  `pipenv lock`
+  - pdm:     `pdm lock`
+  - npm:     `npm install --package-lock-only`
+  - pnpm:    `pnpm install --lockfile-only`
+  - yarn:    `yarn install --mode=update-lockfile`
+  - bun:     `bun install --frozen-lockfile`
+  - cargo:   `cargo generate-lockfile`
+  - bundler: `bundle lock`
+  - composer:`composer update --lock`
+  - go:      `go mod tidy` (regenerates `go.sum`)
+  - mix:     `mix deps.get` (writes `mix.lock`)
+
+  For bare-pip Python projects with no lockfile tooling, either switch
+  to `uv` or `poetry` for a real lockfile, or pin `requirements.txt`
+  to exact versions with `pip freeze > requirements.txt`.
+
+  Verify with: `test -f uv.lock || test -f poetry.lock || test -f Pipfile.lock || test -f pdm.lock || test -f package-lock.json || test -f yarn.lock || test -f pnpm-lock.yaml || test -f bun.lock || test -f bun.lockb || test -f Cargo.lock || test -f Gemfile.lock || test -f composer.lock || test -f go.sum || test -f mix.lock`

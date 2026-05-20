@@ -9,7 +9,7 @@ explanation: |
   A devcontainer / Nix flake / Gitpod config / Vagrantfile lets an
   agent (or a new contributor) get a reproducible environment without
   hand-installing system deps. The project that ships one cuts the
-  "wrong Python version" / "missing libssl-dev" class of failure
+  "wrong runtime version" / "missing system library" class of failure
   to zero.
 match:
   type: composite
@@ -73,15 +73,23 @@ verify:
   command: "test -f .devcontainer/devcontainer.json"
   description: .devcontainer/devcontainer.json must exist.
 fix_prompt: |
-  Without this, an agent in a fresh sandbox hits "wrong Python version"
-  / "missing libssl-dev" within minutes of bring-up and can't recover
-  headlessly.
+  Without this, an agent in a fresh sandbox hits "wrong runtime version"
+  / "missing system library" within minutes of bring-up and can't
+  recover headlessly.
 
   Create `.devcontainer/devcontainer.json` for this {primary_language}
-  project. Use a Microsoft base image (`mcr.microsoft.com/devcontainers/{primary_language}:1`)
-  and set `postCreateCommand` to your canonical install command (mirror
-  what's in `AGENTS.md`). Add the VS Code extensions you actually use to
-  `customizations.vscode.extensions`. For Nix shops, `flake.nix` with a
-  `devShell` is the equivalent.
+  project. Microsoft publishes language-specific base images at
+  `mcr.microsoft.com/devcontainers/<lang>:1` for python, javascript-node,
+  typescript-node, go, rust, java, dotnet, ruby, php, etc. Pick the one
+  that matches {primary_language}; fall back to
+  `mcr.microsoft.com/devcontainers/base:ubuntu` plus a `features:` block
+  if no language-specific image fits. Set `postCreateCommand` to your
+  canonical install command (mirror what's in `AGENTS.md` — for example
+  `{language_install_command}`). Add the VS Code / Cursor extensions
+  you actually use to `customizations.vscode.extensions`.
+
+  For Nix shops, `flake.nix` with a `devShell` is the equivalent;
+  for Gitpod, `.gitpod.yml` + `.gitpod.Dockerfile`; for tool-version
+  managers, `.tool-versions` (asdf/mise) is the lightest-weight option.
 
   Verify with: `test -f .devcontainer/devcontainer.json`
