@@ -43,13 +43,28 @@ action:
     - detect: primary_manifest
 verify:
   command: |
+    # Mirrors the engine's _ROOT_MANIFESTS list — any one of these is
+    # enough. JVM + niche-language manifests (build.sbt, build.sc,
+    # deps.edn, rebar.config, dune-project, Project.toml, DESCRIPTION,
+    # Makefile.PL, cpanfile, Pipfile, tsconfig.json) were missing
+    # pre-v2.4.0 even though the language probe knew about them, so
+    # this verify command lagged the matcher.
     test -f pyproject.toml || test -f package.json || \
       test -f go.mod || test -f Cargo.toml || test -f Gemfile || \
       test -f composer.json || test -f pom.xml || \
       test -f build.gradle || test -f build.gradle.kts || \
+      test -f build.sbt || test -f build.sc || \
       test -f Package.swift || test -f mix.exs || \
-      test -f pubspec.yaml || test -f project.clj
-  description: A primary manifest must exist (any supported language).
+      test -f pubspec.yaml || \
+      test -f project.clj || test -f deps.edn || \
+      test -f rebar.config || test -f dune-project || \
+      test -f Project.toml || test -f DESCRIPTION || \
+      test -f Makefile.PL || test -f cpanfile || \
+      test -f Pipfile || test -f tsconfig.json || \
+      test -f stack.yaml || test -f cabal.project
+  description: |
+    A primary manifest must exist (any supported language). Matches
+    the engine's recognised-manifest list as of pack v2.4.0.
 fix_prompt: |
   Without this, an agent has no contract telling it what the project is,
   how to install it, or what depends on what — every action becomes

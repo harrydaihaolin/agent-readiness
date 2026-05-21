@@ -5,6 +5,114 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.3] - 2026-05-21
+
+The "stop score-chasing the wrong ecosystem" release. Engine-side
+gains a language-aware mode on the gitignore-coverage matcher, a
+broader manifest list (Scala / Clojure / Erlang / OCaml / Julia / R /
+Perl / Haskell now recognised by their canonical manifest), and a
+scaffolder that substitutes the *actual* canonical commands for the
+detected language into the AGENTS.md template. Re-vendors the
+upstream rule pack to **v2.4.0**, which flips the new behaviour on
+at the YAML layer.
+
+### Why
+
+A clean Scala / SBT repo scanned at v2.4.2 hit overall 75 / 100
+with pillar scores of 94 / 92 / 93 / 96 — by any honest read this
+is a healthy repo. The safety pillar dipped to 95.7 because
+`gitignore.covers_junk` fired with *"missing python_pycache,
+node_modules, dist_build, go_vendor, python_egg_info, coverage,
+terraform"* — every missing group except `coverage` is an
+ecosystem the repo doesn't use. The action was *"add seven
+ecosystems' worth of patterns to your `.gitignore`"* — pure
+score-chasing. Same repo also hit `manifest.detected` despite
+`build.sbt` being present at the root, because the engine's
+`_ROOT_MANIFESTS` tuple lagged the language-detection table.
+
+Same root cause in both: the matchers were Python / JS / Go first
+with hard-coded ecosystem checklists, while the engine's *prose*
+(rule explanations, fix_prompt bodies, language tables) already
+knew about every supported ecosystem. v2.4.3 brings the enforcement
+in line with the prose.
+
+### Added (engine)
+
+- `gitignore_coverage`: new `language_aware: true` config flag.
+  When set, the matcher resolves the repo's primary language via
+  the existing `context_probe._detect_primary_language` probe and
+  filters the requested group list down to *universal* groups
+  (`dotenv` / `ide_junk` / `logs`) plus the per-language groups
+  for each detected language. Multi-language repos require the
+  *union*. Unclassifiable repos fall back to the full-list
+  behaviour so we don't silently under-fire on unknown ecosystems.
+- `manifest_introspection`: `_ROOT_MANIFESTS` grown from 16 → 30
+  entries to mirror `context_probe._LANGUAGE_BY_MANIFEST`. Now
+  recognises `build.sbt`, `build.sc` (Mill), `project.clj`,
+  `deps.edn`, `rebar.config`, `dune-project`, `Project.toml`
+  (Julia), `DESCRIPTION` (R), `Makefile.PL` + `cpanfile` (Perl),
+  `Pipfile`, `tsconfig.json`. `_MONOREPO_MANIFESTS` grows
+  similarly so Scala / Java / Clojure monorepos with modules at
+  `modules/<name>/build.sbt` are recognised at depth==2.
+- `scaffold._substitute()` now runs the same probe stack as rule
+  actions and substitutes `{{PRIMARY_LANGUAGE}}`,
+  `{{INSTALL_COMMAND}}`, `{{TEST_COMMAND}}`, `{{LINT_COMMAND}}`
+  into bundled templates. The shipped `AGENTS.md` template now
+  carries those tokens; a Scala repo's freshly-scaffolded
+  AGENTS.md now ships `sbt compile` / `sbt test` /
+  `sbt scalafmtCheckAll` in the Quick Start block instead of
+  `<replace with your install command>` placeholders. Falls back
+  to readable English (`your install command`) when the probe
+  can't resolve.
+- `agent_docs.canonical` added to `_CHECK_TEMPLATES` so the
+  scaffolder seeds AGENTS.md whether the firing rule is the
+  warn-level canonical rule or the softer
+  `agent_docs.present` info rule.
+
+### Changed (vendored rules)
+
+- Re-vendored `agent-readiness-rules` from **v2.3.0 → v2.4.0**
+  (`scripts/vendor_rules.sh v2.4.0`). Three rule changes:
+  - `gitignore.covers_junk`: `match.language_aware: true`.
+    Explanation, fix_hint, fix_template content, fix_prompt, and
+    verify.command all rewritten in the per-language voice.
+  - `manifest.detected`: verify.command extended to mirror the
+    engine's new manifest list.
+  - `agent_docs.canonical`: `action.template` rewritten to
+    interpolate `{primary_language}` /
+    `{language_install_command}` / `{language_test_command}` /
+    `{language_lint_command}` into the AGENTS.md content; the
+    `context_probe` block grows to include `primary_manifest`
+    and `package_manager` so the rendered prose has the full
+    ecosystem context.
+
+### Validation
+
+- `python3 -m pytest -q`: **169 passed, 1 skipped** (was 156 / 1).
+  13 new tests: 4 language-aware gitignore (Scala-clean /
+  Scala-missing-dotenv / Python-Node monorepo / unclassifiable
+  fallback), 3 broader-manifest (build.sbt / deps.edn /
+  Project.toml), 6 scaffolder (substitution paths +
+  `agent_docs.canonical` mapping).
+- `manifest.toml` `pack_version` is `"2.4.0"` post-vendor.
+- `MANIFEST` records the v2.4.0 tarball SHA.
+
+### Expected field impact
+
+A clean Scala / SBT repo with no Python or Node should now score
+~93 instead of 75 — the gitignore false-fire and the missing-
+manifest false-fire both clear. `apply_top_action` on a fresh
+repo writes an AGENTS.md with the actual canonical commands
+instead of a generic skeleton.
+
+### Cross-repo provenance
+
+- Engine PR: [#78](https://github.com/harrydaihaolin/agent-readiness/pull/78).
+- Rules-pack PR: [agent-readiness-rules#26](https://github.com/harrydaihaolin/agent-readiness-rules/pull/26).
+- Council follow-on: backlog item *"rules engine prompt
+  generation isn't language agnostic enough"* (Phase 1; see
+  `agent-readiness-research/research/triage_2026-05-20_followups.md`).
+
 ## [2.4.2] - 2026-05-21
 
 The "agent-led explanations land in the prompts" release. Re-vendors

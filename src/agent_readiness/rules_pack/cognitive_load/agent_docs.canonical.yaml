@@ -60,22 +60,50 @@ action:
   kind: create_file
   path: AGENTS.md
   template: |
-    # Agents guide
+    # Agent guide
 
-    A concise (<2 KB) orientation document for autonomous coding agents
-    working in this repository. Document, in order:
+    This is a {primary_language} project. Use the commands in the
+    Quick start block below; an agent will trust these over manifest
+    sniffing.
 
-    1. What this repo does in one sentence.
-    2. The single command an agent runs to set up the environment.
-    3. The single command to run tests.
-    4. The single command to lint.
-    5. Where the entry point lives (file path + function/binary name).
+    ## Quick start
 
-    Keep it < 60 lines so it fits in any agent's context window.
+    ```bash
+    # Install dependencies
+    {language_install_command}
+
+    # Run tests
+    {language_test_command}
+
+    # Lint
+    {language_lint_command}
+    ```
+
+    If any of the above is wrong for this project (custom runner,
+    monorepo layout, etc.), edit it now.
+
+    ## Do-not-touch
+
+    - <!-- list paths agents should never modify, e.g. generated/, vendor/ -->
+
+    ## Conventions
+
+    - Branch naming: `feat/<short>`, `fix/<issue>`, `chore/<topic>`.
+    - Commit style: Conventional Commits.
+    - PR scope: one logical change per PR.
+
+    ## CI and the feedback loop
+
+    **CI is part of the feedback loop.** After you push or update a
+    PR, monitor your CI provider's run results. When CI fails, read
+    the logs, fix the root cause, and push follow-up commits. Do not
+    stop while checks are red.
   preconditions:
     - not_exists: AGENTS.md
   context_probe:
     - detect: primary_language
+    - detect: primary_manifest
+    - detect: package_manager
 verify:
   command: "test -f AGENTS.md"
   description: AGENTS.md must exist at the repo root.

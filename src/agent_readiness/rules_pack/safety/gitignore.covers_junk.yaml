@@ -6,16 +6,29 @@ title: .gitignore covers build artifacts and secrets
 weight: 1.0
 severity: warn
 explanation: |
-  An agent that runs `pip install` / `npm install` / a build will
-  produce artefact directories (`__pycache__`, `node_modules`,
-  `dist/`, `build/`, IDE settings, coverage reports). If the
-  `.gitignore` doesn't cover them, those artefacts get accidentally
-  committed and pollute future diffs. The same pattern catches
-  secrets — `.env` not being ignored is how API keys end up in
-  public history.
+  An agent that runs the project's build, test, or install step
+  produces artefact directories for its ecosystem — `target/` on
+  JVM / Rust, `__pycache__/` + `dist/` on Python, `node_modules/`
+  on Node, `vendor/` on Go, `_build/` on Elixir, etc. If `.gitignore`
+  doesn't cover the artefacts for the *detected* primary language,
+  those directories get accidentally committed and pollute every
+  future diff. The same pattern catches secrets and IDE state:
+  `.env` not being ignored is how API keys end up in public history,
+  and stray `.idea/` / `.vscode/` directories show up in PRs nobody
+  intended. The rule scores against the per-language groups for the
+  detected stack plus three universal groups (`dotenv`, `ide_junk`,
+  `logs`) that matter for every repo.
 match:
   type: gitignore_coverage
-  min_groups_covered: 7
+  # language_aware: the matcher resolves the repo's primary language
+  # from the same probe the action templates use and requires only the
+  # *universal* groups (dotenv / ide_junk / logs) plus the per-language
+  # groups for each detected language. A Scala-only repo no longer
+  # fires for missing `node_modules/` or `__pycache__/`; a Python+Node
+  # monorepo still requires both. Unclassifiable repos fall back to
+  # the full-list behaviour. min_groups_covered is implicit in this
+  # mode — every required (universal + language) group must be present.
+  language_aware: true
   groups:
     - python_pycache
     - node_modules
@@ -29,45 +42,63 @@ match:
     - coverage
     - terraform
     - logs
+    - swift_build
 fix_hint: |
-  Run `gitignore.io` for your stack and paste the result into
-  `.gitignore`. At minimum, cover: `__pycache__`, `node_modules`,
-  `.env`, `dist/`, `build/`, `*.log`, IDE settings, coverage dirs.
+  Generate a `.gitignore` for your stack (e.g. https://gitignore.io)
+  and paste the result. At minimum, every repo needs the universal
+  groups (`.env`, IDE state, `*.log`); the rest are scored against
+  the detected primary language only.
 fix_template:
-  # ``append_to_file`` so the patch works whether the repo already has a
-  # `.gitignore` (we add the missing groups) or has none (it gets
-  # created). The appended block is intentionally generic — covers the
-  # 7+ groups this rule scores on without language-specific assumptions.
+  # ``append_to_file`` so the patch works whether the repo already has
+  # a `.gitignore` (we add the missing groups) or has none (it gets
+  # created). The appended block intentionally ships the union of
+  # common ecosystems — the matcher only scores against the detected
+  # language's groups, so over-ignoring is harmless.
   kind: append_to_file
   path: .gitignore
   content: |
-    # --- agent-readiness: cover common build artefacts and secrets ---
+    # --- agent-readiness: cover artefacts + secrets ---
+    # Secrets / env (universal — every repo)
+    .env
+    .env.*
+    !.env.example
+
+    # IDE / OS junk (universal — every repo)
+    .idea/
+    .vscode/
+    .DS_Store
+
+    # Logs (universal — every repo)
+    *.log
+
     # Python
     __pycache__/
     *.py[cod]
     *.egg-info/
     .venv/
     venv/
+    .pytest_cache/
+    htmlcov/
 
     # JS / Node
     node_modules/
 
-    # Build / dist
+    # JVM (Java / Kotlin / Scala) / Rust
+    target/
+    *.class
+    .metals/
+    .bloop/
+
+    # Build outputs (Python / JS / C++)
     dist/
     build/
-    target/
 
-    # IDE / OS junk
-    .idea/
-    .vscode/
-    .DS_Store
+    # Go
+    vendor/
 
-    # Coverage / logs / env
-    coverage/
-    htmlcov/
-    *.log
-    .env
-    .env.*
+    # Swift / Xcode
+    .build/
+    DerivedData/
 insight_query: .gitignore build artifacts secrets node_modules pycache .env coverage
 action:
   kind: edit_gitignore
@@ -86,19 +117,39 @@ action:
     - __pycache__/
 verify:
   command: |
-    grep -E '^(\.env|node_modules|\.venv|dist|__pycache__)' .gitignore >/dev/null
-  description: .gitignore must cover the standard junk groups.
+    grep -E '^(\.env|\.idea|\*\.log)' .gitignore >/dev/null
+  description: |
+    .gitignore must cover the universal groups (dotenv / IDE junk /
+    logs). The full language-aware check is enforced by the matcher
+    against the detected primary language; this verify command only
+    asserts the always-required floor.
 fix_prompt: |
-  Without this, an agent that runs `pip install` / `npm install` / a
-  build accidentally commits artefact directories and pollutes every
-  future diff — and worse, `.env` files can leak secrets into history.
+  Without this, an agent that runs the project's build or install
+  step accidentally commits artefact directories and pollutes every
+  future diff — and worse, `.env` files can leak secrets into
+  history.
 
-  Append these groups to `.gitignore` (creating the file if needed):
-  `__pycache__/`, `*.py[cod]`, `.venv/`, `venv/`, `node_modules/`,
-  `dist/`, `build/`, `target/`, `.idea/`, `.vscode/`, `.DS_Store`,
-  `coverage/`, `htmlcov/`, `*.log`, `.env`, `.env.*`, `!.env.example`.
-  The negation on `.env.example` keeps the placeholder file tracked
-  while ignoring real `.env` files.
+  Three groups are required for *every* repo regardless of language:
 
-  Verify with: `grep -E '^(\.env|node_modules|\.venv|dist|__pycache__)'
-  .gitignore`
+  - **Secrets**: `.env`, `.env.*`, and `!.env.example` (the negation
+    keeps the placeholder tracked while ignoring real `.env` files).
+  - **IDE / OS junk**: `.idea/`, `.vscode/`, `.DS_Store`, `*.swp`.
+  - **Logs**: `*.log`.
+
+  Then add the build-artefact groups that match {primary_language}
+  (the matcher only scores you on these for the language it detected,
+  so other ecosystems' patterns are optional padding):
+
+  - **Python**: `__pycache__/`, `*.py[cod]`, `*.egg-info/`,
+    `.venv/`, `venv/`, `.pytest_cache/`, `htmlcov/`, `dist/`,
+    `build/`.
+  - **JS / TS**: `node_modules/`, `dist/`, `coverage/`.
+  - **Go**: `vendor/`.
+  - **Rust**: `target/`.
+  - **JVM (Java / Kotlin / Scala / Clojure)**: `target/`, `*.class`,
+    `.metals/`, `.bloop/` (Scala-specific build-state dirs).
+  - **Swift**: `.build/`, `DerivedData/`.
+
+  Verify with: `grep -E '^(\.env|\.idea|\*\.log)' .gitignore`
+  (universal-group check; the language-specific check is
+  ecosystem-dependent).
