@@ -579,6 +579,135 @@ class TestGitignoreCoverage(unittest.TestCase):
             )
             self.assertEqual(findings, [])
 
+    def test_language_aware_python_allows_one_miss_in_lang_groups(self):
+        """Regression test for the v2.4.0 -> v2.4.3 calibration finding:
+        v2.4.0 made language_aware mode strict ("every required group
+        must be present"), which silently tightened the bar for
+        ecosystems with >=3 language-specific groups. Python had 4
+        language groups + 3 universals = 7 in scope; a previously
+        passing repo missing only `coverage` newly fired. The 2026-05-21
+        calibration cycle measured this as a +4.1pp regression in the
+        full v3 cohort. The fix allows one language-group miss when the
+        detected ecosystem has >=3 language-specific groups in scope.
+        Universals stay non-negotiable."""
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import (
+            match_gitignore_coverage,
+        )
+        # Python repo missing only the `coverage` group — three universals
+        # present (`.env`, `.idea/`, `*.log`), plus `__pycache__`,
+        # `.egg-info/`, `dist/` — but no `htmlcov/` / `.pytest_cache/` /
+        # `coverage/` patterns.
+        gi = (
+            ".env\n"
+            ".idea/\n"
+            "*.log\n"
+            "__pycache__/\n"
+            "*.egg-info/\n"
+            "dist/\n"
+            # NB: no coverage/ pattern
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "pyproject.toml": "[project]\nname='x'\n",
+                    ".gitignore": gi,
+                    "src/a.py": "x\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": [
+                        "python_pycache", "node_modules", "dotenv", "dist_build",
+                        "go_vendor", "rust_target", "jvm_class", "ide_junk",
+                        "python_egg_info", "coverage", "terraform", "logs",
+                        "swift_build",
+                    ],
+                    "min_groups_covered": 7,
+                },
+            )
+            # Was firing in v2.4.0 (strict). After the fix: one language
+            # miss in a 4-lang-group ecosystem is allowed.
+            self.assertEqual(findings, [], "Python repo missing only `coverage` should pass under v2.4.3+ semantics")
+
+    def test_language_aware_python_still_fires_on_universal_miss(self):
+        """Universals (dotenv, ide_junk, logs) must stay non-negotiable
+        even with the miss-budget tolerance. A Python repo that covers
+        all 4 language groups but lacks `.env` should still fire."""
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import (
+            match_gitignore_coverage,
+        )
+        # Missing .env entirely (no dotenv group), but has everything else.
+        gi = (
+            ".idea/\n"
+            "*.log\n"
+            "__pycache__/\n"
+            "*.egg-info/\n"
+            "dist/\n"
+            "htmlcov/\n"
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "pyproject.toml": "[project]\nname='x'\n",
+                    ".gitignore": gi,
+                    "src/a.py": "x\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": [
+                        "python_pycache", "node_modules", "dotenv", "dist_build",
+                        "go_vendor", "rust_target", "jvm_class", "ide_junk",
+                        "python_egg_info", "coverage", "terraform", "logs",
+                        "swift_build",
+                    ],
+                    "min_groups_covered": 7,
+                },
+            )
+            self.assertEqual(len(findings), 1, "Missing universal group must always fire")
+            self.assertIn("dotenv", findings[0][2])
+
+    def test_language_aware_rust_still_strict_on_single_lang_group(self):
+        """Rust has only one language-specific group in scope
+        (`rust_target`). The miss-budget tolerance kicks in only when
+        lang_count >= 3; with lang_count=1 the matcher stays strict so
+        the language signal isn't silently waived."""
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import (
+            match_gitignore_coverage,
+        )
+        # Three universals present, but `target/` missing.
+        gi = ".env\n.idea/\n*.log\n"
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "Cargo.toml": '[package]\nname = "x"\nversion = "0.1.0"\n',
+                    ".gitignore": gi,
+                    "src/main.rs": "fn main() {}\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": [
+                        "python_pycache", "node_modules", "dotenv", "dist_build",
+                        "go_vendor", "rust_target", "jvm_class", "ide_junk",
+                        "python_egg_info", "coverage", "terraform", "logs",
+                        "swift_build",
+                    ],
+                    "min_groups_covered": 7,
+                },
+            )
+            self.assertEqual(len(findings), 1, "Rust repo missing rust_target should still fire")
+            self.assertIn("rust_target", findings[0][2])
+
     def test_language_aware_falls_back_when_no_language_detected(self):
         """If the engine can't classify the repo (no manifest, no
         recognised file extensions), the matcher falls back to the

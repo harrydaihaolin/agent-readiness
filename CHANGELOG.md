@@ -5,6 +5,67 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.4] - 2026-05-21
+
+The "language-aware gitignore matcher shouldn't tighten the bar"
+hotfix. v2.4.3 shipped `language_aware: true` for
+`gitignore.covers_junk`, which narrowed the *requested* group set to
+universals + detected-language groups — but inadvertently switched the
+threshold semantics from "7-of-13 groups required" (v1.5.0 default) to
+"every filtered group required" (v2.4.3 strict). A Python repo that
+covered six of the now-seven required groups but lacked a
+`htmlcov/` / `.coverage` pattern silently flipped from passing into a
+finding. The 2026-05-21 calibration cycle measured this as a **+4.1 pp
+regression** on the full 1000-repo v3 cohort
+([daily-scan 26209874024](https://github.com/harrydaihaolin/agent-readiness-leaderboard/actions/runs/26209874024)),
+exactly the kind of footgun the language-aware mode was supposed to
+*prevent*.
+
+### Why
+
+The cycle started as a council-reviewed plan
+([`.council/self-improvement-2026-05-21/PLAN.md`](https://github.com/harrydaihaolin/agent-readiness-research/blob/self-improvement/cohort-fp-fn-2026-05-21/.council/self-improvement-2026-05-21/PLAN.md)
+in `agent-readiness-research`) with two pre-declared targets we
+expected v2.4.0 to clear by ≥ 5 pp:
+`safety.gitignore.covers_junk` and `feedback.manifest.detected`. The
+n=97 language-stratified paired sample showed both flat — but the
+parallel full-cohort daily scan, which we don't normally watch in the
+same loop, showed `gitignore.covers_junk` going the *wrong* direction.
+Reading the matcher revealed the threshold tightening that the YAML
+config never asked for.
+
+### Fixed
+
+- **`rules_eval/private_matchers/gitignore_coverage.py`** —
+  `language_aware: true` now uses an explicit two-stage check
+  ("all universal groups required; one language-group miss allowed
+  when the ecosystem has ≥ 3 language-specific groups in scope")
+  instead of "every effective_requested group required". Python /
+  TypeScript / JavaScript repos missing only `coverage` /
+  `python_egg_info` / equivalents stop firing; Rust / Scala /
+  Clojure repos (smaller language-group sets) stay strict so the
+  language signal isn't silently waived. Unclassifiable repos keep
+  the v1.5.0 fallback unchanged.
+- **`tests/test_private_matchers.py`** — three new regression tests
+  cover the Python "missing only coverage" case, the universal-miss
+  case (always fires), and the Rust single-language-group case (still
+  strict). All 47 matcher tests + the full 172-test suite green.
+
+### Evidence
+
+- [`agent-readiness-research`/`research/aaif_evidence/2026-05-21_calibration_cycle.md`](https://github.com/harrydaihaolin/agent-readiness-research/blob/self-improvement/cohort-fp-fn-2026-05-21/research/aaif_evidence/2026-05-21_calibration_cycle.md)
+  — full Phase-1 (TFR bands over 993 v3 repos), Phase-2 (n=97 paired
+  diff), Phase-3 (LLM-judge: **D1 0.44 → 1.00, D2 0.44 → 1.00,
+  D3 0.38 → 0.72** — the actionability rewrites are working) and
+  Phase-4 (this fix) artefacts. Designed to feed the next AAIF
+  qualification cycle.
+- The pre-declared targets failing to clear on the v3 cohort is
+  itself a finding: the v3 cohort is GitHub-topic-seeded and
+  under-represents the JVM / Clojure / Erlang / OCaml / Julia / R
+  population the v2.4.3 fix targets (zero Scala, 1 Clojure, 1 Julia
+  in 993 repos). Building a JVM-skewed cohort is queued as a
+  follow-up research item.
+
 ## [2.4.3] - 2026-05-21
 
 The "stop score-chasing the wrong ecosystem" release. Engine-side

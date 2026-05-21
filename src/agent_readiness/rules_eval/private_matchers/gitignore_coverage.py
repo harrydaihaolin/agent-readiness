@@ -110,6 +110,29 @@ def _required_groups(
     return [g for g in requested if g in required]
 
 
+def _language_aware_miss_budget(effective_requested: list[str]) -> int:
+    """How many language-group misses are tolerated in language_aware mode.
+
+    The v2.4.0 implementation hard-required *every* group in the
+    universal+language-specific filter, which silently tightened the
+    bar relative to the pre-language-aware behaviour for ecosystems
+    with three or more language-specific groups (Python ended up
+    needing all 7 groups, where v1.5.0 only required 7-of-13). A
+    single missing `coverage` or `python_egg_info` pattern then
+    flipped a previously-passing repo into a finding.
+
+    The fix keeps universal groups (`dotenv`, `ide_junk`, `logs`)
+    non-negotiable — any universal miss still fires the rule — but
+    allows one language-group miss when the detected ecosystem has at
+    least three language-specific groups in scope. Smaller language
+    sets (Rust's single `rust_target`, Scala's `jvm_class` +
+    `rust_target`) stay strict so the rule still differentiates
+    between ecosystem-aware and ecosystem-blind `.gitignore` files.
+    """
+    lang_count = sum(1 for g in effective_requested if g not in _UNIVERSAL_GROUPS)
+    return 1 if lang_count >= 3 else 0
+
+
 def match_gitignore_coverage(
     ctx: RepoContext, cfg: dict[str, Any]
 ) -> list[tuple[str | None, int | None, str]]:
@@ -127,9 +150,11 @@ def match_gitignore_coverage(
     language_aware = bool(cfg.get("language_aware", False))
 
     # Under language_aware mode the effective requested set is the
-    # universal + detected-language groups; ``min_required`` then means
-    # "all of these required groups must be present" (i.e. it's
-    # implicitly the size of the filtered set, not the YAML number).
+    # universal + detected-language groups; universals must all be
+    # present, but language-specific groups get a small miss-budget so
+    # the language-aware narrowing doesn't *tighten* the bar relative
+    # to the pre-language-aware behaviour (see
+    # ``_language_aware_miss_budget`` docstring).
     if language_aware:
         # Local import keeps the matcher module free of any heavy
         # imports at engine startup; the probe is cheap.
@@ -140,10 +165,8 @@ def match_gitignore_coverage(
         primary = _detect_primary_language(ctx)
         detected = {primary} if primary else set()
         effective_requested = _required_groups(requested, detected)
-        min_required = len(effective_requested)
     else:
         effective_requested = requested
-        min_required = min_required_cfg
 
     missing: list[str] = []
     for name in effective_requested:
@@ -156,10 +179,22 @@ def match_gitignore_coverage(
         if not any(pat.search(text) for pat in patterns):
             missing.append(name)
 
-    covered = len(effective_requested) - len(missing)
-    if covered >= min_required:
-        return []
+    if language_aware and detected:
+        # Universal misses always fire. Language misses get a small
+        # tolerance (see ``_language_aware_miss_budget``).
+        universal_misses = [g for g in missing if g in _UNIVERSAL_GROUPS]
+        language_misses = [g for g in missing if g not in _UNIVERSAL_GROUPS]
+        miss_budget = _language_aware_miss_budget(effective_requested)
+        if not universal_misses and len(language_misses) <= miss_budget:
+            return []
+    else:
+        # Non-language-aware (or unclassifiable repo): use the
+        # configured coverage threshold like v1.5.0 did.
+        covered = len(effective_requested) - len(missing)
+        if covered >= min_required_cfg:
+            return []
 
+    covered = len(effective_requested) - len(missing)
     return [(
         ".gitignore", None,
         f".gitignore covers {covered}/{len(effective_requested)} groups; missing: {', '.join(missing)}.",
