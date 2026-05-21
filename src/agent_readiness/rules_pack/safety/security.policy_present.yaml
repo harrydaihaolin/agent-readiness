@@ -6,11 +6,12 @@ title: Security policy (SECURITY.md) present
 weight: 0.6
 severity: info
 explanation: |
-  A SECURITY.md (or .github/SECURITY.md / docs/SECURITY.md) tells
-  agents and reporters where to send vulnerability disclosures and what
-  the project's response window is. Without it, a coding agent that
-  finds a security issue has no documented escalation path and may
-  default to opening a public issue.
+  Agents that find a security issue with no SECURITY.md (or
+  .github/SECURITY.md / docs/SECURITY.md) have no documented
+  escalation path and may default to opening a public issue,
+  leaking the vulnerability before a fix lands. SECURITY.md tells
+  agents and reporters where to send vulnerability disclosures and
+  what the project's response window is.
 match:
   type: path_glob
   require_globs:

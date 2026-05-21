@@ -28,15 +28,16 @@ title: Large source files
 weight: 0.5
 severity: warn
 explanation: |
-  Files over 3000 lines or 300 KB exceed an agent's working memory in
-  a single read and force a chunked-reading pattern that loses
-  context across chunk boundaries. This rule excludes lock files,
-  generated data, binary assets, long-form tests, vendored
-  third-party code, and build/template artefacts — which are large
-  but not "source" files an agent would meaningfully edit. Thresholds
-  recalibrated in v2.0.1 (3000 lines / 300 KB) from v1.5.0's 1500 /
-  150 KB setting after EXP-2 fire-rate measurement on the v3.2 cohort;
-  see the rule comment block for cohort calibration history.
+  Agents reading a 3000+-line file exceed working memory in a single
+  pass and are forced into chunked reads that lose context across
+  boundaries — files over 3000 lines or 300 KB exceed that budget.
+  This rule excludes lock files, generated data, binary assets,
+  long-form tests, vendored third-party code, and build/template
+  artefacts — which are large but not "source" files an agent would
+  meaningfully edit. Thresholds recalibrated in v2.0.1 (3000 lines /
+  300 KB) from v1.5.0's 1500 / 150 KB setting after EXP-2 fire-rate
+  measurement on the v3.2 cohort; see the rule comment block for
+  cohort calibration history.
 match:
   type: file_size
   threshold_lines: 3000

@@ -5,6 +5,65 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.2] - 2026-05-21
+
+The "agent-led explanations land in the prompts" release. Re-vendors
+the upstream rule pack so every `explanation` field — and therefore
+the lede sentence of every `fix_prompt` an agent reads — leads with
+the agent consequence, not the abstract code-quality framing. Zero
+engine code changes; this is a pure rules-pack refresh.
+
+### Changed (vendored rules)
+
+- Re-vendored `agent-readiness-rules` from **v2.2.0 → v2.3.0**
+  (`scripts/vendor_rules.sh v2.3.0`). Highlights of the upstream change:
+  - 23 of 38 rules had their `explanation` lede rewritten so the
+    first sentence answers "what does the agent lose if this is
+    ignored?" instead of describing the abstract code/config state.
+    Mirrors the existing `Without this, an agent...` openers on
+    `fix_prompt` and gives the two fields a single voice.
+  - The other 15 rules already led with agent / "an agent" prose
+    and are byte-identical post-rewrite.
+  - **No schema change.** `action`, `verify`, `fix_prompt`,
+    `match`, and `context_probe` are byte-identical on every rule.
+    A reviewer reading `git diff src/agent_readiness/rules_pack/`
+    sees only `explanation` text changes plus the bumped
+    `pack_version` (2.2.0 → 2.3.0) in `manifest.toml`.
+
+### Why
+
+Before v2.3.0, `agent-readiness scan --json` could ship two paragraphs
+of friction text whose *frame* disagreed: the structured `explanation`
+treated the rule as an abstract code-quality concern ("High cyclomatic
+complexity means many independent control-flow paths..."), while
+`fix_prompt` led with the agent consequence ("Without this, an agent
+editing a high-CC function has to reason across every branch..."). An
+agent (or a human) reading the scan output had to mentally reconcile
+the two voices. v2.3.0 settles on the agent-led voice for both fields,
+so the explanation now reads as the start of the same paragraph the
+`fix_prompt` finishes.
+
+This is the *copy* half of the COPY-O3 protocol (council 2026-05-20
+verdict on the legacy `EXP-1` backlog item, renamed in the same pass
+to clear an id collision with the shipped action contract). The
+*measurement* half — an `O3` LLM-judge run that grades the explanation
+field in isolation against an 0.80 YES-rate gate — ships in
+`agent-readiness-research/scripts/evaluate_actionability.py
+--objective explanation`; that gate is inert until an operator with a
+`GEMINI_API_KEY` produces both a v2.2.0 baseline and a v2.3.0
+post-rewrite measurement (`data/exp_o3_baseline.json` scaffold ships
+the reproduction commands).
+
+### Validation
+
+- `python3 -m pytest -q`: 156 passed, 1 skipped (no regression from
+  the vendored rules pack).
+- `scripts/vendor_rules.sh v2.3.0` writes a tarball SHA into
+  `src/agent_readiness/rules_pack/MANIFEST` (audit trail; confirms
+  the bytes match the released tag, not a 404 page).
+- `src/agent_readiness/rules_pack/manifest.toml` `pack_version` is
+  `"2.3.0"` post-vendor.
+
 ## [2.4.1] - 2026-05-20
 
 The "language tables catch up to the prompt prose" release. Pairs the

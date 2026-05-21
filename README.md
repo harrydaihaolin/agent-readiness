@@ -28,6 +28,11 @@ Top friction (fix these first):
   2. agent_docs.present — no AGENTS.md / CLAUDE.md / .cursorrules at root
   3. headless.no_setup_prompts — README mentions "log in to the dashboard"
      during setup; agents can't traverse this
+
+Every WARN/ERROR finding also carries a paste-ready `fix_prompt` block
+(one paragraph of agent-led prose + a verify command) so you can hand it
+straight to your coding agent. Pipe `--json` to see them, or use the MCP
+server's `list_friction(path)` tool.
 ```
 
 ## Install
@@ -51,6 +56,11 @@ The scanner is also packaged as a Claude Code
 [Agent Skill](https://agentskills.io/specification). Ask your agent
 *"score this repo for agent readiness"* and it scans + fixes via the
 same scoring engine as the CLI.
+
+The MCP server exposes `scan_repo(path)` (full scan + score) and
+`list_friction(path)` (every WARN/ERROR with its paste-ready
+`fix_prompt`, sorted by `score_impact` desc). Either call returns
+the same agent-led prose the CLI prints.
 
 **Claude Code (recommended):** the plugin bundles the MCP server config
 — no manual JSON paste.

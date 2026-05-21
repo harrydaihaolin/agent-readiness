@@ -6,13 +6,13 @@ title: AGENTS.md documents CI monitoring as feedback
 weight: 0.75
 severity: warn
 explanation: |
-  CI is the main automated feedback channel once an agent pushes a
-  branch. repos that never tell agents to watch workflow results or to
-  treat failing checks as something to fix (not noise) see agents land
-  red PRs, declare "done," and disappear — the same failure mode as
-  missing hooks, only slower. Root `AGENTS.md` should explicitly bind
-  **monitor CI / checks → read failures → fix and iterate** into the
-  agent contract.
+  Agents that push a PR without an explicit contract to watch CI
+  declare "done" before checking whether the build went red — the
+  feedback loop is open-circuited and the same failure mode as
+  missing hooks, only slower. CI is the main automated feedback
+  channel once a branch is pushed; the root `AGENTS.md` should
+  explicitly bind **monitor CI / checks → read failures → fix and
+  iterate** into the agent contract.
 match:
   type: composite
   op: and

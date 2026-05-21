@@ -6,11 +6,12 @@ title: Coverage configuration hint
 weight: 0.5
 severity: info
 explanation: |
-  Coverage configuration (`.coveragerc`, `codecov.yml`, `coveralls.yml`,
-  `pyproject.toml [tool.coverage.*]`) signals that the repo tracks which
-  code is exercised by tests. Agents benefit from knowing what is and
-  isn't tested before making a change, so they can target tests
-  appropriately. Community-contributed demo rule.
+  Agents making a change need to know which lines are covered by
+  tests so they can target new tests appropriately and avoid adding
+  behaviour into an untested path. Coverage configuration
+  (`.coveragerc`, `codecov.yml`, `coveralls.yml`,
+  `pyproject.toml [tool.coverage.*]`) is the signal that the repo
+  tracks this. Community-contributed demo rule.
 match:
   type: composite
   op: or

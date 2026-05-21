@@ -6,11 +6,12 @@ title: Issue / PR templates and CODEOWNERS present
 weight: 0.7
 severity: info
 explanation: |
-  Issue templates, PR templates, and CODEOWNERS make agent-opened PRs
-  routable: the right reviewer is auto-assigned, the right metadata
-  fields are filled in, and the project's expectations are explicit.
-  Repos without these get a flood of agent PRs that all look the same
-  and have no obvious reviewer.
+  Agents opening PRs into a repo without issue / PR templates and a
+  CODEOWNERS file all look the same, have no obvious reviewer, and
+  force the project to absorb the routing cost on every PR. Issue
+  templates, PR templates, and CODEOWNERS make those PRs routable:
+  the right reviewer is auto-assigned, the right metadata fields
+  are filled in, and the project's expectations are explicit.
 match:
   type: composite
   op: or

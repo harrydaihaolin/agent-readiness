@@ -6,11 +6,12 @@ title: Dev container or reproducible workspace configured
 weight: 0.8
 severity: info
 explanation: |
-  A devcontainer / Nix flake / Gitpod config / Vagrantfile lets an
-  agent (or a new contributor) get a reproducible environment without
-  hand-installing system deps. The project that ships one cuts the
-  "wrong runtime version" / "missing system library" class of failure
-  to zero.
+  Agents in a fresh sandbox hit "wrong runtime version" / "missing
+  system library" within minutes of bring-up and can't recover
+  headlessly without a reproducible environment definition. A
+  devcontainer / Nix flake / Gitpod config / Vagrantfile lets the
+  agent (or a new contributor) get that environment without
+  hand-installing system deps and cuts the class of failure to zero.
 match:
   type: composite
   op: or
