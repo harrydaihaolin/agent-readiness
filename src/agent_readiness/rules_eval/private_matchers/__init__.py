@@ -34,6 +34,7 @@ from . import (  # noqa: F401  -- import for side effect (registration)
     naming_search,
     prompt_scan,
     regex_secret_scan,
+    secret_scanning_config,
     setup_command_count,
     tree_aggregate,
 )

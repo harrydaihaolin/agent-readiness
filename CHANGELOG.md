@@ -5,6 +5,95 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.5] - 2026-05-21
+
+The "`safety.gitleaks_config` shouldn't fire on pure-library repos"
+follow-up. v2.4.4 closed the `gitignore_coverage` regression flagged
+by the 2026-05-21 calibration cycle; this release works on the
+*next* FP target surfaced in the same cycle's residue list:
+`safety.gitleaks_config` was firing at 64.9 % top-finding rate on
+the v3 cohort and at 67.4 % (rising) on the n=97 language-stratified
+sample, including JVM library repos with zero credential-handling
+surface area. The Scala-repo complaint from the user's
+`mle-authn-sidecar` report was the canonical case.
+
+### Why
+
+The original rule was a plain `path_glob` — fire when none of a list
+of well-known secret-scanning configs exists. That works on Python
+web apps where every repo touches `os.environ`, but punishes JVM
+numerics packages, OCaml type-system playgrounds, and pure-library
+repos that have no credentials to leak. There was no notion of
+*whether the repo even handles secrets*.
+
+### Added
+
+- **`rules_eval/private_matchers/secret_scanning_config.py`** —
+  new matcher type. Two-stage check:
+  1. **Accept**: if any of the rule's `accept_paths` exists, pass.
+  2. **Precondition**: if no accept path exists *and* the repo
+     shows evidence of handling secrets, fire with a message that
+     names the evidence so the user can see *why* the rule applies
+     to their repo. Evidence comes in four channels:
+     - **Env files**: `.env`, `.env.<env>`, `.envrc` at any path.
+     - **Env-var reads** in source: `os.environ`, `os.getenv`,
+       `process.env.*`, `System.getenv`, `os.Getenv`,
+       `std::env::var`, `ENV[`, `getenv()`, `Sys.getenv`,
+       `Config.fetch :env`, `dotenv!`, `dotenv` library imports.
+     - **Cloud SDK imports**: boto3 / aws-sdk / @aws-sdk/*,
+       google.cloud / @google-cloud/*, azure.identity / @azure/identity,
+       firebase-admin, stripe, twilio, hvac (Vault), database URLs.
+     - **Compose / IaC**: docker-compose `secrets:` / `env_file:`,
+       kubernetes `kind: Secret`, terraform
+       `aws_secretsmanager_secret` / `google_secret_manager_secret`
+       / `azurerm_key_vault_secret` / `vault_generic_secret`, helm
+       `.Values.*Secret`.
+     - **Hardcoded credentials** (mirrors `secrets.basic_scan` so the
+       two rules stay aligned): AWS access keys (`AKIA[A-Z0-9]{16}`),
+       GitHub tokens (`gh[pousr]_…`), Slack tokens (`xox[abprs]-…`),
+       Google API keys (`AIza[A-Za-z0-9_-]{35}`), Stripe live keys
+       (`sk_live_…`/`pk_live_…`), PEM private key headers.
+  3. **Skip silently** when no accept path exists *and* there's no
+     secret-handling surface area — the FP suppression that closes
+     the user's original complaint.
+  The matcher is scoped (`max_files_scanned=200`,
+  `max_bytes_per_file=64000`) so a chatty monorepo doesn't blow the
+  scan budget. `require_precondition: false` degrades the matcher
+  to plain accept-path-presence for downstream packs that want
+  v1.5.0 semantics back.
+
+### Changed
+
+- **`safety.gitleaks_config`** (in `agent-readiness-rules`) — match
+  type flipped from `path_glob` to `secret_scanning_config`. Rule
+  text + `fix_prompt` updated to tell the user *why* the rule fired
+  (which evidence channel triggered it) and that pure-library repos
+  are auto-skipped.
+
+### Evidence
+
+- **Snapshot regen**: the four `agent-readiness-fixtures` snapshots
+  re-rendered cleanly under the new matcher. `good` and `broken`
+  continue to fire (env-file evidence and hardcoded AWS-key
+  evidence respectively); `noisy` and `monorepo` correctly *stop*
+  firing because they have no secret-handling surface area — they
+  were FPs under v1.5.0 / v2.4.4.
+- **Tests**: 11 new behavioural cases in
+  `tests/test_private_matchers.py::TestSecretScanningConfig`
+  (accept-path pass, no-evidence skip, env-var read, dotenv file,
+  cloud SDK import, compose `env_file:` block, terraform secret
+  resource, hardcoded AWS key, JVM repo *with* env reads still
+  fires, `require_precondition: false` degradation, missing-config
+  defensive skip). Full suite: 183 passed, 1 skipped (no
+  regression from the new matcher).
+- **AAIF evidence companion**:
+  `agent-readiness-research/research/aaif_evidence/2026-05-21_calibration_cycle.md`
+  (follow-up #1 in the residue list).
+- **Cohort guard**: `agent-readiness-leaderboard/data/cohorts/jvm_skewed_v1.json`
+  (PR #27) — 144 repos across 12 languages, will be used to
+  measure `safety.gitleaks_config` clearance in the next
+  calibration cycle.
+
 ## [2.4.4] - 2026-05-21
 
 The "language-aware gitignore matcher shouldn't tighten the bar"
