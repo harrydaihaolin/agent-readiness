@@ -5,16 +5,23 @@ the context they need to work effectively in this repository.
 
 ## Quick start
 
+This is a {{PRIMARY_LANGUAGE}} project. The canonical commands an agent
+should be able to copy verbatim:
+
 ```bash
 # Install dependencies
-# <fill in your install command>
+{{INSTALL_COMMAND}}
 
 # Run tests
-# <fill in your test command>
+{{TEST_COMMAND}}
 
 # Run the linter
-# <fill in your lint command>
+{{LINT_COMMAND}}
 ```
+
+If any of the above is wrong for this project (custom runner, monorepo
+layout, etc.), edit it now — an agent will trust this block over
+manifest sniffing.
 
 ## CI and the feedback loop
 

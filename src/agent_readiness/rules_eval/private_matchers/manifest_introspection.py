@@ -12,25 +12,59 @@ from typing import Any
 from agent_readiness.context import RepoContext
 from agent_readiness.rules_eval import register_private_matcher
 
-# Standard fixed-name manifests across ecosystems.
+# Standard fixed-name manifests across ecosystems. Mirrors the language
+# table in ``context_probe._LANGUAGE_BY_MANIFEST`` so anything the engine
+# can probe a language for is *also* a recognised manifest here — i.e.
+# the matcher does not under-fire on Scala / Clojure / Erlang / OCaml /
+# Julia / R / Perl repos just because their canonical manifest name
+# isn't in this tuple.
 _ROOT_MANIFESTS: tuple[str, ...] = (
+    # Python.
     "pyproject.toml", "setup.py", "setup.cfg",
-    "package.json",
-    "Cargo.toml",
-    "go.mod",
-    "Gemfile",
-    "pom.xml", "build.gradle", "build.gradle.kts",
-    "mix.exs",
-    "composer.json",
-    "pubspec.yaml",
-    "Package.swift",
-    "global.json",
-    "deno.json", "deno.jsonc",
-    "stack.yaml", "cabal.project",
-    "flake.nix", "default.nix",
-    "CMakeLists.txt",
-    "WORKSPACE", "WORKSPACE.bazel",
+    "Pipfile",
     "requirements.txt", "requirements-dev.txt", "requirements-test.txt",
+    # JS / TS / Deno.
+    "package.json",
+    "deno.json", "deno.jsonc",
+    "tsconfig.json",
+    # Rust.
+    "Cargo.toml",
+    # Go.
+    "go.mod",
+    # Ruby.
+    "Gemfile",
+    # PHP.
+    "composer.json",
+    # JVM (Java / Kotlin / Scala) — Maven, Gradle, SBT, Mill, Bazel.
+    "pom.xml", "build.gradle", "build.gradle.kts",
+    "build.sbt", "build.sc",
+    "WORKSPACE", "WORKSPACE.bazel",
+    # Elixir.
+    "mix.exs",
+    # Swift.
+    "Package.swift",
+    # Dart / Flutter.
+    "pubspec.yaml",
+    # Clojure.
+    "project.clj", "deps.edn",
+    # Erlang.
+    "rebar.config",
+    # OCaml.
+    "dune-project",
+    # Julia.
+    "Project.toml",
+    # R.
+    "DESCRIPTION",
+    # Perl.
+    "Makefile.PL", "cpanfile",
+    # Haskell.
+    "stack.yaml", "cabal.project",
+    # .NET (also see ``_MANIFEST_SUFFIXES_AT_ROOT_OR_SHALLOW`` below).
+    "global.json",
+    # Nix-managed repos.
+    "flake.nix", "default.nix",
+    # C / C++.
+    "CMakeLists.txt",
 )
 
 # Suffix-driven manifests (.NET project files, .cabal, .gemspec).
@@ -40,9 +74,16 @@ _MANIFEST_SUFFIXES_AT_ROOT_OR_SHALLOW: tuple[str, ...] = (
 )
 
 # Subset of manifests that count when found at depth==2 (monorepo layout).
+# Same shape as ``_ROOT_MANIFESTS`` but limited to the manifests we
+# actually see at ``packages/<name>/<manifest>`` style depth-2 paths in
+# the wild (Python, JS, Rust, Go, JVM). Adding the JVM trio (`pom.xml`,
+# `build.gradle*`, `build.sbt`) keeps the matcher in sync with how Scala
+# / Java monorepos actually lay out their modules.
 _MONOREPO_MANIFESTS: frozenset[str] = frozenset({
     "pyproject.toml", "package.json", "Cargo.toml",
-    "go.mod", "pom.xml", "build.gradle", "build.gradle.kts",
+    "go.mod",
+    "pom.xml", "build.gradle", "build.gradle.kts", "build.sbt",
+    "deps.edn", "project.clj",
 })
 
 
