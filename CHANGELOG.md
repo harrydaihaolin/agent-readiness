@@ -5,6 +5,56 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-05-21
+
+Minor: ships **workspace detection** as a first-class scanner concern,
+exposed via a new `agent-readiness detect <path>` CLI subcommand and
+consumed by the MCP server (next release) and the skill.
+
+The detector classifies a path as one of `single_repo` / `monorepo` /
+`multi_repo_workspace` and returns the wire-stable `detect_v1` envelope
+(repos list, AGENTS.md enrichment + drift warnings, signals fired).
+
+This release also adds a **breaking** behavior change: `agent-readiness
+scan <path>` now exits non-zero with a structured error when `<path>` is
+a multi-repo workspace (a parent directory containing multiple sibling
+`.git/`'d repos). Today's behavior on those paths was to silently score
+the parent as if it were one repo, producing garbage numbers. The error
+points at `agent-readiness detect <path>` so the user can pick the
+right repo and re-run. Callers that were piping `scan` on workspace
+roots will need to update; everyone else is unaffected.
+
+### Added
+
+- **`src/agent_readiness/workspace_detect.py`** — new module: `detect(path)
+  -> WorkspaceDetection`. Classifies single repos via three signals
+  (explicit workspace declaration, convention dir + child manifests,
+  manifest density), multi-repo workspaces via one-level child `.git/`
+  walking, and falls back to manifest-density when no `.git` is present
+  anywhere. Parses `AGENTS.md` tables (this very workspace's format) for
+  display-name enrichment + drift warnings.
+- **`agent-readiness detect <path>`** — new CLI subcommand. Default
+  output is a human-readable summary; `--json` emits the structured
+  envelope; `--quiet` suppresses the summary for clean piping. Exit code
+  0 for any resolved classification, 2 for input errors.
+- **`tests/test_workspace_detect.py`** — 43-test suite covering every
+  Signal A manifest, Signal B convention dirs, Signal C density,
+  step-2 multi-repo walking, step-3 no-git fallback, AGENTS.md
+  enrichment + both drift kinds, and a dogfood test that the
+  agent-readiness checkout itself classifies as `single_repo`.
+
+### Changed
+
+- **`agent-readiness scan <path>`** — now calls `detect()` first. On
+  `multi_repo_workspace` classification, exits 2 with a structured JSON
+  error on stderr (`{"error": "multi_repo_workspace", "hint": ..., "detected_repos": [...], "root": ..., "version": "detect_v1"}`). This
+  is the breaking change called out above.
+
+### Wire format
+
+`detect_v1` — bump this string when the envelope shape changes; the MCP
+server and skill check it before parsing.
+
 ## [2.4.6] - 2026-05-21
 
 Vendor-only release. Picks up `agent-readiness-rules` v2.4.1 so the
