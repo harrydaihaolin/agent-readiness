@@ -57,6 +57,7 @@ class TestRegistration(unittest.TestCase):
         "gh_cli_query", "naming_search", "tree_aggregate",
         "cross_file_consistency", "prompt_scan", "setup_command_count",
         "manifest_introspection", "gitignore_coverage",
+        "secret_scanning_config",
     }
 
     def test_all_oss_private_matchers_registered(self):
@@ -733,6 +734,227 @@ class TestGitignoreCoverage(unittest.TestCase):
             )
             # Only 3/5 covered; missing python_pycache + node_modules.
             self.assertEqual(len(findings), 1)
+
+
+class TestSecretScanningConfig(unittest.TestCase):
+    """``secret_scanning_config`` replaces a plain ``path_glob`` for
+    ``safety.gitleaks_config`` with a precondition gate so JVM /
+    long-tail-language repos that don't handle credentials aren't
+    penalised for missing a tool they have no use for."""
+
+    ACCEPT_PATHS = [
+        ".gitleaks.toml",
+        ".gitleaks.yaml",
+        ".secrets.baseline",
+        ".pre-commit-config.yaml",
+        ".github/workflows/gitleaks.yml",
+    ]
+
+    def _cfg(self, **overrides):
+        cfg = {"accept_paths": self.ACCEPT_PATHS, "require_precondition": True}
+        cfg.update(overrides)
+        return cfg
+
+    def test_pass_when_accept_path_exists(self):
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    ".gitleaks.toml": "title = 'x'\n",
+                    "src/app.py": "import os\nos.environ.get('SECRET')\n",
+                },
+            )
+            self.assertEqual(match_secret_scanning_config(ctx, self._cfg()), [])
+
+    def test_skip_when_no_secret_handling_evidence(self):
+        """Pure-library Scala repo with no env reads, no cloud SDKs,
+        no .env files. The matcher must skip silently rather than
+        firing on a repo that has no need for gitleaks."""
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "Math library\n",
+                    "build.sbt": 'name := "mathlib"\n',
+                    "src/main/scala/Math.scala":
+                        "object Math {\n  def add(a: Int, b: Int): Int = a + b\n}\n",
+                },
+            )
+            self.assertEqual(match_secret_scanning_config(ctx, self._cfg()), [])
+
+    def test_fires_on_env_var_read_in_python(self):
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    "src/app.py":
+                        "import os\n"
+                        "API_KEY = os.environ['STRIPE_KEY']\n",
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("env-var read", findings[0][2])
+            self.assertIn("None of these expected paths exist", findings[0][2])
+
+    def test_fires_on_dotenv_file(self):
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    ".env.example": "DATABASE_URL=postgres://localhost/x\n",
+                    "src/app.py": "print('hi')\n",
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("env file", findings[0][2])
+
+    def test_fires_on_cloud_sdk_import(self):
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    "src/aws.py":
+                        "import boto3\n"
+                        "client = boto3.client('s3')\n",
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("AWS SDK", findings[0][2])
+
+    def test_fires_on_compose_secrets_block(self):
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    "docker-compose.yml":
+                        "services:\n  app:\n    image: x\n    env_file: .env\n",
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("compose env_file", findings[0][2])
+
+    def test_fires_on_terraform_secret_resource(self):
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    "infra/main.tf":
+                        'resource "aws_secretsmanager_secret" "db" {\n'
+                        '  name = "prod/db/password"\n'
+                        '}\n',
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("terraform secret", findings[0][2])
+
+    def test_fires_on_hardcoded_aws_key(self):
+        """A repo that bakes in an AWS key has no env reads and no
+        cloud SDK imports, but it absolutely needs gitleaks. The
+        hardcoded-credential evidence pathway must catch this."""
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    "src/keys.py":
+                        '# Example-only secret pattern (NOT a real key):\n'
+                        'AWS_KEY = "AKIAIOSFODNN7EXAMPLE"\n',
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("hardcoded AWS access key", findings[0][2])
+
+    def test_jvm_scala_repo_with_env_reads_still_fires(self):
+        """Negative-of-negative: a JVM repo that does handle creds
+        (System.getenv) should still fire. The precondition is FP
+        suppression, not blanket exemption for JVM."""
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    "build.sbt": 'name := "svc"\n',
+                    "src/main/scala/Main.scala":
+                        "object Main {\n"
+                        "  def main(args: Array[String]): Unit = {\n"
+                        '    val key = System.getenv("API_KEY")\n'
+                        "    println(key)\n"
+                        "  }\n"
+                        "}\n",
+                },
+            )
+            findings = match_secret_scanning_config(ctx, self._cfg())
+            self.assertEqual(len(findings), 1)
+            self.assertIn("env-var read", findings[0][2])
+
+    def test_require_precondition_false_degrades_to_path_glob(self):
+        """Downstream packs that want v1.5.0 semantics back can set
+        require_precondition: false; the matcher then fires whenever
+        no accept_path exists, regardless of evidence."""
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            # No env reads, no cloud SDKs — but with require_precondition=False
+            # we still fire (legacy mode).
+            ctx = _make_ctx(
+                Path(td),
+                {"README.md": "Math library\n", "src/Math.scala": "object Math {}\n"},
+            )
+            findings = match_secret_scanning_config(
+                ctx, self._cfg(require_precondition=False)
+            )
+            self.assertEqual(len(findings), 1)
+            self.assertNotIn("This repo handles secrets", findings[0][2])
+
+    def test_missing_accept_paths_config_returns_no_findings(self):
+        """Defensive: a rule with no accept_paths is misconfigured.
+        Skip rather than firing noisily."""
+        from agent_readiness.rules_eval.private_matchers.secret_scanning_config import (
+            match_secret_scanning_config,
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td), {"src/app.py": "import os\nos.environ['X']\n"})
+            self.assertEqual(match_secret_scanning_config(ctx, {}), [])
 
 
 class TestGhCliQuery(unittest.TestCase):
