@@ -390,6 +390,40 @@ class TestManifestIntrospection(unittest.TestCase):
             self.assertEqual(len(findings), 1)
             self.assertIn("No project manifest", findings[0][2])
 
+    def test_clean_on_scala_sbt_repo(self):
+        """``build.sbt`` is a first-class manifest. A pure-Scala repo
+        with no other manifest should not fire the "no manifest" finding.
+        Pre-fix this would fire because ``_ROOT_MANIFESTS`` listed
+        ``pom.xml`` / ``build.gradle*`` but not ``build.sbt``.
+        """
+        from agent_readiness.rules_eval.private_matchers.manifest_introspection import match_manifest_introspection
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td), {"build.sbt": "name := \"x\"\n"})
+            self.assertEqual(
+                match_manifest_introspection(ctx, {"mode": "any_manifest_present"}),
+                [],
+            )
+
+    def test_clean_on_clojure_deps_repo(self):
+        """``deps.edn`` (modern Clojure CLI) is a first-class manifest."""
+        from agent_readiness.rules_eval.private_matchers.manifest_introspection import match_manifest_introspection
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td), {"deps.edn": "{:deps {}}"})
+            self.assertEqual(
+                match_manifest_introspection(ctx, {"mode": "any_manifest_present"}),
+                [],
+            )
+
+    def test_clean_on_julia_project_repo(self):
+        """``Project.toml`` is the canonical Julia manifest."""
+        from agent_readiness.rules_eval.private_matchers.manifest_introspection import match_manifest_introspection
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(Path(td), {"Project.toml": "name = \"X\"\n"})
+            self.assertEqual(
+                match_manifest_introspection(ctx, {"mode": "any_manifest_present"}),
+                [],
+            )
+
 
 class TestGitignoreCoverage(unittest.TestCase):
     def test_fires_when_no_gitignore(self):
@@ -432,6 +466,144 @@ class TestGitignoreCoverage(unittest.TestCase):
             )
             self.assertEqual(len(findings), 1)
             self.assertIn("typo_name", findings[0][2])
+
+    def test_language_aware_passes_on_scala_repo(self):
+        """A Scala repo whose .gitignore covers JVM + universal groups
+        but not python/node/go ones should pass under language_aware mode.
+
+        This is the literal repro for the score-chasing complaint:
+        before language_aware, the matcher required 7/12 groups and a
+        bare-Scala repo could only cover ~5, so it fired and pulled the
+        safety pillar below 100. The post-fix expectation is that the
+        rule passes with no findings because every Scala-relevant group
+        is covered.
+        """
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import match_gitignore_coverage
+        scala_gitignore = (
+            "*.class\n"
+            "target/\n"
+            ".idea/\n"
+            ".vscode/\n"
+            ".DS_Store\n"
+            ".env\n"
+            ".env.*\n"
+            "*.log\n"
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "build.sbt": "name := \"x\"\n",
+                    ".gitignore": scala_gitignore,
+                    "src/main/scala/App.scala": "object App\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": [
+                        "python_pycache", "node_modules", "dotenv", "dist_build",
+                        "go_vendor", "rust_target", "jvm_class", "ide_junk",
+                        "python_egg_info", "coverage", "terraform", "logs",
+                    ],
+                    "min_groups_covered": 7,
+                },
+            )
+            self.assertEqual(findings, [])
+
+    def test_language_aware_fires_on_scala_repo_missing_secrets_group(self):
+        """Language-aware mode still enforces the universal groups
+        (dotenv / ide_junk / logs). A Scala repo that ignores `target/`
+        and `*.class` but forgets `.env` should still fire — the dotenv
+        risk is language-agnostic.
+        """
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import match_gitignore_coverage
+        scala_gitignore = (
+            "*.class\n"
+            "target/\n"
+            ".idea/\n"
+            "*.log\n"
+            # no .env line on purpose.
+        )
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "build.sbt": "name := \"x\"\n",
+                    ".gitignore": scala_gitignore,
+                    "src/main/scala/App.scala": "object App\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": [
+                        "python_pycache", "node_modules", "dotenv", "dist_build",
+                        "go_vendor", "rust_target", "jvm_class", "ide_junk",
+                        "python_egg_info", "coverage", "terraform", "logs",
+                    ],
+                    "min_groups_covered": 7,
+                },
+            )
+            self.assertEqual(len(findings), 1)
+            self.assertIn("dotenv", findings[0][2])
+
+    def test_language_aware_passes_on_python_node_monorepo(self):
+        """Multi-language repos (Python + Node) require the *union*
+        of language-specific groups. Both `__pycache__` AND
+        `node_modules` must be covered."""
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import match_gitignore_coverage
+        gi = "__pycache__\nnode_modules\n.env\n.idea/\n*.log\ndist/\n"
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "pyproject.toml": "[project]\nname='x'\n",
+                    ".gitignore": gi,
+                    "src/a.py": "x\n",
+                    "web/index.js": "x\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": [
+                        "python_pycache", "node_modules", "dotenv", "dist_build",
+                        "ide_junk", "logs",
+                    ],
+                    "min_groups_covered": 6,
+                },
+            )
+            self.assertEqual(findings, [])
+
+    def test_language_aware_falls_back_when_no_language_detected(self):
+        """If the engine can't classify the repo (no manifest, no
+        recognised file extensions), the matcher falls back to the
+        non-language-aware behaviour — every requested group is
+        required. This is the safer default; we'd rather over-fire on
+        unclassifiable repos than silently under-fire on real misses."""
+        from agent_readiness.rules_eval.private_matchers.gitignore_coverage import match_gitignore_coverage
+        with TemporaryDirectory() as td:
+            ctx = _make_ctx(
+                Path(td),
+                {
+                    "README.md": "hi\n",
+                    ".gitignore": ".env\n*.log\n.idea/\n",
+                },
+            )
+            findings = match_gitignore_coverage(
+                ctx,
+                {
+                    "language_aware": True,
+                    "groups": ["python_pycache", "node_modules", "dotenv", "ide_junk", "logs"],
+                    "min_groups_covered": 5,
+                },
+            )
+            # Only 3/5 covered; missing python_pycache + node_modules.
+            self.assertEqual(len(findings), 1)
 
 
 class TestGhCliQuery(unittest.TestCase):

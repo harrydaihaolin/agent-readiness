@@ -23,6 +23,14 @@ from agent_readiness.rules_runtime import load_default_rules
 # Maps rule_id -> list of (relative_dest, template_name) tuples.
 # Each entry describes one file this check requires.
 _CHECK_TEMPLATES: dict[str, list[tuple[str, str]]] = {
+    # ``agent_docs.canonical`` is the warn-level rule that fires when
+    # AGENTS.md is missing at the root. ``agent_docs.present`` is the
+    # softer info-level rule for the broader "any agent-targeted doc"
+    # contract. Both map to the same template; whichever fires first
+    # gets the scaffold to land.
+    "agent_docs.canonical": [
+        ("AGENTS.md", "AGENTS.md"),
+    ],
     "agent_docs.present": [
         ("AGENTS.md", "AGENTS.md"),
     ],
@@ -65,12 +73,41 @@ def _load_template(name: str) -> str:
 
 
 def _substitute(text: str, ctx: RepoContext) -> str:
-    """Replace {{PLACEHOLDERS}} in template text with repo-specific values."""
+    """Replace ``{{PLACEHOLDER}}`` tokens in template text with
+    repo-specific values.
+
+    The substitution runs the same probe stack as ``context_probe``
+    uses for rule-action templates, so the scaffolder's AGENTS.md
+    template ships with the *actual* install / test / lint command for
+    the detected language instead of a "<replace with your install
+    command>" placeholder a human has to fill in. If the probe can't
+    resolve (no manifest, no file extensions to count), the templates
+    fall back to a generic phrase (``your install command``) so the
+    file still reads as English rather than a literal placeholder.
+    """
+    from agent_readiness.rules_eval.context_probe import run_probes
+
+    probes = [
+        {"detect": "primary_language"},
+        {"detect": "primary_manifest"},
+        {"detect": "package_manager"},
+    ]
+    vars = run_probes(probes, ctx)
+
     repo_name = ctx.root.name
+    primary_language = vars.get("primary_language") or "your project's primary language"
+    install_cmd = vars.get("language_install_command") or "your install command"
+    test_cmd = vars.get("language_test_command") or "your test command"
+    lint_cmd = vars.get("language_lint_command") or "your lint command"
+
     return (
         text
         .replace("{{REPO_NAME}}", repo_name)
         .replace("{{PROJECT_NAME}}", repo_name)
+        .replace("{{PRIMARY_LANGUAGE}}", primary_language)
+        .replace("{{INSTALL_COMMAND}}", install_cmd)
+        .replace("{{TEST_COMMAND}}", test_cmd)
+        .replace("{{LINT_COMMAND}}", lint_cmd)
     )
 
 
