@@ -5,6 +5,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.4.6] - 2026-05-21
+
+Vendor-only release. Picks up `agent-readiness-rules` v2.4.1 so the
+default scan (no `--rules-dir` flag) actually uses the new
+`secret_scanning_config` matcher that v2.4.5 added. Without this
+vendor bump, fresh installs of v2.4.5 ship the new matcher but the
+bundled YAML still says `match.type: path_glob`, so the
+precondition gate does nothing on default scans.
+
+### Changed
+
+- **`src/agent_readiness/rules_pack/`** vendored from
+  [`agent-readiness-rules` v2.4.1](https://github.com/harrydaihaolin/agent-readiness-rules/releases/tag/v2.4.1).
+  The only meaningful diff is
+  `safety/safety.gitleaks_config.yaml` flipping `match.type` from
+  `path_glob` to `secret_scanning_config`.
+
+### Verified
+
+Smoke-tested on a pure-library Scala fixture (no env reads, no
+cloud SDKs, no `.env`, no hardcoded credentials):
+
+```
+safety.gitleaks_config  score=100.0  warn/err findings=0
+```
+
+Before this vendor bump the same fixture under v2.4.5 fired with
+`score=80`. The default scan now matches the unit-test behaviour.
+
 ## [2.4.5] - 2026-05-21
 
 The "`safety.gitleaks_config` shouldn't fire on pure-library repos"

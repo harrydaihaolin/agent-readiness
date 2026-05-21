@@ -12,9 +12,20 @@ explanation: |
   with detect-secrets, or GitHub's native push protection markers)
   signal that secret scanning is enforced as part of the contributor
   flow, which materially reduces leak risk in agent-driven changes.
+
+  This rule only fires when the repo shows evidence of *handling
+  secrets* — env-file usage, env-var reads in source (os.environ /
+  process.env / System.getenv / std::env), cloud SDK imports (boto3,
+  @aws-sdk/*, google.cloud, azure.identity, …), or compose / IaC
+  declarations that bind secrets (docker-compose env_file:, k8s
+  Secret kind, terraform aws_secretsmanager_secret, …). A
+  pure-library repo with no credential surface area is not penalised
+  for omitting a tool it has no use for; see
+  ``agent-readiness-research/research/aaif_evidence/2026-05-21_calibration_cycle.md``
+  for the FP analysis that motivated this gate.
 match:
-  type: path_glob
-  require_globs:
+  type: secret_scanning_config
+  accept_paths:
     - .gitleaks.toml
     - .gitleaks.yaml
     - .gitleaks.yml
@@ -25,6 +36,9 @@ match:
     - .pre-commit-config.yaml
     - .github/workflows/gitleaks.yml
     - .github/workflows/secret-scan.yml
+  require_precondition: true
+  max_files_scanned: 200
+  max_bytes_per_file: 64000
 fix_hint: |
   Add a `.gitleaks.toml` (or `.secrets.baseline` for detect-secrets) and
   wire it into pre-commit or a GitHub Actions workflow. Example:
@@ -63,9 +77,12 @@ verify:
   command: "test -f .gitleaks.toml"
   description: .gitleaks.toml must exist.
 fix_prompt: |
-  Without this, an agent one copy-paste away from leaking a credential
-  has no automated catch — the leak makes it into git history before
-  review.
+  This rule fired because your repo shows evidence of handling
+  secrets (env-file usage, env-var reads in source, cloud SDK imports,
+  or compose / IaC declarations that bind secrets) but ships no
+  secret-scanning config. Without one, an agent one copy-paste away
+  from leaking a credential has no automated catch — the leak makes
+  it into git history before review.
 
   Create `.gitleaks.toml` at the repo root with a minimal config: a
   `title` string and one `[allowlist]` block listing your known
@@ -74,5 +91,9 @@ fix_prompt: |
   `.pre-commit-config.yaml`) AND CI (add `.github/workflows/gitleaks.yml`
   using `gitleaks/gitleaks-action@v2`). Detect-secrets via
   `.secrets.baseline` is an acceptable alternative.
+
+  If your repo genuinely has no credential surface area (a pure
+  library, a numerics package, a docs-only repo) the scanner
+  suppresses this rule automatically — there's nothing to do.
 
   Verify with: `test -f .gitleaks.toml`
