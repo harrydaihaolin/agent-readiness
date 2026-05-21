@@ -6,13 +6,14 @@ title: Self-pushing workflow lacks `concurrency:` guard
 weight: 0.7
 severity: warn
 explanation: |
-  GitHub Actions workflows that push back to their own repo (typical
-  for daily-scan / weekly-rebuild / scheduled data-publishing
-  patterns) without a top-level `concurrency:` block can race
-  themselves. Two scheduled runs (or a manual edit colliding with the
-  cron) lose one set of changes silently — the second `git push` is
-  rejected by the remote, the workflow exits 0, and the data drift is
-  invisible until a human notices stale dashboards.
+  Agents (and humans) read "workflow exited 0" as success — but two
+  scheduled runs of a self-pushing workflow without a top-level
+  `concurrency:` block race each other: the second `git push` is
+  rejected silently, the workflow exits 0, and one set of changes is
+  lost until a human notices stale dashboards. The pattern bites
+  daily-scan / weekly-rebuild / scheduled data-publishing workflows
+  most often (a manual edit colliding with the cron is the second
+  common trigger).
 
   The fix is one block per workflow. For write workflows, prefer
   `cancel-in-progress: false` so the second run waits for the first

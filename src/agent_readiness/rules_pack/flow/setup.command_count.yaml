@@ -6,11 +6,12 @@ title: Setup requires few commands
 weight: 0.7
 severity: warn
 explanation: |
-  Each command in a README's Setup / Installation section is a place
-  the agent can fail (wrong flag, missing prerequisite, version
-  mismatch). Agents succeed at 1-3 setup commands at near-100% and
-  fall off a cliff after 5. The rule counts distinct shell commands
-  in the setup section's fenced code blocks and shell-prompt lines.
+  Agents chaining 5+ setup commands from a README fall off a cliff
+  after command 3 — each command is a place to fail (wrong flag,
+  missing prerequisite, version mismatch), and 1–3 succeed at
+  near-100% while 5+ collapse. The rule counts distinct shell
+  commands in the setup section's fenced code blocks and shell-
+  prompt lines.
 match:
   type: setup_command_count
   max_commands: 5

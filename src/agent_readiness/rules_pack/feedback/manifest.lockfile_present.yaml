@@ -6,13 +6,13 @@ title: Dependency lockfile present
 weight: 1.0
 severity: warn
 explanation: |
-  A lockfile pins the exact dependency tree the project was last
-  validated against. Without one, `pip install` / `npm install` will
-  resolve different versions on different machines, so an agent that
-  installs deps and runs tests can't trust a green run on its laptop
-  to predict a green run in CI. Some ecosystems (Cargo, Poetry, npm)
-  produce lockfiles automatically; others (bare requirements.txt) do
-  not, and the project has to opt in.
+  Agents running `pip install` / `npm install` / `bundle install`
+  without a lockfile resolve different dependency versions on
+  different machines, so a green test run on the agent's laptop
+  can't predict CI's outcome. A lockfile pins the exact tree the
+  project was last validated against; some ecosystems (Cargo,
+  Poetry, npm) produce one automatically, others (bare
+  requirements.txt) require the project to opt in.
 match:
   type: composite
   op: or

@@ -6,11 +6,13 @@ title: Git or agent hooks configured
 weight: 0.7
 severity: info
 explanation: |
-  Hooks (pre-commit, husky, lefthook, lint-staged, .claude/settings,
-  .cursor/settings) are how a project gives an agent feedback *before*
-  a commit lands rather than after CI fails. A repo that runs format
-  + lint on every commit cuts the agent's edit/wait/fix loop by an
-  order of magnitude.
+  Agents running an edit/wait/fix loop at CI speed (minutes) bleed
+  time on cosmetic feedback that pre-commit hooks would have caught
+  in seconds — a repo that runs format + lint on every commit cuts
+  that loop by an order of magnitude. Hooks (pre-commit, husky,
+  lefthook, lint-staged, .claude/settings, .cursor/settings) are how
+  the project gives the agent that feedback *before* a commit lands
+  rather than after CI fails.
 match:
   type: composite
   op: or

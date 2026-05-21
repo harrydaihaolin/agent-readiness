@@ -6,16 +6,16 @@ title: README claims match repo contents
 weight: 0.5
 severity: warn
 explanation: |
-  Drift between what README documents and what the repo actually has
-  is one of the most expensive false starts for an agent: it follows
-  the README, runs into a missing tool, and either reverts or
-  invents a workaround. Common drifts caught here: README mentions
-  pytest but no pytest config exists; README mentions `npm test`
-  but no package.json; README references `make X` for a target that
-  doesn't exist in the Makefile; README documents `npm run X` but
-  the script is missing from package.json; README documents
-  `pip install -e .` but no pyproject.toml/setup.py exists; AGENTS.md
-  / CLAUDE.md is a placeholder.
+  Agents that follow the README will hit a missing tool or undefined
+  target and either revert or invent a workaround when README
+  documentation drifts from what the repo actually has — one of the
+  most expensive false starts. Common drifts caught here: README
+  mentions pytest but no pytest config exists; README mentions
+  `npm test` but no package.json; README references `make X` for a
+  target that doesn't exist in the Makefile; README documents
+  `npm run X` but the script is missing from package.json; README
+  documents `pip install -e .` but no pyproject.toml/setup.py exists;
+  AGENTS.md / CLAUDE.md is a placeholder.
 match:
   type: cross_file_consistency
   mode: readme_repo_match

@@ -6,10 +6,11 @@ title: Type checker is configured
 weight: 0.9
 severity: warn
 explanation: |
-  A type checker catches whole categories of agent errors (missing
-  fields, wrong arg shapes, stale imports) before they reach runtime.
-  Statically-typed language repos pass automatically; for Python and
-  JS this is opt-in but high-leverage.
+  Agents whose edits ship missing fields, wrong arg shapes, or stale
+  imports rely on runtime — and a partial test run — to catch the
+  regression; a type checker catches whole categories of these
+  errors before runtime. Statically-typed language repos pass
+  automatically; for Python and JS this is opt-in but high-leverage.
 match:
   type: composite
   op: or

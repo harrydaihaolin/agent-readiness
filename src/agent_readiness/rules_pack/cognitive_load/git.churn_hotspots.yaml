@@ -6,13 +6,14 @@ title: No high-churn large files (hotspots)
 weight: 0.6
 severity: warn
 explanation: |
-  Files that are both large *and* frequently edited are the highest-
-  risk surface for an agent: each touch has the most context to
-  re-read and the most history to consider. Splitting them into
-  smaller modules cuts agent error rates more than any other
-  refactor. This rule fires per file that exceeds both the touch and
-  size thresholds; gives `not_measured` on shallow clones and
-  repos with very few commits.
+  Agents editing a churn-hotspot file pay the maximum re-read cost on
+  every touch — the most context to re-read, the most history to
+  consider, the highest chance of colliding with an in-flight change.
+  Files that are both large *and* frequently edited are that surface;
+  splitting them into smaller modules cuts agent error rates more
+  than any other refactor. This rule fires per file that exceeds
+  both the touch and size thresholds; gives `not_measured` on
+  shallow clones and repos with very few commits.
 match:
   # v2.0.1 (EXP-2): bumped min_commits_touching_file 10 → 25 and
   # min_file_lines 200 → 500. The v1.4 thresholds caught any file

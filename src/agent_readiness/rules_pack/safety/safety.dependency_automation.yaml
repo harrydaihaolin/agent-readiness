@@ -6,12 +6,14 @@ title: Automated dependency / vulnerability scanning configured
 weight: 1.0
 severity: warn
 explanation: |
-  Stale dependencies and unscanned third-party code are the most
-  common path from "agent merged a small change" to "merged a CVE".
-  A repo that declares Dependabot, Renovate, Snyk, FOSSA, Mend, or
-  CodeQL gets PRs / alerts for vulnerable transitive deps and unsafe
-  patterns automatically, so agents reviewing those PRs can act on
-  them rather than re-discovering the issue from scratch.
+  Agents merging small changes against stale, unscanned dependencies
+  are the most common path from "merged a small change" to "merged a
+  CVE" — transitive deps drift silently and unsafe third-party code
+  accumulates risk. A repo that declares Dependabot, Renovate, Snyk,
+  FOSSA, Mend, or CodeQL gets PRs / alerts for vulnerable transitive
+  deps and unsafe patterns automatically, so agents reviewing those
+  PRs can act on them rather than re-discovering the issue from
+  scratch.
 match:
   type: composite
   op: or

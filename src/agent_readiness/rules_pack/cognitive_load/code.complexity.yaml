@@ -6,12 +6,12 @@ title: Code cyclomatic complexity is bounded
 weight: 0.7
 severity: warn
 explanation: |
-  High cyclomatic complexity means many independent control-flow
-  paths through one function. Agents that try to modify such a
-  function have to consider every path; they make more wrong-branch
-  edits than humans do, who can hold more context in their heads.
-  Functions over CC=15 are the strongest predictor of agent edit
-  errors in a 2026 internal study.
+  Agents editing a high-complexity function have to reason across
+  every independent control-flow path and ship more wrong-branch
+  edits than a human would, who can hold more context in their
+  heads. Cyclomatic complexity is the proxy: functions over CC=15
+  are the strongest predictor of agent edit errors in a 2026
+  internal study.
 match:
   type: ast_complexity
   max_cc: 15

@@ -6,11 +6,12 @@ title: Linter is configured
 weight: 0.9
 severity: warn
 explanation: |
-  A configured linter is the difference between an agent's edit being
-  immediately rejected with a clear error and the same edit silently
-  drifting from house style. Even if the linter is permissive, having
-  *a* config tells agents which rules are intentional and which are
-  drift.
+  Agents writing edits without a configured linter silently drift
+  from house style — CI reviewers then spend cycles on cosmetic
+  feedback instead of logic, while the agent never learns which
+  rules were intentional vs. accidental. A configured linter makes
+  that boundary explicit; even a permissive linter config is enough
+  to tell agents which rules are intentional and which are drift.
 match:
   type: composite
   op: or

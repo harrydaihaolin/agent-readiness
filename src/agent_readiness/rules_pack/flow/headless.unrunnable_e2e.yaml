@@ -12,14 +12,16 @@ title: Repo is unrunnable end-to-end by an agent
 weight: 3.0
 severity: error
 explanation: |
-  This is a composite of three already-shipping signals:
+  Agents landing in a repo with no agent-targeted docs, no detected
+  entry point, and no discoverable test command are functionally
+  agent-blind: nothing to read, nothing to run, no way to verify.
+  This rule is the composite of three already-shipping signals —
     - agent_docs.present  (cognitive_load)
     - entry_points.detected  (flow)
     - test_command.discoverable  (feedback)
-  Individually any one of them is a soft signal. Together — when ALL
-  THREE are absent — the repo is functionally agent-blind: no doc to
-  read, no thing to run, no way to verify. Most healthy repos satisfy
-  at least one; this rule isolates the worst-case intersection.
+  and only fires when ALL THREE are absent. Individually any one of
+  them is a soft signal; together their absence is the worst case.
+  Most healthy repos satisfy at least one.
 
   Note: the sub-conditions are written as AND-of-misses (each leaf
   matcher fires explicitly when its signal is missing), not as OR-of-

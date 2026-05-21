@@ -6,13 +6,15 @@ title: Canonical AGENTS.md present
 weight: 1.0
 severity: warn
 explanation: |
-  AGENTS.md at the repo root is the emerging canonical contract between
-  human authors and coding agents (canonical commands, do-not-touch
-  lists, commit conventions). Other formats (.cursorrules, CLAUDE.md,
-  .ai/) help, but a single, well-named file at the root is the most
-  predictable surface for any agent. This rule fires `warn` only when
-  the canonical AGENTS.md is missing; partial coverage by sibling
-  formats is rewarded by the softer `agent_docs.present` rule.
+  Agents landing in a repo need a single, predictable file to read for
+  canonical commands, do-not-touch lists, and commit conventions —
+  AGENTS.md at the repo root is the emerging canonical contract
+  between human authors and coding agents. Other formats
+  (.cursorrules, CLAUDE.md, .ai/) help, but a single, well-named file
+  at the root is the most predictable surface for any agent. This
+  rule fires `warn` only when the canonical AGENTS.md is missing;
+  partial coverage by sibling formats is rewarded by the softer
+  `agent_docs.present` rule.
 match:
   type: path_glob
   require_globs:

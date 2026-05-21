@@ -6,15 +6,17 @@ title: Deploy workflow has a post-deploy smoke check
 weight: 0.9
 severity: warn
 explanation: |
-  When a workflow ships a build to a hosted environment (GitHub Pages,
-  Netlify, Vercel, S3/CloudFront, gh-pages branch, Cloud Run, Fly,
-  Render, Surge), the only feedback signal an agent gets out of the
-  box is "the deploy step exited 0." That is not the same as "the
-  deployed site actually loads." Without a post-deploy smoke check
-  (curl HTTP 200, Playwright/Puppeteer probe, Lighthouse run, etc.),
-  silent prod regressions — broken `base` paths, broken SPA 404
-  fallbacks, asset 404s, missing data files — ship green and the
-  agent declares "done."
+  Agents reading deploy-workflow output get one signal out of the box
+  — "deploy step exited 0" — which is not the same as "the deployed
+  site loads," so silent prod regressions (broken `base` paths,
+  broken SPA 404 fallbacks, asset 404s, missing data files) ship
+  green and the agent declares "done." Without a post-deploy smoke
+  check (curl HTTP 200, Playwright/Puppeteer probe, Lighthouse run,
+  etc.) the agent has no closed-loop verification that the deploy
+  actually shipped a working artefact. This rule catches workflows
+  that ship to hosted environments (GitHub Pages, Netlify, Vercel,
+  S3/CloudFront, gh-pages branch, Cloud Run, Fly, Render, Surge)
+  without a smoke-check step.
 
   This rule fires when at least one workflow file references a deploy
   step, AND no workflow file contains evidence of a smoke check
