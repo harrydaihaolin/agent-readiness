@@ -108,6 +108,31 @@ def scan(
         DockerSandbox, SandboxConfig,
         detect_docker_native, resolve_image,
     )
+    from agent_readiness.workspace_detect import detect as _detect_workspace
+
+    # Fail loudly when the user hands us a multi-repo workspace. Scoring
+    # a parent dir produces silently-garbage numbers today; the structured
+    # error names `agent-readiness detect` so the user can recover.
+    try:
+        _ws = _detect_workspace(path)
+    except (OSError, NotADirectoryError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+    if _ws.classification == "multi_repo_workspace":
+        err = {
+            "error": "multi_repo_workspace",
+            "hint": (
+                "this path contains multiple repos; run "
+                "`agent-readiness detect <path>` to list them, then scan "
+                "each repo individually"
+            ),
+            "detected_repos": [r.name for r in _ws.repos],
+            "root": _ws.root,
+            "version": _ws.version,
+        }
+        import json as _json
+        click.echo(_json.dumps(err, indent=2), err=True)
+        sys.exit(2)
 
     if run:
         try:
@@ -325,6 +350,78 @@ def scan(
     if fail_below > 0 and report.overall_score < fail_below:
         sys.exit(1)
 
+    sys.exit(0)
+
+
+@cli.command()
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path),
+                default=Path("."))
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit the structured detect envelope. Required for "
+                   "headless / piped use.")
+@click.option("--quiet", "quiet", is_flag=True,
+              help="Suppress the human-readable summary. With --json, "
+                   "guarantees the only stdout output is the envelope.")
+def detect(path: Path, json_output: bool, quiet: bool) -> None:
+    """Classify PATH as single repo, monorepo, or multi-repo workspace.
+
+    Prints a human-readable summary by default; use ``--json`` for the
+    structured ``detect_v1`` envelope (the same shape the MCP server's
+    ``detect_workspace`` tool returns). The CLI never asks the user to
+    pick repos — that's the MCP/skill's job. Headless callers should
+    pipe ``detect --json`` through ``jq`` and run ``scan`` per repo.
+
+    Exit codes:
+
+    \b
+      0  classification resolved (any of the three labels).
+      2  path is not a directory, or another input error.
+    """
+    from agent_readiness.workspace_detect import detect as _detect
+
+    try:
+        result = _detect(path)
+    except (OSError, NotADirectoryError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+
+    if json_output:
+        import json as _json
+        click.echo(_json.dumps(result.to_dict(), indent=2, sort_keys=False))
+        sys.exit(0)
+
+    if quiet:
+        sys.exit(0)
+
+    label = {
+        "single_repo": "Single repo",
+        "monorepo": "Monorepo",
+        "multi_repo_workspace": "Multi-repo workspace",
+    }.get(result.classification, result.classification)
+    click.echo(f"{label} (confidence: {result.confidence})")
+    click.echo(f"  Root: {result.root}")
+    if result.signals.get("fired"):
+        click.echo(f"  Signals: {', '.join(result.signals['fired'])}")
+
+    if result.classification == "multi_repo_workspace":
+        click.echo("")
+        click.echo(f"Detected repos ({len(result.repos)}):")
+        for r in result.repos:
+            label_part = f" — {r.display_name}" if r.display_name else ""
+            git_flag = "" if r.has_git else "  (no .git)"
+            click.echo(f"  - {r.rel_path}{label_part}{git_flag}")
+        if result.drift_warnings:
+            click.echo("")
+            click.echo("AGENTS.md drift:")
+            for w in result.drift_warnings:
+                click.echo(f"  - {w.message}")
+        click.echo("")
+        click.echo(
+            "Next: run `agent-readiness scan <repo>` per repo, "
+            "or invoke the MCP tool `scan_workspace` to drive the "
+            "selection interactively."
+        )
     sys.exit(0)
 
 
