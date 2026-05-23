@@ -425,6 +425,133 @@ def detect(path: Path, json_output: bool, quiet: bool) -> None:
     sys.exit(0)
 
 
+@cli.command("enumerate")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path),
+                default=Path("."))
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit the stable enumeration JSON envelope.")
+def enumerate_cmd(path: Path, json_output: bool) -> None:
+    """Enumerate PATH's direct children for workspace classification.
+
+    Returns a static depth-1 view of PATH: which children look like
+    code projects (have .git or README.md), their top-level files/dirs,
+    a per-child language hint, and root-level monorepo-tooling signals.
+    No scoring, no rules — this is the input the skill's classification
+    phase consumes before deciding whether to call ``scan`` or
+    ``workspace-scan``.
+
+    Exit codes:
+
+    \b
+      0  success (including zero-child enumerations).
+      2  missing path or non-directory.
+    """
+    import json as _json
+
+    from agent_readiness.enumerate import enumerate_workspace
+
+    try:
+        report = enumerate_workspace(path)
+    except (NotADirectoryError, FileNotFoundError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+
+    if json_output:
+        click.echo(_json.dumps(report.to_dict(), indent=2))
+        return
+
+    d = report.to_dict()
+    click.echo(f"root: {d['root']['path']}")
+    click.echo(f"  has_git={d['root']['has_git']} "
+               f"has_readme={d['root']['has_readme']} "
+               f"has_agents_md={d['root']['has_agents_md']}")
+    signals = [k for k, v in d["manifest_signals"].items() if v]
+    if signals:
+        click.echo(f"  manifest_signals: {', '.join(signals)}")
+    click.echo(f"children: {len(d['children'])} "
+               f"(with_git={d['stats']['children_with_git']}, "
+               f"with_readme={d['stats']['children_with_readme']})")
+    for c in d["children"]:
+        flags = []
+        if c["has_git"]:
+            flags.append("git")
+        if c["has_readme"]:
+            flags.append("readme")
+        if c["has_agents_md"]:
+            flags.append("agents.md")
+        click.echo(f"  - {c['path']} [{','.join(flags)}]")
+    if d["stats"]["scan_truncated"]:
+        click.echo("warning: enumeration truncated at 200 children", err=True)
+
+
+@cli.command(name="workspace-scan")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path))
+@click.option("--children", "children_csv", type=click.STRING,
+              default="",
+              help="Comma-separated child paths to scan (relative or absolute).")
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit the WorkspaceReadinessReport JSON envelope.")
+def workspace_scan(path: Path, children_csv: str, json_output: bool) -> None:
+    """Run a workspace-level readiness scan over PATH and its --children.
+
+    PATH is the workspace root (where the Coordination pack runs).
+    ``--children`` is a comma-separated list of child repo paths
+    (absolute or relative to PATH). Both must be supplied; the skill
+    is the right place to enumerate and classify before invoking this.
+
+    Exit codes:
+
+    \b
+      0  scan completed (envelope returned regardless of overall score).
+      2  PATH or any child path is missing or not a directory.
+      3  --children empty or omitted.
+    """
+    import json as _json
+
+    from agent_readiness.workspace_scan import scan
+
+    if not children_csv.strip():
+        click.echo("error: --children is required and must list at least one path",
+                   err=True)
+        sys.exit(3)
+
+    raw = [c.strip() for c in children_csv.split(",") if c.strip()]
+    children: list[Path] = []
+    for c in raw:
+        p = (path / c).resolve() if not Path(c).is_absolute() else Path(c).resolve()
+        if not p.exists() or not p.is_dir():
+            click.echo(f"error: child path is not a directory: {p}", err=True)
+            sys.exit(2)
+        children.append(p)
+
+    try:
+        report = scan(path, children)
+    except (NotADirectoryError, FileNotFoundError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(3)
+
+    if json_output:
+        click.echo(_json.dumps(report.to_dict(), indent=2))
+        return
+
+    d = report.to_dict()
+    click.echo(f"workspace: {d['repo_path']}")
+    click.echo(f"overall_score: {d['overall_score']:.1f}")
+    click.echo("pillars:")
+    for p in d["pillars"]:
+        click.echo(f"  {p['pillar']:18s} {p['score']:6.1f}  ({p['source']})")
+    click.echo(f"children scanned: {d['stats']['children_scanned']} "
+               f"failed: {d['stats']['children_failed']}")
+    if d.get("top_action"):
+        click.echo(f"top_action: {d['top_action']['check_id']} "
+                   f"(scope={d['top_action']['scope']})")
+
+
 def _make_badge(score: float) -> str:
     color = (
         "brightgreen" if score >= 80

@@ -23,6 +23,7 @@ class Pillar(str, Enum):
     FEEDBACK = "feedback"
     FLOW = "flow"
     SAFETY = "safety"
+    COORDINATION = "coordination"
 
 
 class Severity(str, Enum):
@@ -159,6 +160,127 @@ class Report:
             }
         if self.delta is not None:
             d["delta"] = self.delta
+        if self.top_action is not None:
+            d["top_action"] = self.top_action
+        return d
+
+
+# --- Workspace enumeration ---------------------------------------------
+
+@dataclass
+class ChildEnumeration:
+    """Static metadata about one entry in an enumeration (root or child)."""
+    path: Path
+    has_git: bool
+    has_readme: bool
+    has_agents_md: bool
+    top_files: list[str] = field(default_factory=list)
+    top_dirs: list[str] = field(default_factory=list)
+    language_hint: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": str(self.path),
+            "has_git": self.has_git,
+            "has_readme": self.has_readme,
+            "has_agents_md": self.has_agents_md,
+            "top_files": self.top_files,
+            "top_dirs": self.top_dirs,
+            "language_hint": self.language_hint,
+        }
+
+
+@dataclass
+class EnumerationReport:
+    """Output of enumerate_workspace(). No scoring, no rule evaluation."""
+    root: ChildEnumeration
+    children: list[ChildEnumeration]
+    manifest_signals: dict[str, bool]
+    stats: dict[str, Any]
+    schema: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": "enumeration",
+            "schema": self.schema,
+            "root": self.root.to_dict(),
+            "children": [c.to_dict() for c in self.children],
+            "manifest_signals": self.manifest_signals,
+            "stats": self.stats,
+        }
+
+
+# --- Workspace readiness -----------------------------------------------
+
+@dataclass
+class ChildReadiness:
+    """One child's report inside the workspace envelope.
+
+    ``top_action`` carries the child's own ``compute_top_action`` pin so
+    the workspace orchestrator can promote it when there are no
+    Coordination findings — without re-scanning the child.
+    """
+    path: Path
+    overall_score: float
+    pillar_scores: dict[str, float]
+    safety_cap_applied: float | None = None
+    top_action: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "path": str(self.path),
+            "overall_score": self.overall_score,
+            "pillar_scores": self.pillar_scores,
+        }
+        if self.safety_cap_applied is not None:
+            d["safety_cap_applied"] = self.safety_cap_applied
+        if self.top_action is not None:
+            d["top_action"] = self.top_action
+        return d
+
+
+@dataclass
+class WorkspaceReadinessReport:
+    """Top-level envelope returned by check_workspace_readiness.
+
+    The Coordination pillar is the only one with workspace-only checks;
+    the other four are aggregated from per-child scans. ``safety_caps_applied``
+    surfaces any per-child Safety caps so the workspace narration can
+    explain why a particular child's safety pillar isn't 100.
+    """
+    repo_path: Path
+    overall_score: float
+    pillar_scores: dict[str, float]
+    children: list[ChildReadiness]
+    coordination_findings: list[Finding]
+    top_action: dict[str, Any] | None
+    stats: dict[str, Any]
+    safety_caps_applied: list[dict[str, Any]]
+    schema: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        pillars: list[dict[str, Any]] = []
+        for pillar_name, score in self.pillar_scores.items():
+            entry: dict[str, Any] = {
+                "pillar": pillar_name,
+                "score": score,
+                "source": "workspace" if pillar_name == "coordination" else "aggregated",
+            }
+            if pillar_name == "safety" and self.safety_caps_applied:
+                entry["safety_caps_applied"] = self.safety_caps_applied
+            if pillar_name == "coordination":
+                entry["findings"] = [f.to_dict() for f in self.coordination_findings]
+            pillars.append(entry)
+
+        d: dict[str, Any] = {
+            "kind": "workspace_readiness",
+            "schema": self.schema,
+            "repo_path": str(self.repo_path),
+            "overall_score": self.overall_score,
+            "pillars": pillars,
+            "children": [c.to_dict() for c in self.children],
+            "stats": self.stats,
+        }
         if self.top_action is not None:
             d["top_action"] = self.top_action
         return d
