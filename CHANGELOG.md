@@ -5,6 +5,69 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-05-23
+
+Minor: ships **workspace-aware scanning** with a new **Coordination
+pillar** (workspace-only). Adds two CLI subcommands (`enumerate` and
+`workspace-scan`) and the library functions that back them, so the
+MCP server and skill can drive the new "enumerate → classify → scan"
+flow without re-implementing classification heuristics.
+
+### Added
+
+- **`src/agent_readiness/enumerate.py`** — new module:
+  `enumerate_workspace(path) -> EnumerationReport`. Static depth-1
+  enumeration of a directory's direct children. Detects `.git` or
+  `README.md` as qualifiers, applies a standard ignore list, collects
+  per-child language hints from top-level manifests, and exposes
+  monorepo-tooling signals (pnpm, cargo, pyproject, package.json,
+  gradle) for downstream classifiers.
+- **`src/agent_readiness/coordination.py`** — new module: the v1
+  Coordination pack with three workspace-only checks:
+  - `coordination.root_agents_md` — workspace root has a non-empty
+    AGENTS.md (portfolio-level orientation).
+  - `coordination.repos_manifest` — workspace declares its member
+    repos (pnpm-workspace, cargo workspace, go.work, package.json
+    workspaces, repos.yaml, or AGENTS.md enumeration).
+  - `coordination.dep_graph` — workspace documents dependency / change
+    order (per Mabl & Bishoy Labib, the single most critical concept
+    for coherent multi-repo agent work).
+- **`src/agent_readiness/workspace_scan.py`** — new module:
+  `scan(path, children) -> WorkspaceReadinessReport`. Runs the
+  Coordination pack at the root, runs the existing per-repo scan on
+  each child, aggregates per-pillar means, and picks a `top_action`
+  whose `scope` is `"workspace"` (Coordination beats child) or
+  `"child"` (the worst child's `top_action` promoted with `child_path`
+  stamped on).
+- **`agent-readiness enumerate <path>`** — new CLI subcommand.
+  Emits the static enumeration envelope. `--json` for the wire
+  envelope; default output is a human-readable summary. Exit code 0
+  on success, 2 on missing path / non-directory.
+- **`agent-readiness workspace-scan <path> --children=...`** — new
+  CLI subcommand. Wraps `workspace_scan.scan()` with a comma-separated
+  `--children` list. Exit 0 on success, 2 on missing path or any
+  child path, 3 on empty `--children`.
+- **`Pillar.COORDINATION`** — new enum value in `models.Pillar`.
+  Per-repo scoring excludes it (workspace-only); the workspace scan
+  carries it explicitly with `source: "workspace"` in the envelope.
+- **`ChildReadiness`, `EnumerationReport`, `WorkspaceReadinessReport`,
+  `ChildEnumeration`** — new dataclasses in `models.py`. Round-trip
+  tested with stable `to_dict()` envelopes.
+- **`tests/test_enumerate.py`**, **`tests/test_coordination.py`**,
+  **`tests/test_workspace_scan.py`**, **`tests/test_cli_enumerate.py`**,
+  **`tests/test_cli_workspace_scan.py`**, **`tests/test_models_workspace.py`**
+  — 37 new unit + integration tests covering the new surfaces.
+
+### Changed
+
+- `scorer.score()` skips `Pillar.COORDINATION` when assembling per-repo
+  pillar lists; the terminal renderer and per-repo `Report` consumers
+  continue to operate on the four legacy pillars.
+- `scorer._PILLAR_PRIORITY` extended with `Pillar.COORDINATION: 4` so
+  the per-finding lookup in `compute_top_action` is exhaustive over
+  the enum and never `KeyError`s if a test rig constructs a
+  Coordination Finding in per-repo context.
+
 ## [2.5.0] - 2026-05-21
 
 Minor: ships **workspace detection** as a first-class scanner concern,
