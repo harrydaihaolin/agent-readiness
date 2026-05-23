@@ -214,11 +214,17 @@ class EnumerationReport:
 
 @dataclass
 class ChildReadiness:
-    """One child's report inside the workspace envelope."""
+    """One child's report inside the workspace envelope.
+
+    ``top_action`` carries the child's own ``compute_top_action`` pin so
+    the workspace orchestrator can promote it when there are no
+    Coordination findings — without re-scanning the child.
+    """
     path: Path
     overall_score: float
     pillar_scores: dict[str, float]
     safety_cap_applied: float | None = None
+    top_action: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {
@@ -228,6 +234,8 @@ class ChildReadiness:
         }
         if self.safety_cap_applied is not None:
             d["safety_cap_applied"] = self.safety_cap_applied
+        if self.top_action is not None:
+            d["top_action"] = self.top_action
         return d
 
 
