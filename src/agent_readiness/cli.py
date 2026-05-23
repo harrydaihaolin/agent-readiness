@@ -425,6 +425,66 @@ def detect(path: Path, json_output: bool, quiet: bool) -> None:
     sys.exit(0)
 
 
+@cli.command("enumerate")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path),
+                default=Path("."))
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit the stable enumeration JSON envelope.")
+def enumerate_cmd(path: Path, json_output: bool) -> None:
+    """Enumerate PATH's direct children for workspace classification.
+
+    Returns a static depth-1 view of PATH: which children look like
+    code projects (have .git or README.md), their top-level files/dirs,
+    a per-child language hint, and root-level monorepo-tooling signals.
+    No scoring, no rules — this is the input the skill's classification
+    phase consumes before deciding whether to call ``scan`` or
+    ``workspace-scan``.
+
+    Exit codes:
+
+    \b
+      0  success (including zero-child enumerations).
+      2  missing path or non-directory.
+    """
+    import json as _json
+
+    from agent_readiness.enumerate import enumerate_workspace
+
+    try:
+        report = enumerate_workspace(path)
+    except (NotADirectoryError, FileNotFoundError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(2)
+
+    if json_output:
+        click.echo(_json.dumps(report.to_dict(), indent=2))
+        return
+
+    d = report.to_dict()
+    click.echo(f"root: {d['root']['path']}")
+    click.echo(f"  has_git={d['root']['has_git']} "
+               f"has_readme={d['root']['has_readme']} "
+               f"has_agents_md={d['root']['has_agents_md']}")
+    signals = [k for k, v in d["manifest_signals"].items() if v]
+    if signals:
+        click.echo(f"  manifest_signals: {', '.join(signals)}")
+    click.echo(f"children: {len(d['children'])} "
+               f"(with_git={d['stats']['children_with_git']}, "
+               f"with_readme={d['stats']['children_with_readme']})")
+    for c in d["children"]:
+        flags = []
+        if c["has_git"]:
+            flags.append("git")
+        if c["has_readme"]:
+            flags.append("readme")
+        if c["has_agents_md"]:
+            flags.append("agents.md")
+        click.echo(f"  - {c['path']} [{','.join(flags)}]")
+    if d["stats"]["scan_truncated"]:
+        click.echo("warning: enumeration truncated at 200 children", err=True)
+
+
 def _make_badge(score: float) -> str:
     color = (
         "brightgreen" if score >= 80
