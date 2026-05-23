@@ -552,6 +552,67 @@ def workspace_scan(path: Path, children_csv: str, json_output: bool) -> None:
                    f"(scope={d['top_action']['scope']})")
 
 
+@cli.group(name="manifest")
+def manifest_group() -> None:
+    """Inspect and validate workspace-starter manifest directories.
+
+    A manifest directory holds the workspace bible: manifest.yaml,
+    glossary.yaml, boundaries.yaml, rules/*.yaml, and an optional
+    .agent-readiness-version constraint pin. See
+    ``agent-readiness-manifest`` for the reference layout.
+    """
+
+
+@manifest_group.command(name="validate")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
+                                        exists=True, path_type=Path))
+@click.option("--json", "json_output", is_flag=True,
+              help="Emit the ManifestValidationResult JSON envelope.")
+@click.option("--strict", "strict", is_flag=True,
+              help="Treat warnings as errors (exit non-zero if any warnings).")
+def manifest_validate(path: Path, json_output: bool, strict: bool) -> None:
+    """Load + validate the manifest directory at PATH.
+
+    Runs schema validation on all four file types (manifest, glossary,
+    boundaries, arch rules) AND the cross-file semantic checks
+    (declared-tag-axes, arch-rule-id-vs-filename-prefix).
+
+    Exit codes:
+
+    \b
+      0  manifest is valid (no errors; warnings ignored unless --strict).
+      1  manifest is invalid (at least one error, or --strict + warnings).
+      2  PATH is missing or not a directory.
+    """
+    import json as _json
+
+    from agent_readiness.manifest import validate_manifest_dir
+
+    if not path.is_dir():
+        click.echo(f"error: not a directory: {path}", err=True)
+        sys.exit(2)
+
+    result = validate_manifest_dir(path)
+    envelope = result.to_json_envelope()
+
+    if json_output:
+        click.echo(_json.dumps(envelope, indent=2))
+    else:
+        n_err  = envelope["summary"]["errors"]
+        n_warn = envelope["summary"]["warnings"]
+        verdict = "valid" if result.valid else "invalid"
+        click.echo(
+            f"manifest: {envelope['summary']['manifest_name'] or '?'}  "
+            f"{verdict}  ({n_err} error(s), {n_warn} warning(s))"
+        )
+        for issue in result.issues:
+            click.echo(f"  [{issue.severity:5s}] {issue.message}  ({issue.location})")
+
+    has_warn = any(i.severity == "warn" for i in result.issues)
+    if not result.valid or (strict and has_warn):
+        sys.exit(1)
+
+
 def _make_badge(score: float) -> str:
     color = (
         "brightgreen" if score >= 80
