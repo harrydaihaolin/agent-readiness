@@ -56,6 +56,12 @@ _PILLAR_PRIORITY: dict[Pillar, int] = {
     Pillar.FEEDBACK:       1,
     Pillar.SAFETY:         2,
     Pillar.COGNITIVE_LOAD: 3,
+    # Coordination is workspace-only — it never appears in per-repo
+    # results today. Listed at the bottom so the dict is exhaustive
+    # for the Pillar enum (the compute_top_action loop does a direct
+    # lookup; an unmapped pillar would KeyError if any test rig ever
+    # constructs a Coordination Finding in per-repo context).
+    Pillar.COORDINATION:   4,
 }
 
 _SEVERITY_PRIORITY: dict[Severity, int] = {
@@ -82,14 +88,21 @@ def score(repo_path: Path, results: list[CheckResult],
     weights = weights or DEFAULT_WEIGHTS
 
     # Group by pillar (preserve registration order within a pillar).
-    by_pillar: dict[Pillar, list[CheckResult]] = {p: [] for p in Pillar}
+    # Coordination is workspace-only and intentionally excluded from the
+    # per-repo pillar list — emitting an empty Coordination PillarScore
+    # here would break renderers / consumers that key on the 4 per-repo
+    # pillars. workspace_scan.scan() carries Coordination separately.
+    _per_repo_pillars = [p for p in Pillar if p is not Pillar.COORDINATION]
+    by_pillar: dict[Pillar, list[CheckResult]] = {p: [] for p in _per_repo_pillars}
     for r in results:
+        if r.pillar is Pillar.COORDINATION:
+            continue
         by_pillar.setdefault(r.pillar, []).append(r)
 
     pillar_scores = [
         PillarScore(pillar=p, score=_weighted_mean(by_pillar[p]),
                     check_results=by_pillar[p])
-        for p in Pillar
+        for p in _per_repo_pillars
     ]
 
     # Weighted overall across the three weighted pillars.
