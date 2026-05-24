@@ -181,3 +181,72 @@ def runtime_workspace(tmp_path: Path) -> Path:
     _write_ratified_link(tmp_path, "a-deps-b", "repo-a", "repo-b")
     _write_ratified_link(tmp_path, "b-deps-c", "repo-b", "repo-c")
     return tmp_path
+
+
+def _write_test_action_type(workspace: Path, action_id: str = "publish.pypi") -> None:
+    action_dir = workspace / "ontology" / "actionTypes"
+    action_dir.mkdir(parents=True, exist_ok=True)
+    (action_dir / f"{action_id}.yaml").write_text(
+        """\
+apiVersion: agent-readiness.io/v1
+kind: ActionType
+metadata:
+  name: publish.pypi
+spec:
+  scope: single_system
+  side_effects:
+    - kind: registry_write
+      registry: pypi
+      idempotent: false
+  invocation:
+    command: "twine upload {{ sdist }}"
+    success_predicate: "pypi.has_version(package.name, version)"
+"""
+    )
+
+
+def _write_test_intent_type(workspace: Path, intent_type: str = "test_release") -> None:
+    intent_dir = workspace / "ontology" / "intentTypes"
+    intent_dir.mkdir(parents=True, exist_ok=True)
+    (intent_dir / f"{intent_type}.yaml").write_text(
+        """\
+apiVersion: agent-readiness.io/v1
+kind: IntentType
+metadata:
+  name: test_release
+spec:
+  scope: cross_repo
+  parameters:
+    - name: repo
+      type: ref[Repo]
+      required: true
+  steps:
+    - id: tag_repo
+      action: publish.pypi
+      args:
+        sdist: dist/repo-a.tar.gz
+      preconditions:
+        - object_id: repo-a
+    - id: blocked_step
+      action: publish.pypi
+      args:
+        sdist: dist/missing.tar.gz
+      preconditions:
+        - object_id: missing-repo
+  ledger:
+    location: ontology/intents/{{ intent_id }}.ledger.jsonl
+    format: jsonl
+"""
+    )
+
+
+@pytest.fixture
+def action_workspace(runtime_workspace: Path) -> Path:
+    _write_test_action_type(runtime_workspace)
+    return runtime_workspace
+
+
+@pytest.fixture
+def intent_workspace(action_workspace: Path) -> Path:
+    _write_test_intent_type(action_workspace)
+    return action_workspace
