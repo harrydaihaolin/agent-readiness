@@ -1,0 +1,17 @@
+# ontology/interfaces/Releasable.yaml
+apiVersion: agent-readiness.io/v1
+kind: InterfaceType
+metadata:
+  name: Releasable
+spec:
+  required_properties:
+    - { name: version,          type: semver }
+    - { name: release_workflow, type: path,   exists: true }
+    - { name: changelog,        type: path,   exists: true }
+  satisfaction_proof:
+    type: composite
+    op: and
+    clauses:
+      - { type: file_glob,    paths: [".github/workflows/release.yml", ".github/workflows/release-please.yml"] }
+      - { type: regex_match,  file: "{{ primary_manifest }}", pattern: 'version\s*[=:]\s*["\'']?\d+\.\d+\.\d+' }
+      - { type: file_exists,  path: CHANGELOG.md }

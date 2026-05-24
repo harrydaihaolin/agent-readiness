@@ -1,0 +1,19 @@
+# ontology/objectTypes/Service.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Service
+  description: A deployable runtime service exposed to users or other systems.
+spec:
+  identity:
+    fields: [name]
+    pk_expression: "{{ name }}"
+  properties:
+    - { name: name,               type: string, required: true }
+    - { name: runtime,            type: string }
+    - { name: deployment_target,  type: string }
+    - { name: openapi_path,       type: path }
+    - { name: owner,              type: "ref[Owner]" }
+  derived_from:
+    - source: filesystem
+      detect: ["Dockerfile", "docker-compose.yml", "fly.toml", "render.yaml"]

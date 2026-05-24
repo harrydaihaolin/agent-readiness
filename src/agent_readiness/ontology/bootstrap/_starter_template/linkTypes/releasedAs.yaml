@@ -1,0 +1,15 @@
+# ontology/linkTypes/releasedAs.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: releasedAs
+spec:
+  from: Repo
+  to:   Release
+  cardinality: 1:N
+  inverse: releaseOf
+  derived_from:
+    - source: git
+      field: tags
+    - source: github
+      field: releases

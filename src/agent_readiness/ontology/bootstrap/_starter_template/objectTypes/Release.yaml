@@ -1,0 +1,21 @@
+# ontology/objectTypes/Release.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Release
+  description: A tagged release of a repository published to one or more registries.
+spec:
+  identity:
+    fields: [repo, tag]
+    pk_expression: "{{ repo }}#{{ tag }}"
+  properties:
+    - { name: repo,            type: "ref[Repo]", required: true }
+    - { name: tag,             type: string, required: true }
+    - { name: sha,             type: string }
+    - { name: timestamp,       type: datetime }
+    - { name: registry_urls,   type: "list[string]" }
+  derived_from:
+    - source: git
+      field: tags
+    - source: github
+      field: releases

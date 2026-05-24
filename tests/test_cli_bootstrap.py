@@ -16,9 +16,9 @@ from agent_readiness_insights_protocol.ontology.types import (
     ObjectInstance,
 )
 
-MANIFEST_TEMPLATE = Path(
-    "/Users/haolin.dai/Documents/agent-readiness_project/agent-readiness-manifest/exemplar/ontology"
-)
+from agent_readiness.ontology.bootstrap.init import _BUNDLED_TEMPLATE
+
+MANIFEST_TEMPLATE = _BUNDLED_TEMPLATE
 
 _SRC = Path(__file__).resolve().parent.parent / "src"
 ENV = {"PYTHONPATH": str(_SRC), "PATH": os.environ.get("PATH", "")}

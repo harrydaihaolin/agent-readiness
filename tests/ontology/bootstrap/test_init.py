@@ -6,9 +6,9 @@ import pytest
 
 from agent_readiness.ontology.bootstrap.init import InitReport, init_ontology
 
-MANIFEST_TEMPLATE = Path(
-    "/Users/haolin.dai/Documents/agent-readiness_project/agent-readiness-manifest/exemplar/ontology"
-)
+from agent_readiness.ontology.bootstrap.init import _BUNDLED_TEMPLATE
+
+MANIFEST_TEMPLATE = _BUNDLED_TEMPLATE
 
 
 def test_init_creates_skeleton_in_empty_workspace(tmp_path: Path):

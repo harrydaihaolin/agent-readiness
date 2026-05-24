@@ -9,9 +9,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_DEFAULT_TEMPLATE = Path(
-    "/Users/haolin.dai/Documents/agent-readiness_project/agent-readiness-manifest/exemplar/ontology"
-)
+_BUNDLED_TEMPLATE = Path(__file__).parent / "_starter_template"
 
 _PROFILE_SKIPS: dict[str, set[str]] = {
     "workspace": set(),
@@ -55,10 +53,12 @@ def init_ontology(
             f"Unknown profile: {profile!r}. Valid: {sorted(_PROFILE_SKIPS)}"
         )
 
-    template = manifest_template or _DEFAULT_TEMPLATE
+    template = manifest_template or _BUNDLED_TEMPLATE
     if not template.is_dir():
         raise FileNotFoundError(
-            f"Template not found: {template}. Pass manifest_template= explicitly."
+            f"Template not found: {template}. Pass manifest_template= explicitly "
+            f"or reinstall the agent-readiness wheel (the bundled template lives at "
+            f"{_BUNDLED_TEMPLATE})."
         )
 
     skips = _PROFILE_SKIPS[profile]

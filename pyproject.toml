@@ -56,6 +56,8 @@ include = [
     "src/agent_readiness/rules_pack/**/*.yaml",
     "src/agent_readiness/rules_pack/MANIFEST",
     "src/agent_readiness/rules_pack/manifest.toml",
+    "src/agent_readiness/ontology/bootstrap/_starter_template/**/*.yaml",
+    "src/agent_readiness/ontology/bootstrap/_starter_template/README.md",
 ]
 
 [tool.ruff]

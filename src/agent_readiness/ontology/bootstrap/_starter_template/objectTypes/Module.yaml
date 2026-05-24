@@ -1,0 +1,19 @@
+# ontology/objectTypes/Module.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Module
+  description: A logical code module within a repository (package, crate, or subproject).
+spec:
+  identity:
+    fields: [repo, path]
+    pk_expression: "{{ repo }}#{{ path }}"
+  properties:
+    - { name: repo,          type: "ref[Repo]", required: true }
+    - { name: path,          type: path, required: true }
+    - { name: exports,       type: "list[string]" }
+    - { name: dependencies,  type: "list[string]" }
+    - { name: test_path,     type: path }
+  derived_from:
+    - source: filesystem
+      detect: ["src/**/__init__.py", "packages/*/package.json"]

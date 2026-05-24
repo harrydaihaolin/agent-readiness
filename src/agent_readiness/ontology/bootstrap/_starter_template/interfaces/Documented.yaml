@@ -1,0 +1,19 @@
+# ontology/interfaces/Documented.yaml
+apiVersion: agent-readiness.io/v1
+kind: InterfaceType
+metadata:
+  name: Documented
+spec:
+  required_properties:
+    - { name: readme,      type: path, exists: true }
+    - { name: agents_doc,  type: path, exists: true }
+  satisfaction_proof:
+    type: composite
+    op: and
+    clauses:
+      - { type: file_exists, path: README.md, min_size_bytes: 200 }
+      - type: composite
+        op: or
+        clauses:
+          - { type: file_exists, path: AGENTS.md }
+          - { type: file_exists, path: CLAUDE.md }

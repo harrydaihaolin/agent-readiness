@@ -1,0 +1,20 @@
+# ontology/objectTypes/Library.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Library
+  description: A published package (PyPI, npm, etc.) with registry coordinates.
+spec:
+  identity:
+    fields: [registry, name]
+    pk_expression: "{{ registry }}#{{ name }}"
+  properties:
+    - { name: name,         type: string, required: true }
+    - { name: version,      type: semver }
+    - { name: registry,     type: "enum[pypi, npm, crates.io, go]" }
+    - { name: source_repo,  type: "ref[Repo]" }
+  derived_from:
+    - source: pyproject.toml
+      field: project.name
+    - source: package.json
+      field: name

@@ -1,0 +1,20 @@
+# ontology/objectTypes/Protocol.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Protocol
+  description: A versioned contract schema shared across repos (e.g. insights-protocol).
+spec:
+  identity:
+    fields: [name, version]
+    pk_expression: "{{ name }}@{{ version }}"
+  properties:
+    - { name: name,                  type: string, required: true }
+    - { name: version,               type: semver, required: true }
+    - { name: schema_path,           type: path }
+    - { name: breaking_changes_in,   type: "list[semver]" }
+  derived_from:
+    - source: naming_pattern
+      pattern: "*-protocol"
+    - source: filesystem
+      detect: ["schemas/*.json", "src/**/version.py"]

@@ -1,0 +1,22 @@
+# ontology/objectTypes/Repo.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Repo
+  description: A git repository participating in the workspace.
+spec:
+  identity:
+    fields: [remote_url, path]
+    pk_expression: "{{ remote_url }}#{{ path }}"
+  properties:
+    - { name: name,             type: string, required: true }
+    - { name: languages,        type: "list[string]" }
+    - { name: default_branch,   type: string, default: main }
+    - { name: primary_manifest, type: "enum[pyproject.toml, package.json, go.mod, Cargo.toml]" }
+    - { name: owner_team,       type: "ref[Owner]" }
+  derived_from:
+    - source: gitlinks
+      from_pattern: "*"
+    - source: filesystem
+      detect: ["pyproject.toml", "package.json", "go.mod"]
+  implements: [Versioned]
