@@ -812,6 +812,15 @@ def explain(check_id: str) -> None:
     click.echo(rule.explanation or "(no explanation provided)")
 
 
+def _emit_payload(payload: dict, json_output: bool) -> None:
+    import json as _json
+
+    if json_output:
+        click.echo(_json.dumps(payload, separators=(",", ":")))
+    else:
+        click.echo(_json.dumps(payload, indent=2))
+
+
 @cli.group()
 def ontology() -> None:
     """Workspace Ontology subcommands."""
@@ -864,6 +873,267 @@ def ontology_load(path: Path, json_output: bool) -> None:
         click.echo(_json.dumps(payload, separators=(",", ":")))
     else:
         click.echo(_json.dumps(payload, indent=2))
+
+
+@ontology.group("bootstrap")
+def ontology_bootstrap() -> None:
+    """Bootstrap the workspace ontology."""
+
+
+@ontology_bootstrap.command("init")
+@click.argument("path", type=click.Path(file_okay=False, dir_okay=True, path_type=Path))
+@click.option(
+    "--profile",
+    type=click.Choice(["workspace", "single-repo", "monorepo"]),
+    default="workspace",
+)
+@click.option(
+    "--manifest-template",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_bootstrap_init(
+    path: Path,
+    profile: str,
+    manifest_template: Path | None,
+    json_output: bool,
+) -> None:
+    """Scaffold an empty ontology/ skeleton from the starter template."""
+    from agent_readiness.ontology.bootstrap import init_ontology
+
+    try:
+        report = init_ontology(path, profile=profile, manifest_template=manifest_template)
+    except FileExistsError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    except (FileNotFoundError, ValueError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    payload = {
+        "files_written": report.files_written,
+        "profile": report.profile,
+        "skipped_due_to_profile": report.skipped_due_to_profile,
+    }
+    _emit_payload(payload, json_output)
+
+
+@ontology_bootstrap.command("propose-objects")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option("--object-type", required=True)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_bootstrap_propose_objects(
+    path: Path, object_type: str, json_output: bool
+) -> None:
+    """Propose Object Type instances from observed workspace signals."""
+    from agent_readiness.ontology.bootstrap import propose_object_instances
+
+    try:
+        env = propose_object_instances(workspace=path, object_type=object_type)
+    except (NotImplementedError, ValueError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(env.model_dump(mode="json"), json_output)
+
+
+@ontology_bootstrap.command("propose-links")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option("--link-type", required=True)
+@click.option("--min-ratified-pct", type=float, default=0.8)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_bootstrap_propose_links(
+    path: Path, link_type: str, min_ratified_pct: float, json_output: bool
+) -> None:
+    """Propose Link Type instances from observed workspace signals."""
+    from agent_readiness.ontology.bootstrap import propose_link_instances
+
+    try:
+        env = propose_link_instances(
+            path, link_type=link_type, min_ratified_pct=min_ratified_pct
+        )
+    except RuntimeError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    except (NotImplementedError, ValueError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(env.model_dump(mode="json"), json_output)
+
+
+@ontology_bootstrap.command("propose-interfaces")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option("--interface", required=True)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_bootstrap_propose_interfaces(
+    path: Path, interface: str, json_output: bool
+) -> None:
+    """Propose interface claims from observed workspace signals."""
+    from agent_readiness.ontology.bootstrap import propose_interface_claims
+
+    try:
+        env = propose_interface_claims(workspace=path, interface=interface)
+    except (NotImplementedError, ValueError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(env.model_dump(mode="json"), json_output)
+
+
+@ontology_bootstrap.command("propose-functions")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option("--function-type", required=True)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_bootstrap_propose_functions(
+    path: Path, function_type: str, json_output: bool
+) -> None:
+    """Propose function implementations from observed workspace signals."""
+    from agent_readiness.ontology.bootstrap import propose_function_implementations
+
+    try:
+        env = propose_function_implementations(workspace=path, function_type=function_type)
+    except (NotImplementedError, ValueError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(env.model_dump(mode="json"), json_output)
+
+
+@ontology_bootstrap.command("propose-actions")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option("--scope", default="all")
+@click.option("--json", "json_output", is_flag=True)
+def ontology_bootstrap_propose_actions(
+    path: Path, scope: str, json_output: bool
+) -> None:
+    """Propose action and intent types from observed workspace signals."""
+    from agent_readiness.ontology.bootstrap import propose_action_intent_types
+
+    try:
+        env = propose_action_intent_types(workspace=path, scope=scope)
+    except (NotImplementedError, ValueError) as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(env.model_dump(mode="json"), json_output)
+
+
+@ontology.command("ratify")
+@click.argument("atom_id")
+@click.option("--ratified-by", required=True)
+@click.option(
+    "--workspace",
+    "workspace",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+def ontology_ratify(atom_id: str, ratified_by: str, workspace: Path) -> None:
+    """Bump a proposed atom's lifecycle.state to ratified."""
+    from agent_readiness.ontology.ratify import ratify_atom
+
+    try:
+        path = ratify_atom(workspace, atom_id, ratified_by)
+    except LookupError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    click.echo(f"ratified: {atom_id} ({path})")
+
+
+@ontology.command("validate")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("ontology"),
+)
+@click.option("--strict", is_flag=True)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_validate(path: Path, strict: bool, json_output: bool) -> None:
+    """Validate the ontology. With --strict, enforce closure invariant."""
+    from agent_readiness.ontology.validate import validate_ontology
+
+    rep = validate_ontology(path, strict=strict)
+    payload = {
+        "ok": rep.ok,
+        "issues": [
+            {"kind": i.kind, "atom_id": i.atom_id, "message": i.message}
+            for i in rep.issues
+        ],
+    }
+    _emit_payload(payload, json_output)
+    if not rep.ok:
+        raise SystemExit(1)
+
+
+@ontology.command("query")
+@click.argument("expr")
+@click.option(
+    "--workspace",
+    "workspace",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_query(expr: str, workspace: Path, json_output: bool) -> None:
+    """Run a simple query against the ontology. See --help for the grammar."""
+    from agent_readiness.ontology.query import query_ontology
+
+    try:
+        result = query_ontology(workspace / "ontology", expr)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload({"expr": expr, "result": result}, json_output)
+
+
+@ontology.command("status")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("ontology"),
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_status(path: Path, json_output: bool) -> None:
+    """Per-type summary: declared, proposed, ratified."""
+    from agent_readiness.ontology.status import status_ontology
+
+    rep = status_ontology(path)
+    payload = {
+        "object_types": {
+            name: {
+                "declared": ts.declared,
+                "proposed": ts.proposed_instances,
+                "ratified": ts.ratified_instances,
+            }
+            for name, ts in rep.object_types.items()
+        },
+        "link_types": {
+            name: {
+                "declared": ts.declared,
+                "proposed": ts.proposed_instances,
+                "ratified": ts.ratified_instances,
+            }
+            for name, ts in rep.link_types.items()
+        },
+        "interfaces_declared": rep.interfaces_declared,
+        "functions_declared": rep.functions_declared,
+        "action_types_declared": rep.action_types_declared,
+        "intent_types_declared": rep.intent_types_declared,
+    }
+    _emit_payload(payload, json_output)
 
 
 if __name__ == "__main__":
