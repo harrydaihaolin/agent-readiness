@@ -1,10 +1,4 @@
-"""Implementations of the five OSS match types.
-
-Each matcher takes a RepoContext and a match-config dict, and returns
-a list of (file, line, message) tuples for findings. None of these run
-target-repo code; everything is read-only file walking, regex, and
-manifest parsing.
-"""
+"""Built-in OSS match types (file_size, path_glob, composite, …)."""
 
 from __future__ import annotations
 
@@ -16,27 +10,11 @@ from typing import Any, Callable, Iterable
 
 from agent_readiness.context import RepoContext
 
-# A match function returns a list of `(file_or_None, line_or_None, message)`
-# tuples — one per finding produced by this rule firing.
 MatcherFn = Callable[[RepoContext, dict[str, Any]], list[tuple[str | None, int | None, str]]]
-
-
-# ---------------------------------------------------------------------------
-# file_size
-# ---------------------------------------------------------------------------
 
 
 @lru_cache(maxsize=512)
 def _glob_to_regex(pattern: str) -> re.Pattern[str]:
-    """Translate a gitignore-ish glob pattern with ``**`` to a regex.
-
-    Rules:
-    - ``**/`` matches any sequence of directories (including empty)
-    - ``**`` matches any character sequence including ``/``
-    - ``*`` matches any character except ``/``
-    - ``?`` matches one character except ``/``
-    - other special chars are escaped
-    """
     out = ["^"]
     i = 0
     while i < len(pattern):
@@ -70,7 +48,6 @@ def _matches_any_glob(rel: Path, patterns: Iterable[str]) -> bool:
         regex = _glob_to_regex(pat)
         if regex.match(s) or regex.match(name):
             return True
-        # Plain fnmatch is still a fallback for corner cases like `*.lock`.
         if fnmatch.fnmatch(s, pat) or fnmatch.fnmatch(name, pat):
             return True
     return False
@@ -91,13 +68,11 @@ def match_file_size(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[str | N
         except OSError:
             continue
         if size <= threshold_bytes:
-            # Quick byte gate — if it's small, don't bother counting lines.
             if size < threshold_lines:
                 continue
         if size > threshold_bytes:
             findings.append((str(rel), None, f"Large file: {rel} ({size:,} bytes > {threshold_bytes:,})"))
             continue
-        # Count lines only for borderline files
         text = ctx.read_text(rel, max_bytes=threshold_bytes * 2)
         if text is None:
             continue
@@ -107,29 +82,18 @@ def match_file_size(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[str | N
     return findings
 
 
-# ---------------------------------------------------------------------------
-# path_glob
-# ---------------------------------------------------------------------------
-
-
 def match_path_glob(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[str | None, int | None, str]]:
     require = list(cfg.get("require_globs", []))
     forbid = list(cfg.get("forbid_globs", []))
     findings: list[tuple[str | None, int | None, str]] = []
 
     if require:
-        # Fire when NONE of require_globs matches any file.
         if not any(_matches_any_glob(rel, require) for rel in ctx.files):
             findings.append((None, None, f"None of these expected paths exist: {', '.join(require)}"))
     for rel in ctx.files:
         if forbid and _matches_any_glob(rel, forbid):
             findings.append((str(rel), None, f"Forbidden path present: {rel}"))
     return findings
-
-
-# ---------------------------------------------------------------------------
-# manifest_field
-# ---------------------------------------------------------------------------
 
 
 def _walk_dotted(data: Any, dotted: str) -> Any:
@@ -151,7 +115,7 @@ def _load_manifest(path: Path) -> dict[str, Any] | None:
         if name == "pyproject.toml":
             try:
                 import tomllib
-            except ImportError:  # py<3.11
+            except ImportError:
                 return None
             return tomllib.loads(path.read_text())
         if name == "package.json":
@@ -179,11 +143,6 @@ def match_manifest_field(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[st
     if fire_when == "present" and present:
         return [(manifest_name, None, f"{manifest_name}: '{field_path}' is present (rule expected absent).")]
     return []
-
-
-# ---------------------------------------------------------------------------
-# regex_in_files
-# ---------------------------------------------------------------------------
 
 
 def match_regex_in_files(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[str | None, int | None, str]]:
@@ -215,11 +174,6 @@ def match_regex_in_files(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[st
     return findings
 
 
-# ---------------------------------------------------------------------------
-# command_in_makefile
-# ---------------------------------------------------------------------------
-
-
 def match_command_in_makefile(
     ctx: RepoContext, cfg: dict[str, Any]
 ) -> list[tuple[str | None, int | None, str]]:
@@ -230,7 +184,6 @@ def match_command_in_makefile(
         if fire_when == "missing":
             return [("Makefile", None, "Makefile not present.")]
         return []
-    # Look for a line like `target:` (allow leading .PHONY etc. on other lines)
     pat = re.compile(rf"^{re.escape(target)}\s*:", re.MULTILINE)
     found = bool(pat.search(text))
     if fire_when == "missing" and not found:
@@ -240,14 +193,12 @@ def match_command_in_makefile(
     return []
 
 
-# ---------------------------------------------------------------------------
-# composite (and / or / not over leaf clauses)
-# ---------------------------------------------------------------------------
-
-
-# Engines should never recurse deeper than this. Keeps evaluation cheap
-# and disallows degenerate hand-written rules from blowing the stack.
 _COMPOSITE_MAX_DEPTH = 4
+
+
+def _registry() -> dict[str, MatcherFn]:
+    from agent_readiness.rules_eval.matchers import OssMatchTypeRegistry
+    return OssMatchTypeRegistry
 
 
 def _eval_clause(
@@ -256,10 +207,8 @@ def _eval_clause(
     ctype = str(clause.get("type", ""))
     if ctype == "composite":
         return _match_composite(ctx, clause, depth=depth + 1)
-    matcher = OssMatchTypeRegistry.get(ctype)
+    matcher = _registry().get(ctype)
     if matcher is None:
-        # Unknown leaf type — treat as a no-finding clause so AND/NOT
-        # semantics remain conservative (fail closed; do not fire).
         return []
     return matcher(ctx, clause)
 
@@ -276,16 +225,13 @@ def _match_composite(
     summary = cfg.get("summary")
 
     if op == "not":
-        # `not` operates on the FIRST clause only; extras are ignored.
         sub = _eval_clause(clauses[0], ctx, depth)
         if sub:
             return []
         msg = summary or "Composite NOT: expected absence, but found nothing required to fire."
-        # Convey what the inner clause was looking for.
         ctype = clauses[0].get("type", "?")
         return [(None, None, f"{msg} (clause type={ctype})")]
 
-    # Evaluate each clause once for both `and` and `or`.
     sub_findings = [_eval_clause(c, ctx, depth) for c in clauses]
     if op == "and":
         if not all(sub for sub in sub_findings):
@@ -293,15 +239,6 @@ def _match_composite(
         msg = summary or "Composite AND fired: all clauses produced findings."
         return [(None, None, msg)]
     if op == "or":
-        # OR is satisfied (= produces no findings) when AT LEAST ONE clause
-        # is satisfied. In this codebase a clause "is satisfied" when its
-        # leaf matcher returns no findings — i.e. the required paths are
-        # present, the required regex matches, etc. This matches every
-        # rules-pack author's intent ("at least one CI provider configured",
-        # "any of these alternative READMEs/lockfiles is fine"), even though
-        # an earlier docstring described the inverse OR-of-failures
-        # semantic. Only when EVERY clause failed do we surface findings,
-        # one per failing clause so the user sees each unmet alternative.
         if any(not sub for sub in sub_findings):
             return []
         out: list[tuple[str | None, int | None, str]] = []
@@ -311,27 +248,10 @@ def _match_composite(
         if summary:
             return [(None, None, f"{summary} (no clause matched)"), *out]
         return out
-    # Unknown op → fail closed (no findings).
     return []
 
 
 def match_composite(
     ctx: RepoContext, cfg: dict[str, Any]
 ) -> list[tuple[str | None, int | None, str]]:
-    """Public entry point for the composite matcher (depth tracked internally)."""
     return _match_composite(ctx, cfg, depth=0)
-
-
-# ---------------------------------------------------------------------------
-# Registry
-# ---------------------------------------------------------------------------
-
-
-OssMatchTypeRegistry: dict[str, MatcherFn] = {
-    "file_size": match_file_size,
-    "path_glob": match_path_glob,
-    "manifest_field": match_manifest_field,
-    "regex_in_files": match_regex_in_files,
-    "command_in_makefile": match_command_in_makefile,
-    "composite": match_composite,
-}
