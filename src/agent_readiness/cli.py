@@ -812,5 +812,59 @@ def explain(check_id: str) -> None:
     click.echo(rule.explanation or "(no explanation provided)")
 
 
+@cli.group()
+def ontology() -> None:
+    """Workspace Ontology subcommands."""
+
+
+@ontology.command("load")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path, exists=False),
+)
+@click.option("--json", "json_output", is_flag=True, help="Emit compact JSON (default: pretty).")
+def ontology_load(path: Path, json_output: bool) -> None:
+    """Load an ontology/ directory and print its contents.
+
+    PATH is the path to the `ontology/` directory itself (not the workspace root).
+    Missing PATH yields an empty Ontology with exit code 0; malformed YAML
+    or schema violations exit with code 1.
+    """
+    import json as _json
+
+    from agent_readiness.ontology import load_ontology
+
+    try:
+        ont = load_ontology(path)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+
+    def _dump_types(d: dict) -> dict:
+        return {name: model.model_dump(mode="json") for name, model in d.items()}
+
+    def _dump_instances(d: dict) -> dict:
+        return {
+            type_name: [inst.model_dump(mode="json") for inst in insts]
+            for type_name, insts in d.items()
+        }
+
+    payload = {
+        "object_types": _dump_types(ont.object_types),
+        "link_types": _dump_types(ont.link_types),
+        "interfaces": _dump_types(ont.interfaces),
+        "functions": _dump_types(ont.functions),
+        "action_types": _dump_types(ont.action_types),
+        "intent_types": _dump_types(ont.intent_types),
+        "object_instances": _dump_instances(ont.object_instances),
+        "link_instances": _dump_instances(ont.link_instances),
+    }
+
+    if json_output:
+        click.echo(_json.dumps(payload, separators=(",", ":")))
+    else:
+        click.echo(_json.dumps(payload, indent=2))
+
+
 if __name__ == "__main__":
     cli()
