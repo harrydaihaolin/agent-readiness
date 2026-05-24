@@ -13,6 +13,12 @@ explanation: |
   `__main__.py`, `index.{js,ts}`) also count. Without any of these,
   the agent has to guess from filenames, which fails for non-trivial
   layouts.
+applies_when:
+  # Code-ecosystem rule: skip on YAML-only / docs-only / config-only
+  # repos where ctx.detected_languages is empty. There's nothing for
+  # an "entry point" to refer to without source code. Requires
+  # agent-readiness >= 2.8.0.
+  any_language_detected: true
 match:
   type: composite
   op: or

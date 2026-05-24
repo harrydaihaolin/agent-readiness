@@ -12,6 +12,12 @@ explanation: |
   one, every action becomes guesswork from filenames and tribal
   knowledge. This rule looks for a manifest at the repo root or, for
   monorepos, at depth ≤ 2 (`packages/<name>/pyproject.toml`).
+applies_when:
+  # Code-ecosystem rule: skip on YAML-only / docs-only / config-only
+  # repos where ctx.detected_languages is empty. Requires
+  # agent-readiness >= 2.8.0; older engines ignore the field and
+  # continue firing the rule (the previous behaviour).
+  any_language_detected: true
 match:
   type: manifest_introspection
   mode: any_manifest_present
