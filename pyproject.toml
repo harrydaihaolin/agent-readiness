@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-readiness"
-version = "2.6.0"
+version = "2.7.0"
 description = "Benchmark how agent-ready a code repository is for LLM coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,7 +32,7 @@ dependencies = [
     # rules_eval/loader.py L94-111): the protocol's Rule validation is
     # best-effort and unknown match types still graceful-degrade to
     # not_measured. Tighten this pin once protocol >=0.4 is published.
-    "agent-readiness-insights-protocol>=0.1,<1.0",
+    "agent-readiness-insights-protocol>=0.5.0,<0.6.0",
 ]
 
 [project.urls]

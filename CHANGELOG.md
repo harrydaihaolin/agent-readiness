@@ -5,6 +5,49 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-05-23
+
+Minor: ships **workspace-starter M1** — the scanner can now load and
+validate the v1 manifest format (workspace bible: `manifest.yaml`,
+`glossary.yaml`, `boundaries.yaml`, `rules/*.yaml`,
+`.agent-readiness-version`). New `agent-readiness manifest validate`
+CLI subcommand emits a stable `ManifestValidationResult` JSON envelope
+that the MCP `manifest_validate` tool serializes byte-for-byte.
+
+### Added
+
+- **`src/agent_readiness/manifest/`** — new package:
+  - `loader.py`: `load_manifest_dir(path) -> LoadedManifest` parses the
+    standard manifest directory layout into typed Pydantic models from
+    `agent-readiness-insights-protocol>=0.5.0`. Raises
+    `ManifestLoadError` (with `location`) on missing files, YAML parse
+    failures, or schema violations.
+  - `validator.py`: `validate_manifest_dir(path) -> ValidationResult`
+    layers two semantic checks over the schema:
+    1. boundary rules may only reference tag axes declared in
+       `boundaries.spec.tagAxes`;
+    2. arch rule `metadata.id` must share the numeric prefix of its
+       containing filename (e.g. `001-foo.yaml` ⇒ id starts `001-`).
+    Emits a `to_json_envelope()` shape that's the contract for the
+    MCP tool and any future renderers.
+- **`agent-readiness manifest validate <path>`** CLI subcommand:
+  human and `--json` output; `--strict` upgrades warnings to exit 1;
+  exit 2 on missing/invalid path.
+- 16 new tests in `tests/manifest/` (6 loader, 6 validator, 4 CLI).
+
+### Changed
+
+- **`pyproject.toml`** — pin `agent-readiness-insights-protocol` to
+  `>=0.5.0,<0.6.0` (was `>=0.1,<1.0`). Required for the new manifest
+  models; the upper bound matches the protocol-package SemVer policy.
+
+### Notes
+
+This is M1 of the workspace-starter superpower (see
+`agent-readiness-research/docs/superpowers/plans/2026-05-22-workspace-starter-plan.md`).
+M2–M6 (materialize / add-repo / boundaries-check / glossary / sessions)
+land in future minor bumps.
+
 ## [2.6.0] - 2026-05-23
 
 Minor: ships **workspace-aware scanning** with a new **Coordination
