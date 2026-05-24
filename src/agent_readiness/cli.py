@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -1308,6 +1309,153 @@ def ontology_invoke_function(
         click.echo(f"error: {exc}", err=True)
         raise SystemExit(2)
     _emit_payload(result, json_output)
+
+
+@ontology.command("apply-action")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--action-id", required=True)
+@click.option("--arg", "args", multiple=True, help="Action argument as K=V (repeatable).")
+@click.option("--no-dry-run", "no_dry_run", is_flag=True, default=False)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_apply_action(
+    path: Path,
+    action_id: str,
+    args: tuple[str, ...],
+    no_dry_run: bool,
+    json_output: bool,
+) -> None:
+    """Apply a declared ActionType (dry-run by default)."""
+    from agent_readiness.ontology.runtime import (
+        ActionExecutionError,
+        ActionNotFoundError,
+        apply_action,
+    )
+
+    try:
+        result = apply_action(
+            path,
+            action_id,
+            _parse_kv_pairs(args),
+            dry_run=not no_dry_run,
+        )
+    except ActionNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    except ActionExecutionError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(result, json_output)
+
+
+@ontology.command("record-intent")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--intent-type", required=True)
+@click.option("--goal-arg", "goal_args", multiple=True, help="Goal argument as K=V.")
+@click.option("--started-by", default=lambda: os.getenv("USER", "agent"))
+@click.option("--json", "json_output", is_flag=True)
+def ontology_record_intent(
+    path: Path,
+    intent_type: str,
+    goal_args: tuple[str, ...],
+    started_by: str,
+    json_output: bool,
+) -> None:
+    """Record a new cross-repo intent without executing steps."""
+    from agent_readiness.ontology.runtime import IntentNotFoundError, record_intent
+
+    try:
+        result = record_intent(
+            path,
+            intent_type,
+            _parse_kv_pairs(goal_args),
+            started_by,
+        )
+    except IntentNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    _emit_payload(result, json_output)
+
+
+@ontology.command("advance-intent")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--intent-id", required=True)
+@click.option("--step-id", required=True)
+@click.option("--no-dry-run", "no_dry_run", is_flag=True, default=False)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_advance_intent(
+    path: Path,
+    intent_id: str,
+    step_id: str,
+    no_dry_run: bool,
+    json_output: bool,
+) -> None:
+    """Advance one intent step (dry-run by default)."""
+    from agent_readiness.ontology.runtime import (
+        IntentNotFoundError,
+        IntentStepError,
+        advance_intent,
+    )
+
+    try:
+        result = advance_intent(
+            path,
+            intent_id,
+            step_id,
+            dry_run=not no_dry_run,
+        )
+    except IntentNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    except IntentStepError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(result, json_output)
+
+
+@ontology.command("query-intent")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--intent-id", required=True)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_query_intent(path: Path, intent_id: str, json_output: bool) -> None:
+    """Query consolidated intent state from the ledger."""
+    from agent_readiness.ontology.runtime import IntentNotFoundError, query_intent
+
+    try:
+        result = query_intent(path, intent_id)
+    except IntentNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    _emit_payload(result, json_output)
+
+
+@ontology.command("list-active-intents")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_list_active_intents(path: Path, json_output: bool) -> None:
+    """List intents that still have pending steps."""
+    from agent_readiness.ontology.runtime import list_active_intents
+
+    _emit_payload(list_active_intents(path), json_output)
 
 
 if __name__ == "__main__":
