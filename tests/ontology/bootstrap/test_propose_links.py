@@ -88,3 +88,57 @@ def test_unresolved_dep_recorded_as_ambiguity(linked_workspace: Path):
     assert any(p.properties["to"]["id"] == "repo-b" for p in env.proposed)
     # requests is external and should not produce a proposal but may produce an ambiguity
     assert all(p.properties["to"]["id"] != "requests" for p in env.proposed)
+
+
+@pytest.fixture
+def protocol_link_workspace(tmp_path: Path) -> Path:
+    d = tmp_path / "foo-protocol"
+    d.mkdir()
+    (d / ".git").mkdir()
+    (d / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    write_ratified_repo_instance(tmp_path, "foo-protocol")
+    return tmp_path
+
+
+def test_providesProtocol_for_name_suffix(protocol_link_workspace: Path):
+    env = propose_link_instances(protocol_link_workspace, link_type="providesProtocol")
+    assert env.target_type == "providesProtocol"
+    assert any(
+        p.properties["from"]["id"] == "foo-protocol"
+        and p.properties["to"]["object_type"] == "Protocol"
+        for p in env.proposed
+    )
+
+
+@pytest.fixture
+def codeowners_workspace(tmp_path: Path) -> Path:
+    d = tmp_path / "owned-repo"
+    d.mkdir()
+    (d / ".git").mkdir()
+    (d / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (d / "CODEOWNERS").write_text("* @some-team\n")
+    write_ratified_repo_instance(tmp_path, "owned-repo")
+    return tmp_path
+
+
+def test_ownedBy_from_CODEOWNERS(codeowners_workspace: Path):
+    env = propose_link_instances(codeowners_workspace, link_type="ownedBy")
+    assert any(
+        p.properties["from"]["id"] == "owned-repo"
+        and p.properties["to"] == {"object_type": "Owner", "id": "@some-team"}
+        for p in env.proposed
+    )
+
+
+def test_partOf_returns_empty_when_no_modules(tmp_path: Path):
+    write_ratified_repo_instance(tmp_path, "r1")
+    env = propose_link_instances(tmp_path, link_type="partOf")
+    assert env.proposed == []
+    assert any("Module instances not yet bootstrapped" in a.reason for a in env.ambiguities)
+
+
+def test_releasedAs_is_deferred(tmp_path: Path):
+    write_ratified_repo_instance(tmp_path, "r1")
+    env = propose_link_instances(tmp_path, link_type="releasedAs")
+    assert env.proposed == []
+    assert any(a.id == "releasedAs--deferred" for a in env.ambiguities)
