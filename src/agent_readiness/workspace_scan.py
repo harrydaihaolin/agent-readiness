@@ -45,12 +45,15 @@ def scan(path: Path, children: list[Path]) -> WorkspaceReadinessReport:
 
     started = time.monotonic()
 
-    # 1. Coordination pack at the root.
+    # 1. Coordination checks at the root (findings + top_action only).
     coordination_results = evaluate_coordination(path, children)
     coordination_findings: list[Finding] = []
     for cr in coordination_results:
         coordination_findings.extend(cr.findings)
-    coordination_score = _score_coordination(coordination_results)
+
+    # Ontology pillar from YAML rules at the workspace root. Coordination
+    # score is a deprecated alias of Ontology (dual-emit for back-compat).
+    ontology_score = _score_ontology_at_root(path)
 
     # 2. Per-child scans (sequential; parallel is a deliberate non-goal).
     child_reports: list[ChildReadiness] = []
@@ -75,7 +78,7 @@ def scan(path: Path, children: list[Path]) -> WorkspaceReadinessReport:
             })
 
     # 3. Aggregation.
-    pillar_scores = _aggregate_pillar_scores(child_reports, coordination_score)
+    pillar_scores = _aggregate_pillar_scores(child_reports, ontology_score)
     overall = _overall_score(pillar_scores)
 
     # 4. Top-action selection — Coordination beats child.
@@ -131,6 +134,21 @@ def _scan_one_child(child_path: Path) -> ChildReadiness:
 
 # --- scoring + aggregation --------------------------------------------
 
+def _score_ontology_at_root(path: Path) -> float:
+    """Score Ontology pillar YAML rules against the workspace root."""
+    from agent_readiness.context import RepoContext
+    from agent_readiness.rules_eval import evaluate_rules
+    from agent_readiness.rules_runtime import load_default_rules
+    from agent_readiness.scorer import _weighted_mean
+
+    rules = [r for r in load_default_rules() if r.pillar.lower() == "ontology"]
+    if not rules:
+        return 100.0
+    ctx = RepoContext(root=path)
+    results = evaluate_rules(rules, ctx)
+    return _weighted_mean(results)
+
+
 def _score_coordination(results: list[CheckResult]) -> float:
     """Coordination pillar score: mean of per-check scores.
 
@@ -145,9 +163,13 @@ def _score_coordination(results: list[CheckResult]) -> float:
 
 def _aggregate_pillar_scores(
     child_reports: list[ChildReadiness],
-    coordination_score: float,
+    ontology_score: float,
 ) -> dict[str, float]:
-    """Mean of post-cap child scores per pillar; coordination from root."""
+    """Mean of post-cap child scores per pillar; ontology from root rules.
+
+    ``coordination`` is a deprecated alias of ``ontology`` (same numeric
+    score) for two minor protocol versions of back-compat.
+    """
     pillars = ["cognitive_load", "feedback", "flow", "safety"]
     out: dict[str, float] = {}
     for p in pillars:
@@ -156,15 +178,19 @@ def _aggregate_pillar_scores(
             continue
         scores = [c.pillar_scores.get(p, 0.0) for c in child_reports]
         out[p] = sum(scores) / len(scores)
-    out["coordination"] = coordination_score
+    out["ontology"] = ontology_score
+    out["coordination"] = ontology_score  # deprecated alias — remove in v0.9
     return out
 
 
 def _overall_score(pillar_scores: dict[str, float]) -> float:
-    """Arithmetic mean of all 5 pillar scores."""
+    """Arithmetic mean of pillar scores (coordination alias excluded when ontology present)."""
     if not pillar_scores:
         return 0.0
-    return sum(pillar_scores.values()) / len(pillar_scores)
+    scores = dict(pillar_scores)
+    if "ontology" in scores and "coordination" in scores:
+        del scores["coordination"]
+    return sum(scores.values()) / len(scores)
 
 
 def _pick_top_action(
