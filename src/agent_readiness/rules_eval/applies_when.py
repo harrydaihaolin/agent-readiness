@@ -15,6 +15,10 @@ Predicates registered here in v1:
 - ``languages_in: list[str]`` — ``True`` iff *any* detected language
   is in the list. Use for ecosystem-specific rules
   (e.g. ``[python, rust]`` for a Python-or-Rust rule).
+- ``is_workspace: bool`` — ``True`` iff the path has ≥ 2 child dirs
+  with ``.git/`` (multi-repo workspace heuristic).
+- ``has_ontology: bool`` — ``True`` iff ``ontology/`` exists and
+  contains at least one ``*.yaml`` file.
 
 Unknown predicate keys log a warning and evaluate to ``False`` so that
 a rules-pack pinned ahead of the engine cannot silently change
@@ -55,8 +59,28 @@ def _pred_languages_in(ctx: RepoContext, value: Any) -> bool:
     return bool(detected & allowed)
 
 
+def _pred_is_workspace(ctx: RepoContext, value: Any) -> bool:
+    """``is_workspace: true`` → path has ≥ 2 git child directories."""
+    expected = bool(value)
+    has_repos = sum(
+        1 for p in ctx.root.iterdir()
+        if p.is_dir() and (p / ".git").exists()
+    ) >= 2
+    return has_repos is expected
+
+
+def _pred_has_ontology(ctx: RepoContext, value: Any) -> bool:
+    """``has_ontology: true`` → ontology/ dir with at least one YAML file."""
+    expected = bool(value)
+    ont = ctx.root / "ontology"
+    present = ont.is_dir() and any(ont.rglob("*.yaml"))
+    return present is expected
+
+
 _PREDICATES: dict[str, Predicate] = {
     "any_language_detected": _pred_any_language_detected,
+    "has_ontology":          _pred_has_ontology,
+    "is_workspace":          _pred_is_workspace,
     "languages_in":          _pred_languages_in,
 }
 
