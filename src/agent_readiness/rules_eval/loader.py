@@ -58,6 +58,7 @@ class LoadedRule:
     action: dict[str, Any] | None = None
     verify: dict[str, Any] | None = None
     fix_prompt: str | None = None
+    applies_when: dict[str, Any] | None = None
 
     @property
     def match_type(self) -> str:
@@ -143,6 +144,10 @@ def load_rule_file(path: Path) -> LoadedRule | None:
     if fix_prompt is not None and not isinstance(fix_prompt, str):
         raise RuleLoadError(f"{path}: 'fix_prompt' must be a string or null")
 
+    applies_when = data.get("applies_when")
+    if applies_when is not None and not isinstance(applies_when, dict):
+        raise RuleLoadError(f"{path}: 'applies_when' must be a mapping or null")
+
     return LoadedRule(
         rule_id=str(data["id"]),
         pillar=str(data["pillar"]),
@@ -158,6 +163,7 @@ def load_rule_file(path: Path) -> LoadedRule | None:
         action=action,
         verify=verify,
         fix_prompt=fix_prompt,
+        applies_when=applies_when,
     )
 
 

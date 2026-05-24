@@ -13,6 +13,7 @@ from pathlib import Path
 from agent_readiness.context import RepoContext
 from agent_readiness.models import CheckResult, Finding, Pillar, Severity
 
+from .applies_when import rule_applies
 from .context_probe import render_action, render_fix_prompt, run_probes
 from .loader import LoadedRule
 from .matchers import OssMatchTypeRegistry
@@ -40,9 +41,31 @@ def _to_severity(name: str) -> Severity:
 def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
     """Evaluate one rule. Returns a CheckResult; unknown match types
     produce a `not_measured=True` result with no findings.
+
+    Rules carrying an ``applies_when`` selector are short-circuited to
+    ``not_measured=True`` when any predicate is false against ``ctx``;
+    this lets the rules pack opt out of code-ecosystem checks on
+    YAML-only / docs-only / config-only repos without each rule having
+    to encode the heuristic in its matcher.
     """
     pillar = _to_pillar(rule.pillar)
     severity = _to_severity(rule.severity)
+
+    if not rule_applies(rule.applies_when, ctx):
+        # Rule's applies_when selector excluded this repo. Return the
+        # same not_measured shape as the unknown-match-type fallback so
+        # the scorer drops the rule from the weighted average instead
+        # of treating absent findings as a perfect score.
+        return CheckResult(
+            check_id=rule.rule_id,
+            pillar=pillar,
+            score=100.0,
+            weight=rule.weight,
+            not_measured=True,
+            findings=[],
+            explanation=rule.explanation or None,
+        )
+
     matcher = OssMatchTypeRegistry.get(rule.match_type)
     if matcher is None:
         # Unknown match type (likely a private match type from the engine).

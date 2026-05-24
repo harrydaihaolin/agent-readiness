@@ -5,6 +5,57 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-05-23
+
+Minor: ships the **`applies_when` rule selector** — rules can now
+declare which repos they apply to and short-circuit to
+`not_measured` on the rest, so YAML-only / docs-only / config-only
+repos stop taking score hits from code-ecosystem rules that don't
+apply to them.
+
+Closes [#87](https://github.com/harrydaihaolin/agent-readiness/issues/87).
+Unblocks
+[agent-readiness-rules#28](https://github.com/harrydaihaolin/agent-readiness-rules/issues/28).
+
+### Added
+
+- **`src/agent_readiness/rules_eval/applies_when.py`** — new module:
+  - `rule_applies(applies_when, ctx) -> bool` — AND-combine
+    predicates against `RepoContext`. Empty/None means "always
+    applies" (backwards-compatible).
+  - Two v1 predicates:
+    - `any_language_detected: bool` — true iff
+      `ctx.detected_languages` is non-empty. Use to opt rules out
+      of YAML/docs/config-only repos.
+    - `languages_in: list[str]` — true iff any detected language
+      appears in the list (case-insensitive). Use for
+      ecosystem-specific rules.
+  - Unknown predicate keys evaluate to `False` and log a warning
+    (closed-world: a rule pack pinned ahead of the engine cannot
+    silently enable new predicates the engine doesn't yet know).
+- `LoadedRule.applies_when: dict | None` carried through the loader.
+- 14 new tests in `tests/test_applies_when.py` covering predicate
+  dispatch, AND-combination, case-insensitivity, unknown-key safety,
+  loader extraction, and evaluator integration.
+
+### Changed
+
+- **`rules_eval/evaluator.py`** — `evaluate_rule()` now consults
+  `rule.applies_when` before calling the matcher. An excluded rule
+  returns the same `not_measured=True` shape as the existing
+  unknown-match-type fallback, so the scorer drops it from the
+  weighted average instead of treating absent findings as a perfect
+  score.
+
+### Notes
+
+This is purely additive at the rule-schema level: rules that don't
+declare `applies_when` behave identically to before. The companion
+rules-pack change ([agent-readiness-rules#28](https://github.com/harrydaihaolin/agent-readiness-rules/issues/28))
+will add `applies_when: {any_language_detected: true}` to the three
+known-FP rules: `manifest.detected`, `manifest.lockfile_present`,
+`entry_points.detected`.
+
 ## [2.7.0] - 2026-05-23
 
 Minor: ships **workspace-starter M1** — the scanner can now load and
