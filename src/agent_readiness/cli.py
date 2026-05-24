@@ -1458,5 +1458,91 @@ def ontology_list_active_intents(path: Path, json_output: bool) -> None:
     _emit_payload(list_active_intents(path), json_output)
 
 
+@ontology.command("drift")
+@click.argument(
+    "workspace",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--json", "json_output", is_flag=True)
+@click.option(
+    "--block-threshold",
+    type=int,
+    default=70,
+    help=(
+        "Severity score at which CLI exits 2 (block); default 70 "
+        "(matches DriftReport.severity_level=='block')."
+    ),
+)
+def ontology_drift(workspace: Path, json_output: bool, block_threshold: int) -> None:
+    """Compute drift between ratified ontology and observed workspace reality."""
+    from agent_readiness.ontology.drift.detect import detect_drift
+
+    report = detect_drift(workspace)
+    payload = report.model_dump(mode="json")
+    _emit_payload(payload, json_output)
+    if report.severity_score >= block_threshold:
+        raise SystemExit(2)
+    if report.deltas:
+        raise SystemExit(1)
+
+
+@ontology.command("drift-propose-pr")
+@click.argument(
+    "workspace",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option(
+    "--manifest",
+    "manifest",
+    required=True,
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option(
+    "--apply/--dry-run",
+    default=False,
+    help=(
+        "--apply writes to the manifest repo + creates branch. "
+        "--dry-run is default."
+    ),
+)
+@click.option(
+    "--skip-gh/--with-gh",
+    default=True,
+    help="Don't actually call gh pr create (default: True for safety).",
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_drift_propose_pr(
+    workspace: Path,
+    manifest: Path,
+    apply: bool,
+    skip_gh: bool,
+    json_output: bool,
+) -> None:
+    """Open a PR against the manifest repo with proposed ontology updates from drift."""
+    from agent_readiness.ontology.drift.detect import detect_drift
+    from agent_readiness.ontology.drift.propose_pr import propose_pr_for_drift
+
+    report = detect_drift(workspace)
+    result = propose_pr_for_drift(
+        report=report,
+        manifest_repo=manifest,
+        dry_run=not apply,
+        skip_gh=skip_gh,
+    )
+    payload = {
+        "pr_url": result.pr_url,
+        "branch": result.branch,
+        "yaml_diff": result.yaml_diff,
+        "files_created": [str(p) for p in result.files_created],
+        "files_modified": [str(p) for p in result.files_modified],
+        "files_deleted": [str(p) for p in result.files_deleted],
+        "severity_level": report.severity_level,
+        "severity_score": report.severity_score,
+    }
+    _emit_payload(payload, json_output)
+
+
 if __name__ == "__main__":
     cli()
