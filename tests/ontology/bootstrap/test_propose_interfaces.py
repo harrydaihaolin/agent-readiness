@@ -11,9 +11,9 @@ from agent_readiness.ontology.bootstrap.propose_interfaces import (
 
 from .conftest import write_ratified_repo_instance
 
-MANIFEST_TEMPLATE = Path(
-    "/Users/haolin.dai/Documents/agent-readiness_project/agent-readiness-manifest/exemplar/ontology"
-)
+from agent_readiness.ontology.bootstrap.init import _BUNDLED_TEMPLATE
+
+MANIFEST_TEMPLATE = _BUNDLED_TEMPLATE
 
 
 @pytest.fixture

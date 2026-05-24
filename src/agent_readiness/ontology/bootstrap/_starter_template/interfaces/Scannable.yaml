@@ -1,0 +1,14 @@
+# ontology/interfaces/Scannable.yaml
+apiVersion: agent-readiness.io/v1
+kind: InterfaceType
+metadata:
+  name: Scannable
+  description: Passes agent-readiness scan with score at or above the documented floor.
+  floor: 70
+spec:
+  required_properties:
+    - { name: score, type: float }
+  satisfaction_proof:
+    type: command
+    command: "agent-readiness scan . --json | jq '.score'"
+    expect: "score >= {{ metadata.floor }}"

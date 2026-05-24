@@ -1,0 +1,16 @@
+# ontology/objectTypes/Capability.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: Capability
+  description: A named capability within a domain, exposed via CLI, MCP, or API.
+spec:
+  identity:
+    fields: [domain, name]
+    pk_expression: "{{ domain }}#{{ name }}"
+  properties:
+    - { name: name,          type: string, required: true }
+    - { name: domain,        type: string, required: true }
+    - { name: description,   type: string }
+    - { name: surface_type,  type: "enum[CLI, MCP, API]" }
+    - { name: provided_by,   type: "ref[Repo]" }

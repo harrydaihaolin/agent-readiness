@@ -1,0 +1,14 @@
+# ontology/functions/compute_dep_graph.yaml
+apiVersion: agent-readiness.io/v1
+kind: FunctionType
+metadata:
+  name: compute_dep_graph
+  description: |
+    Return the edges of the Repo × dependsOn DAG across the workspace.
+spec:
+  inputs: []
+  outputs:
+    - name: dag
+      type: "list[{from: ref[Repo], to: ref[Repo]}]"
+  pure: true
+  implementation: ontology/functions/compute_dep_graph.py

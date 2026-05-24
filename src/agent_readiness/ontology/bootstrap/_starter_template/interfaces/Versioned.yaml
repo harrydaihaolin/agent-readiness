@@ -1,0 +1,12 @@
+# ontology/interfaces/Versioned.yaml
+apiVersion: agent-readiness.io/v1
+kind: InterfaceType
+metadata:
+  name: Versioned
+spec:
+  required_properties:
+    - { name: version, type: semver }
+  satisfaction_proof:
+    type: regex_match
+    file: "{{ primary_manifest }}"
+    pattern: 'version\s*[=:]\s*["\'']?\d+\.\d+\.\d+'

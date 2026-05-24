@@ -1,0 +1,16 @@
+# ontology/linkTypes/consumesProtocol.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: consumesProtocol
+spec:
+  from: Repo
+  to:   Protocol
+  cardinality: N:N
+  inverse: consumedBy
+  derived_from:
+    - source: pyproject.toml
+      field: project.dependencies
+      resolve: protocol_package_to_protocol
+    - source: import_scan
+      detect: ["from agent_readiness_insights_protocol", "agent-readiness-insights-protocol"]

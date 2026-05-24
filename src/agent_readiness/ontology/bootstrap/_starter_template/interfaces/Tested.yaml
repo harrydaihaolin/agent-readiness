@@ -1,0 +1,23 @@
+# ontology/interfaces/Tested.yaml
+apiVersion: agent-readiness.io/v1
+kind: InterfaceType
+metadata:
+  name: Tested
+spec:
+  required_properties:
+    - { name: test_runner, type: path, exists: true }
+  satisfaction_proof:
+    type: composite
+    op: and
+    clauses:
+      - type: composite
+        op: or
+        clauses:
+          - { type: regex_match, file: pyproject.toml, pattern: '\[tool\.pytest\]' }
+          - { type: regex_match, file: package.json, pattern: '"test"\s*:\s*"' }
+          - { type: regex_match, file: Makefile, pattern: '^test\s*:' }
+      - type: composite
+        op: or
+        clauses:
+          - { type: file_glob, paths: [".github/workflows/test.yml", ".github/workflows/ci.yml"] }
+          - { type: regex_match, file: ".github/workflows/ci.yml", pattern: 'pytest|npm test|make test' }

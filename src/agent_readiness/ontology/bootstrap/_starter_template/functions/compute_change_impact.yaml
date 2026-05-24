@@ -1,0 +1,17 @@
+# ontology/functions/compute_change_impact.yaml
+apiVersion: agent-readiness.io/v1
+kind: FunctionType
+metadata:
+  name: compute_change_impact
+  description: |
+    Given a changed repo and semver bump kind, estimate which downstream
+    repos are affected and assign a risk level per consumer.
+spec:
+  inputs:
+    - { name: changed_repo, type: "ref[Repo]" }
+    - { name: change_kind,  type: "enum[major, minor, patch]" }
+  outputs:
+    - name: affected_repos
+      type: "list[{repo: ref[Repo], risk: enum[low, medium, high]}]"
+  pure: true
+  implementation: ontology/functions/compute_change_impact.py

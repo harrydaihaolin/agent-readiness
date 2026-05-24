@@ -1,0 +1,15 @@
+# ontology/functions/compute_publish_order.yaml
+apiVersion: agent-readiness.io/v1
+kind: FunctionType
+metadata:
+  name: compute_publish_order
+  description: |
+    Given a changed repo, return the topological order in which its
+    dependedOnBy closure must be released to keep consumers consistent.
+spec:
+  inputs:
+    - { name: changed_repo, type: "ref[Repo]" }
+  outputs:
+    - { name: ordered_repos, type: "list[ref[Repo]]" }
+  pure: true
+  implementation: ontology/functions/compute_publish_order.py

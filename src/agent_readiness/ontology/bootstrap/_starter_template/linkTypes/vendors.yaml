@@ -1,0 +1,17 @@
+# ontology/linkTypes/vendors.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: vendors
+spec:
+  from: Repo
+  to:   RulesPack
+  cardinality: N:N
+  inverse: vendoredInto
+  derived_from:
+    - source: filesystem
+      detect: ["rules/**/*.yaml", "src/**/rules/**"]
+    - source: pyproject.toml
+      field: tool.agent-readiness.rules_path
+    - source: release_manifest
+      field: vendored_rules_version

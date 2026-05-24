@@ -1,0 +1,20 @@
+# ontology/linkTypes/dependsOn.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: dependsOn
+spec:
+  from: Repo
+  to:   Repo
+  cardinality: N:N
+  inverse: dependedOnBy
+  derived_from:
+    - source: pyproject.toml
+      field: project.dependencies
+      resolve: pypi_to_repo
+    - source: package.json
+      field: dependencies + devDependencies
+      resolve: npm_to_repo
+  axioms:
+    - acyclic: true
+    - irreflexive: true

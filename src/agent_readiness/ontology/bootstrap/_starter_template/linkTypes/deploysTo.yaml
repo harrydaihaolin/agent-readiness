@@ -1,0 +1,15 @@
+# ontology/linkTypes/deploysTo.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: deploysTo
+spec:
+  from: Service
+  to:   Environment
+  cardinality: N:N
+  inverse: hostsService
+  derived_from:
+    - source: github
+      field: environments
+    - source: filesystem
+      detect: [".github/workflows/deploy*.yml", "fly.toml", "render.yaml"]

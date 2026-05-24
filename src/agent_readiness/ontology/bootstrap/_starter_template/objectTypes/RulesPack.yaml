@@ -1,0 +1,18 @@
+# ontology/objectTypes/RulesPack.yaml
+apiVersion: agent-readiness.io/v1
+kind: ObjectType
+metadata:
+  name: RulesPack
+  description: A declarative YAML rule pack vendored into scanner releases.
+spec:
+  identity:
+    fields: [name, version]
+    pk_expression: "{{ name }}@{{ version }}"
+  properties:
+    - { name: name,                  type: string, required: true }
+    - { name: version,               type: semver, required: true }
+    - { name: vendored_into,         type: "list[ref[Repo]]" }
+    - { name: schema_compatibility,  type: semver }
+  derived_from:
+    - source: filesystem
+      detect: ["rules/**/*.yaml", "rules/**/*.yml"]

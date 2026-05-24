@@ -1,0 +1,27 @@
+# ontology/interfaces/Headless.yaml
+apiVersion: agent-readiness.io/v1
+kind: InterfaceType
+metadata:
+  name: Headless
+  description: |
+    No interactive prompts, stable --json output, exit codes mean things.
+    Mechanical verification is heuristic; full satisfaction may require manual review.
+spec:
+  required_properties:
+    - { name: cli_json_output,   type: bool }
+    - { name: exit_codes_stable, type: bool }
+  satisfaction_proof:
+    type: composite
+    op: and
+    clauses:
+      - { type: regex_match, file: "{{ cli_entrypoint }}", pattern: '--json' }
+      - type: composite
+        op: or
+        clauses:
+          - { type: regex_match, file: AGENTS.md, pattern: 'Headless|--json|exit code' }
+          - { type: regex_match, file: "{{ cli_help_output }}", pattern: '--json' }
+      - type: composite
+        op: or
+        clauses:
+          - { type: regex_match, file: AGENTS.md, pattern: 'exit code|Exit codes' }
+          - { type: file_exists, path: docs/headless-contract.md }

@@ -1,0 +1,15 @@
+# ontology/linkTypes/providesProtocol.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: providesProtocol
+spec:
+  from: Repo
+  to:   Protocol
+  cardinality: 1:N
+  inverse: providedBy
+  derived_from:
+    - source: naming_pattern
+      pattern: "*-protocol"
+    - source: import_scan
+      detect: ["schemas/*.json", "src/**/version.py"]

@@ -1,0 +1,15 @@
+# ontology/linkTypes/ownedBy.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: ownedBy
+spec:
+  from: Repo
+  to:   Owner
+  cardinality: N:1
+  inverse: owns
+  derived_from:
+    - source: CODEOWNERS
+      field: "*"
+    - source: github
+      field: repository.owner

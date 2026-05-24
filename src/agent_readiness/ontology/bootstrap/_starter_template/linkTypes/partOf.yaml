@@ -1,0 +1,13 @@
+# ontology/linkTypes/partOf.yaml
+apiVersion: agent-readiness.io/v1
+kind: LinkType
+metadata:
+  name: partOf
+spec:
+  from: Module
+  to:   Repo
+  cardinality: N:1
+  inverse: contains
+  derived_from:
+    - source: filesystem
+      detect: ["src/**", "packages/**", "lib/**"]
