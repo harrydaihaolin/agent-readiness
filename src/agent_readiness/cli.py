@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -812,13 +813,32 @@ def explain(check_id: str) -> None:
     click.echo(rule.explanation or "(no explanation provided)")
 
 
-def _emit_payload(payload: dict, json_output: bool) -> None:
+def _emit_payload(payload: Any, json_output: bool) -> None:
     import json as _json
 
     if json_output:
         click.echo(_json.dumps(payload, separators=(",", ":")))
     else:
         click.echo(_json.dumps(payload, indent=2))
+
+
+def _parse_kv_pairs(pairs: tuple[str, ...]) -> dict[str, Any]:
+    """Parse ``--where k=v --where k2=v2`` into a dict.
+
+    Values are JSON-parsed when possible, otherwise kept as strings.
+    """
+    import json as _json
+
+    out: dict[str, Any] = {}
+    for kv in pairs:
+        if "=" not in kv:
+            raise click.UsageError(f"Expected K=V, got {kv!r}")
+        k, v = kv.split("=", 1)
+        try:
+            out[k] = _json.loads(v)
+        except _json.JSONDecodeError:
+            out[k] = v
+    return out
 
 
 @cli.group()
@@ -1134,6 +1154,160 @@ def ontology_status(path: Path, json_output: bool) -> None:
         "intent_types_declared": rep.intent_types_declared,
     }
     _emit_payload(payload, json_output)
+
+
+@ontology.command("list-object-types")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_list_object_types(path: Path, json_output: bool) -> None:
+    """List declared ObjectType definitions."""
+    from agent_readiness.ontology.runtime import list_object_types
+
+    _emit_payload(list_object_types(path), json_output)
+
+
+@ontology.command("query-objects")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--object-type", required=True)
+@click.option("--where", multiple=True, help="Property filter as K=V (repeatable).")
+@click.option("--json", "json_output", is_flag=True)
+def ontology_query_objects(
+    path: Path, object_type: str, where: tuple[str, ...], json_output: bool
+) -> None:
+    """Query ratified ObjectInstances by type and optional property filters."""
+    from agent_readiness.ontology.runtime import query_objects
+
+    _emit_payload(
+        query_objects(path, object_type=object_type, where=_parse_kv_pairs(where) or None),
+        json_output,
+    )
+
+
+@ontology.command("list-links")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--from", "from_id", default=None, help="Filter by source object id.")
+@click.option("--to", "to_id", default=None, help="Filter by target object id.")
+@click.option("--link-type", default=None, help="Filter by link type name.")
+@click.option("--json", "json_output", is_flag=True)
+def ontology_list_links(
+    path: Path,
+    from_id: str | None,
+    to_id: str | None,
+    link_type: str | None,
+    json_output: bool,
+) -> None:
+    """List ratified LinkInstances with optional filters."""
+    from agent_readiness.ontology.runtime import list_links
+
+    _emit_payload(
+        list_links(path, from_id=from_id, to_id=to_id, link_type=link_type),
+        json_output,
+    )
+
+
+@ontology.command("get-object")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--id", "object_id", required=True, help="Object instance id.")
+@click.option("--json", "json_output", is_flag=True)
+def ontology_get_object(path: Path, object_id: str, json_output: bool) -> None:
+    """Fetch a single ratified ObjectInstance by id."""
+    from agent_readiness.ontology.runtime import get_object
+
+    obj = get_object(path, object_id)
+    _emit_payload(obj, json_output)
+    if obj is None:
+        raise SystemExit(1)
+
+
+@ontology.command("list-interfaces")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_list_interfaces(path: Path, json_output: bool) -> None:
+    """List declared InterfaceType definitions."""
+    from agent_readiness.ontology.runtime import list_interfaces
+
+    _emit_payload(list_interfaces(path), json_output)
+
+
+@ontology.command("which-interfaces")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--object-id", required=True, help="Object instance id.")
+@click.option("--json", "json_output", is_flag=True)
+def ontology_which_interfaces(
+    path: Path, object_id: str, json_output: bool
+) -> None:
+    """List interface claims on a ratified ObjectInstance."""
+    from agent_readiness.ontology.runtime import which_interfaces
+
+    _emit_payload(which_interfaces(path, object_id), json_output)
+
+
+@ontology.command("list-functions")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--json", "json_output", is_flag=True)
+def ontology_list_functions(path: Path, json_output: bool) -> None:
+    """List declared FunctionType definitions and implementation status."""
+    from agent_readiness.ontology.runtime import list_functions
+
+    _emit_payload(list_functions(path), json_output)
+
+
+@ontology.command("invoke-function")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option("--function-name", required=True)
+@click.option("--arg", "args", multiple=True, help="Function argument as K=V (repeatable).")
+@click.option("--json", "json_output", is_flag=True)
+def ontology_invoke_function(
+    path: Path, function_name: str, args: tuple[str, ...], json_output: bool
+) -> None:
+    """Invoke an ontology function implementation."""
+    from agent_readiness.ontology.runtime import (
+        FunctionInvocationError,
+        FunctionNotFoundError,
+        invoke_function,
+    )
+
+    try:
+        result = invoke_function(path, function_name, **_parse_kv_pairs(args))
+    except FunctionNotFoundError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1)
+    except FunctionInvocationError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(2)
+    _emit_payload(result, json_output)
 
 
 if __name__ == "__main__":
