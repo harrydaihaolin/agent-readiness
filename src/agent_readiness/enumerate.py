@@ -146,7 +146,16 @@ def _language_hint(entry: Path) -> list[str]:
 
 
 def _detect_manifest_signals(root: Path) -> dict[str, bool]:
-    """Static fast-path hints: 'this is obviously a monorepo' signals."""
+    """Static fast-path hints: 'this is obviously a monorepo' signals.
+
+    Kept in lockstep with :py:attr:`RepoContext.monorepo_tools` so the
+    enumerate / workspace-scan path and the per-repo scan path agree on
+    what counts as a monorepo. The ``convention_monorepo`` signal —
+    ≥ 2 direct-child manifest-bearing dirs — is what catches enterprise
+    Python monorepos that pre-date ``uv`` / ``rye`` workspace
+    declarations and stitch their N sibling packages together with a
+    top-level Earthfile / Bazel / Jenkinsfile instead.
+    """
     signals = {
         "pnpm_workspace":           (root / "pnpm-workspace.yaml").exists(),
         "cargo_workspace":          False,
@@ -154,6 +163,7 @@ def _detect_manifest_signals(root: Path) -> dict[str, bool]:
         "package_json_workspaces":  False,
         "gradle_multi":             (root / "settings.gradle").exists()
                                     or (root / "settings.gradle.kts").exists(),
+        "convention_monorepo":      _count_sibling_manifests(root) >= 2,
     }
     cargo = root / "Cargo.toml"
     if cargo.exists():
@@ -169,6 +179,32 @@ def _detect_manifest_signals(root: Path) -> dict[str, bool]:
     if pkg.exists():
         signals["package_json_workspaces"] = '"workspaces"' in _safe_read(pkg)
     return signals
+
+
+_MANIFEST_NAMES = (
+    "pyproject.toml", "setup.py", "Cargo.toml", "package.json",
+    "go.mod", "build.gradle", "build.gradle.kts", "pom.xml",
+)
+
+
+def _count_sibling_manifests(root: Path) -> int:
+    """Count direct-child directories carrying their own manifest.
+
+    Depth-1 only and existence-based — kept cheap so the enumerate
+    fast-path stays sub-millisecond even on very wide repos.
+    """
+    count = 0
+    try:
+        for entry in root.iterdir():
+            if entry.is_symlink() or not entry.is_dir():
+                continue
+            if entry.name in _IGNORE_DIRS:
+                continue
+            if any((entry / m).is_file() for m in _MANIFEST_NAMES):
+                count += 1
+    except OSError:
+        return 0
+    return count
 
 
 def _safe_read(p: Path, max_bytes: int = 64_000) -> str:

@@ -160,10 +160,35 @@ class RepoContext:
 
     @cached_property
     def monorepo_tools(self) -> list[str]:
-        """Detect monorepo tooling signals at the repo root."""
+        """Detect monorepo tooling signals at the repo root.
+
+        Covers four families:
+
+        1. **JS ecosystem** — npm/yarn workspaces, lerna, pnpm, nx, rush,
+           turborepo. These advertise themselves via dedicated files.
+        2. **Python workspace declarations** — ``[tool.uv.workspace]``,
+           ``[tool.rye.workspace]`` in ``pyproject.toml``. Modern Python
+           monorepos opt in here.
+        3. **Cargo / Gradle** — ``[workspace]`` in ``Cargo.toml``, and
+           the presence of ``settings.gradle`` / ``settings.gradle.kts``.
+        4. **Convention monorepos** — repos with ≥ 2 *direct child*
+           directories that each carry their own manifest
+           (``pyproject.toml`` / ``setup.py`` / ``Cargo.toml`` /
+           ``package.json`` / ``go.mod`` / ``build.gradle`` /
+           ``pom.xml``). This catches the very common pattern where a
+           single git repo holds N sibling packages without declaring
+           a formal workspace — e.g. enterprise Python monorepos that
+           predate ``uv`` / ``rye`` and rely on a top-level build
+           orchestrator (Earthfile / Bazel / Jenkinsfile).
+
+           The ≥ 2 threshold keeps the false-positive rate low: a
+           single ``examples/foo/setup.py`` next to the real package
+           doesn't trip it. Only when the repo actually contains
+           multiple independently-manifested siblings does the
+           ``convention-monorepo`` label fire.
+        """
         tools: list[str] = []
 
-        # npm/yarn workspaces — look for "workspaces" key in package.json
         pkg_json = self.root / "package.json"
         if pkg_json.is_file():
             try:
@@ -183,7 +208,58 @@ class RepoContext:
             if (self.root / filename).is_file():
                 tools.append(label)
 
+        pyproject = self.root / "pyproject.toml"
+        if pyproject.is_file():
+            body = self.read_text("pyproject.toml") or ""
+            if "[tool.uv.workspace]" in body:
+                tools.append("uv-workspace")
+            if "[tool.rye.workspace]" in body:
+                tools.append("rye-workspace")
+
+        cargo = self.root / "Cargo.toml"
+        if cargo.is_file():
+            body = self.read_text("Cargo.toml") or ""
+            if "[workspace]" in body:
+                tools.append("cargo-workspace")
+
+        if (
+            (self.root / "settings.gradle").is_file()
+            or (self.root / "settings.gradle.kts").is_file()
+        ):
+            tools.append("gradle-multi-project")
+
+        # Convention monorepo: ≥ 2 direct-child manifest-bearing dirs.
+        # Kept here (not in the tooling list above) because the bar is
+        # structural: any repo whose layout *is* a monorepo, regardless
+        # of which build tool stitches it together.
+        if self._count_sibling_manifests() >= 2:
+            tools.append("convention-monorepo")
+
         return tools
+
+    def _count_sibling_manifests(self) -> int:
+        """Count direct-child directories that carry their own manifest.
+
+        Direct children only (depth-1) so a repo's ``examples/`` or
+        ``tests/`` subtree can't accidentally inflate the count. The
+        check is purely existence-based; we don't parse the manifests.
+        """
+        manifest_names = (
+            "pyproject.toml", "setup.py", "Cargo.toml", "package.json",
+            "go.mod", "build.gradle", "build.gradle.kts", "pom.xml",
+        )
+        count = 0
+        try:
+            for entry in self.root.iterdir():
+                if entry.is_symlink() or not entry.is_dir():
+                    continue
+                if entry.name in _EXCLUDED_DIRS:
+                    continue
+                if any((entry / m).is_file() for m in manifest_names):
+                    count += 1
+        except OSError:
+            return 0
+        return count
 
     @cached_property
     def is_monorepo(self) -> bool:

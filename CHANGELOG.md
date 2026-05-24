@@ -5,6 +5,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-05-23
+
+Minor: closes a recurring false-positive class — *"this is obviously
+a monorepo but agent-readiness sees a single Python project."*
+
+The old detector only knew about JS-ecosystem tooling
+(`npm workspaces`, `lerna`, `pnpm`, `nx`, `rush`, `turborepo`).
+Real-world enterprise monorepos that pre-date `uv` / `rye` workspace
+declarations — typically N sibling Python packages stitched together
+by a top-level Earthfile / Bazel / Jenkinsfile — were misclassified
+as single repos, which silently suppressed every monorepo-aware
+heuristic downstream.
+
+### Added
+
+- **`RepoContext.monorepo_tools`** now also reports:
+  - `uv-workspace` — `[tool.uv.workspace]` in `pyproject.toml`
+  - `rye-workspace` — `[tool.rye.workspace]` in `pyproject.toml`
+  - `cargo-workspace` — `[workspace]` in `Cargo.toml`
+  - `gradle-multi-project` — `settings.gradle` or `settings.gradle.kts`
+  - `convention-monorepo` — ≥ 2 *direct child* directories each
+    carrying their own manifest (`pyproject.toml` / `setup.py` /
+    `Cargo.toml` / `package.json` / `go.mod` / `build.gradle` /
+    `pom.xml`). Depth-1 only so an `examples/foo/setup.py` next to
+    the real root can't trip the heuristic.
+- **`enumerate._detect_manifest_signals`** gains a matching
+  `convention_monorepo: bool` so the workspace-scan fast-path and
+  per-repo scan path agree.
+- 13 new tests in `tests/test_monorepo_detection.py` covering each
+  new signal, the depth-1 / excluded-dirs / threshold guardrails, and
+  a single-package regression check.
+
+### Fixed
+
+- Enterprise Python monorepos with N sibling packages and a root
+  `pyproject.toml` that only configures ruff/isort (no
+  `[project]` block, no workspace declaration) now correctly report
+  `is_monorepo: True` and surface in the scan's context envelope as
+  `monorepo_tools: ["convention-monorepo"]`. The same shape covers
+  Earthfile / Bazel / Jenkinsfile-orchestrated layouts.
+
 ## [2.8.0] - 2026-05-23
 
 Minor: ships the **`applies_when` rule selector** — rules can now
