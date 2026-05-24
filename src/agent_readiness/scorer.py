@@ -62,6 +62,7 @@ _PILLAR_PRIORITY: dict[Pillar, int] = {
     # lookup; an unmapped pillar would KeyError if any test rig ever
     # constructs a Coordination Finding in per-repo context).
     Pillar.COORDINATION:   4,
+    Pillar.ONTOLOGY:       5,
 }
 
 _SEVERITY_PRIORITY: dict[Severity, int] = {
@@ -92,10 +93,12 @@ def score(repo_path: Path, results: list[CheckResult],
     # per-repo pillar list — emitting an empty Coordination PillarScore
     # here would break renderers / consumers that key on the 4 per-repo
     # pillars. workspace_scan.scan() carries Coordination separately.
-    _per_repo_pillars = [p for p in Pillar if p is not Pillar.COORDINATION]
+    # Ontology is also workspace-scoped (YAML rules at the workspace root).
+    _workspace_only = frozenset({Pillar.COORDINATION, Pillar.ONTOLOGY})
+    _per_repo_pillars = [p for p in Pillar if p not in _workspace_only]
     by_pillar: dict[Pillar, list[CheckResult]] = {p: [] for p in _per_repo_pillars}
     for r in results:
-        if r.pillar is Pillar.COORDINATION:
+        if r.pillar in _workspace_only:
             continue
         by_pillar.setdefault(r.pillar, []).append(r)
 

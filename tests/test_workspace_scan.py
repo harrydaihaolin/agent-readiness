@@ -20,6 +20,7 @@ from agent_readiness.workspace_scan import (
     _pick_top_action,
     scan,
 )
+from tests.rules_eval.matchers.conftest import scaffold_ratified_ontology
 
 
 def _make_git(p: Path) -> None:
@@ -82,10 +83,11 @@ def test_scan_envelope_to_dict_shape(tmp_path: Path) -> None:
     assert d["schema"] == 1
     pillar_names = {p["pillar"] for p in d["pillars"]}
     assert pillar_names == {
-        "cognitive_load", "feedback", "flow", "safety", "coordination",
+        "cognitive_load", "feedback", "flow", "safety",
+        "coordination", "ontology",
     }
     for p in d["pillars"]:
-        if p["pillar"] == "coordination":
+        if p["pillar"] in ("coordination", "ontology"):
             assert p["source"] == "workspace"
         else:
             assert p["source"] == "aggregated"
@@ -104,12 +106,14 @@ def test_aggregate_is_arithmetic_mean() -> None:
         pillar_scores={"feedback": 60.0, "flow": 100.0,
                        "cognitive_load": 50.0, "safety": 50.0},
     )
-    out = _aggregate_pillar_scores([child_a, child_b], coordination_score=10.0)
+    out = _aggregate_pillar_scores([child_a, child_b], ontology_score=10.0)
     assert out["feedback"] == 70.0
     assert out["flow"] == 80.0
     assert out["cognitive_load"] == 60.0
     assert out["safety"] == 70.0
+    assert out["ontology"] == 10.0
     assert out["coordination"] == 10.0
+    assert out["coordination"] == out["ontology"]
 
 
 def test_top_action_coordination_beats_child() -> None:
@@ -164,3 +168,23 @@ def test_top_action_no_findings_and_no_top_actions_returns_none() -> None:
         top_action=None,
     )
     assert _pick_top_action([], [child]) is None
+
+
+def test_workspace_scan_emits_ontology_and_coordination_alias(tmp_path: Path) -> None:
+    a = _make_child_repo(tmp_path, "a")
+    b = _make_child_repo(tmp_path, "b")
+    scaffold_ratified_ontology(tmp_path, repos=["a", "b"])
+    (tmp_path / "ontology" / "actionTypes").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "ontology" / "actionTypes" / "publish.pypi.yaml").write_text(
+        "apiVersion: agent-readiness.io/v1\nkind: ActionType\n"
+        "metadata:\n  name: publish.pypi\nspec: {}\n"
+    )
+    (tmp_path / "ontology" / "intentTypes").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "ontology" / "intentTypes" / "release_cascade.yaml").write_text(
+        "apiVersion: agent-readiness.io/v1\nkind: IntentType\n"
+        "metadata:\n  name: release_cascade\nspec: {}\n"
+    )
+    result = scan(tmp_path, children=[a, b])
+    assert "ontology" in result.pillar_scores
+    assert "coordination" in result.pillar_scores
+    assert result.pillar_scores["ontology"] == result.pillar_scores["coordination"]

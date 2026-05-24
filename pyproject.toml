@@ -25,14 +25,7 @@ dependencies = [
     "click>=8.1",
     "rich>=13.7",
     "pyyaml>=6",
-    # NOTE: pinned to >=0.1 (not >=0.4 which would be semantically
-    # correct for the fix_prompt feature) because protocol 0.4.0 is
-    # not on PyPI yet — only 0.1.0 is. The loader gracefully degrades
-    # when an older protocol rejects newer rule fields (see
-    # rules_eval/loader.py L94-111): the protocol's Rule validation is
-    # best-effort and unknown match types still graceful-degrade to
-    # not_measured. Tighten this pin once protocol >=0.4 is published.
-    "agent-readiness-insights-protocol>=0.5.0,<0.6.0",
+    "agent-readiness-insights-protocol>=0.8.0,<0.9.0",
 ]
 
 [project.urls]

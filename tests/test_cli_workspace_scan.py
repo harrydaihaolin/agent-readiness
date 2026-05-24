@@ -34,7 +34,8 @@ def test_workspace_scan_json_emits_envelope(tmp_path: Path) -> None:
     assert envelope["schema"] == 1
     pillar_names = {p["pillar"] for p in envelope["pillars"]}
     assert pillar_names == {
-        "cognitive_load", "feedback", "flow", "safety", "coordination",
+        "cognitive_load", "feedback", "flow", "safety",
+        "coordination", "ontology",
     }
 
 

@@ -24,6 +24,7 @@ class Pillar(str, Enum):
     FLOW = "flow"
     SAFETY = "safety"
     COORDINATION = "coordination"
+    ONTOLOGY = "ontology"
 
 
 class Severity(str, Enum):
@@ -264,12 +265,18 @@ class WorkspaceReadinessReport:
             entry: dict[str, Any] = {
                 "pillar": pillar_name,
                 "score": score,
-                "source": "workspace" if pillar_name == "coordination" else "aggregated",
+                "source": (
+                    "workspace"
+                    if pillar_name in ("coordination", "ontology")
+                    else "aggregated"
+                ),
             }
             if pillar_name == "safety" and self.safety_caps_applied:
                 entry["safety_caps_applied"] = self.safety_caps_applied
             if pillar_name == "coordination":
                 entry["findings"] = [f.to_dict() for f in self.coordination_findings]
+            if pillar_name == "ontology":
+                entry["alias_of"] = "coordination"
             pillars.append(entry)
 
         d: dict[str, Any] = {
