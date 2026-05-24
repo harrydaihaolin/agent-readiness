@@ -1,0 +1,38 @@
+rules_version: 2
+id: ontology.mcp_surface_present
+provenance: agent-readiness/ontology.mcp_surface_present
+pillar: ontology
+title: agent-readiness-ontology-mcp server is reachable
+weight: 1.0
+severity: info
+explanation: |
+  When the workspace ships a runnable ontology MCP server, agents can
+  programmatically introspect the ontology. We accept either the
+  standalone server being present, or the passthrough being declared
+  in agent-readiness-mcp/pyproject.toml.
+applies_when:
+  has_ontology: true
+match:
+  type: composite
+  op: or
+  summary: Ontology MCP server or passthrough must be present in the workspace.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - agent-readiness-ontology-mcp/pyproject.toml
+    - type: path_glob
+      require_globs:
+        - agent-readiness-mcp/pyproject.toml
+fix_hint: |
+  Install `agent-readiness-ontology-mcp` and register it with your MCP host.
+insight_query: agent-readiness-ontology-mcp MCP server ontology introspection
+verify:
+  command: "test -f agent-readiness-ontology-mcp/pyproject.toml || test -f agent-readiness-mcp/pyproject.toml"
+  description: An ontology MCP server or passthrough package must exist in the workspace.
+fix_prompt: |
+  Agents cannot programmatically query the ontology without an MCP surface.
+
+  Add the `agent-readiness-ontology-mcp` repo to the workspace, or register
+  the passthrough in `agent-readiness-mcp/pyproject.toml`.
+
+  Verify with: `test -f agent-readiness-ontology-mcp/pyproject.toml`

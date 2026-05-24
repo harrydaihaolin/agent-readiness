@@ -1,0 +1,34 @@
+rules_version: 2
+id: ontology.repos_enumerated
+provenance: agent-readiness/ontology.repos_enumerated
+pillar: ontology
+title: All git children of the workspace appear as ratified Repo instances
+weight: 1.0
+severity: error
+explanation: |
+  The Drift Adversary flag: a workspace with N git children should have
+  N ratified Repo ObjectInstances. The Ontology pillar's anti-rot
+  invariant.
+applies_when:
+  is_workspace: true
+  has_ontology: true
+match:
+  type: ontology_instance_count
+  object_type: Repo
+  min: 2
+  state: ratified
+fix_hint: |
+  Re-run `agent-readiness ontology bootstrap propose-objects . --object-type Repo`
+  and ratify any new proposals.
+insight_query: ontology Repo instances enumerated workspace git children drift
+verify:
+  command: "agent-readiness ontology query 'count(Repo)'"
+  description: Ratified Repo count should match the number of git children in the workspace.
+fix_prompt: |
+  The workspace has git repos on disk that are not ratified in the ontology.
+  Agents will miss repos when planning cross-repo work.
+
+  Re-run `agent-readiness ontology bootstrap propose-objects . --object-type Repo`
+  and ratify any new proposals.
+
+  Verify with: `agent-readiness ontology query 'count(Repo)'`

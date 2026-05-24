@@ -1,0 +1,33 @@
+rules_version: 2
+id: ontology.object_types_declared
+provenance: agent-readiness/ontology.object_types_declared
+pillar: ontology
+title: Workspace declares the five Object Types
+weight: 1.0
+severity: warn
+explanation: |
+  An agent-ready workspace declares ratified Object Type definitions
+  (Repo, Library, Protocol, RulesPack at minimum) so agents can resolve
+  references by type rather than by file path.
+applies_when:
+  has_ontology: true
+match:
+  type: ontology_instance_count
+  object_type: Repo
+  min: 1
+  state: ratified
+fix_hint: |
+  Run `agent-readiness ontology bootstrap propose-objects . --object-type Repo`,
+  ratify the proposals, and commit. Repeat for Library/Protocol/RulesPack.
+insight_query: ontology object types Repo Library Protocol RulesPack declared
+verify:
+  command: "test -d ontology/instances/Repo && ls ontology/instances/Repo/*.yaml 2>/dev/null | grep -q ."
+  description: At least one ratified Repo instance must exist under ontology/instances/Repo/.
+fix_prompt: |
+  Without typed Object instances, agents reason from file paths instead of
+  a semantic graph.
+
+  Run `agent-readiness ontology bootstrap propose-objects . --object-type Repo`,
+  ratify the proposals, and commit. Repeat for Library, Protocol, and RulesPack.
+
+  Verify with: `ls ontology/instances/Repo/*.yaml`

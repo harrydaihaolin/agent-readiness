@@ -1,0 +1,31 @@
+rules_version: 2
+id: ontology.interface_types_satisfied
+provenance: agent-readiness/ontology.interface_types_satisfied
+pillar: ontology
+title: Declared Interface claims pass their satisfaction proofs
+weight: 0.8
+severity: warn
+explanation: |
+  Every `implements:` claim on a ratified Object instance must have
+  satisfaction == "ratified". Failing claims indicate the repo drifted
+  away from its declared contract.
+applies_when:
+  has_ontology: true
+match:
+  type: ontology_interface_satisfaction
+fix_hint: |
+  Either fix the repo to satisfy the interface (e.g. add CHANGELOG.md
+  for Releasable), or drop the failing claim from the Repo's
+  spec.implements list.
+insight_query: ontology interface satisfaction Releasable Documented Headless failing claim
+verify:
+  command: "agent-readiness ontology validate"
+  description: No Interface claim on a ratified Repo may have satisfaction failing.
+fix_prompt: |
+  A ratified Repo declares an Interface it no longer satisfies. Agents
+  trusting the ontology will assume capabilities that are not present.
+
+  Fix the repo to satisfy the interface, or remove the failing claim from
+  spec.implements on the Repo instance YAML.
+
+  Verify with: `agent-readiness ontology validate`
