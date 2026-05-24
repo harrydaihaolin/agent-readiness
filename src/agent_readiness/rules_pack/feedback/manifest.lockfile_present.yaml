@@ -13,6 +13,12 @@ explanation: |
   project was last validated against; some ecosystems (Cargo,
   Poetry, npm) produce one automatically, others (bare
   requirements.txt) require the project to opt in.
+applies_when:
+  # Code-ecosystem rule: skip on YAML-only / docs-only / config-only
+  # repos where ctx.detected_languages is empty. A lockfile only makes
+  # sense if there's a manifest, and a manifest only makes sense if
+  # there's code. Requires agent-readiness >= 2.8.0.
+  any_language_detected: true
 match:
   type: composite
   op: or
