@@ -1,0 +1,42 @@
+rules_version: 2
+id: ontology.function_types_typed
+provenance: agent-readiness/ontology.function_types_typed
+pillar: ontology
+title: Functions are typed and implemented
+weight: 0.5
+severity: info
+explanation: |
+  Workspace declares Function Types and at least one has a passing
+  implementation under ontology/functions/. Without functions, agents
+  cannot compute publish order or change impact over the typed graph.
+applies_when:
+  has_ontology: true
+match:
+  type: composite
+  op: or
+  summary: At least one canonical ontology function implementation is present.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - ontology/functions/compute_publish_order.py
+    - type: path_glob
+      require_globs:
+        - ontology/functions/compute_change_impact.py
+    - type: path_glob
+      require_globs:
+        - ontology/functions/compute_dep_graph.py
+fix_hint: |
+  Run `agent-readiness ontology bootstrap propose-functions . --function-type compute_publish_order`
+  (or one of the others) and commit the generated stub.
+insight_query: ontology function compute_publish_order compute_change_impact compute_dep_graph
+verify:
+  command: "find ontology/functions -name '*.py' 2>/dev/null | grep -q ."
+  description: At least one Python function implementation must exist under ontology/functions/.
+fix_prompt: |
+  The workspace ontology declares Function Types but has no runnable
+  implementation for agents to invoke.
+
+  Run `agent-readiness ontology bootstrap propose-functions . --function-type compute_publish_order`
+  (or compute_change_impact / compute_dep_graph) and commit the stub.
+
+  Verify with: `find ontology/functions -name '*.py' | head -1`

@@ -1,0 +1,30 @@
+rules_version: 2
+id: ontology.link_types_referentially_closed
+provenance: agent-readiness/ontology.link_types_referentially_closed
+pillar: ontology
+title: Every Link instance points to ratified Object instances
+weight: 1.0
+severity: error
+explanation: |
+  Closure invariant. A ratified Link cannot reference a non-ratified atom.
+  Dangling endpoints break dependency traversal and release-order functions.
+applies_when:
+  has_ontology: true
+match:
+  type: ontology_ref_closure
+  source: ontology
+fix_hint: |
+  Either ratify the missing atom (`agent-readiness ontology ratify <id>`)
+  or remove the dangling Link YAML.
+insight_query: ontology link referential closure dangling reference ratified
+verify:
+  command: "agent-readiness ontology validate --strict"
+  description: Strict ontology validation must report no closure violations.
+fix_prompt: |
+  A ratified Link references an Object instance that is missing or still
+  proposed. Agents following the graph will hit dead ends.
+
+  Either ratify the missing atom (`agent-readiness ontology ratify <id>`)
+  or delete the dangling Link YAML under ontology/instances/.
+
+  Verify with: `agent-readiness ontology validate --strict`

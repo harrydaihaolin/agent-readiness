@@ -1,0 +1,39 @@
+rules_version: 2
+id: ontology.action_intent_split_declared
+provenance: agent-readiness/ontology.action_intent_split_declared
+pillar: ontology
+title: At least one Action Type and one Intent Type declared
+weight: 0.8
+severity: info
+explanation: |
+  Action Types describe single-system mutations; Intent Types describe
+  cross-repo orchestration. Both must be declared for agents to choose
+  the right tool.
+applies_when:
+  has_ontology: true
+match:
+  type: composite
+  op: and
+  summary: Both Action Types and Intent Types must be declared.
+  clauses:
+    - type: path_glob
+      require_globs:
+        - ontology/actionTypes/*.yaml
+    - type: path_glob
+      require_globs:
+        - ontology/intentTypes/*.yaml
+fix_hint: |
+  Run `agent-readiness ontology bootstrap propose-actions .` to scaffold
+  canonical Action and Intent Type YAML under ontology/.
+insight_query: ontology actionTypes intentTypes publish release cascade declared
+verify:
+  command: "test -d ontology/actionTypes && test -d ontology/intentTypes && ls ontology/actionTypes/*.yaml ontology/intentTypes/*.yaml 2>/dev/null | wc -l | grep -qv '^0$'"
+  description: Both ontology/actionTypes/ and ontology/intentTypes/ must contain YAML.
+fix_prompt: |
+  Agents need both atomic Action Types and cross-repo Intent Types to
+  choose the right mutation surface.
+
+  Run `agent-readiness ontology bootstrap propose-actions .` and commit
+  the generated actionTypes/ and intentTypes/ YAML.
+
+  Verify with: `ls ontology/actionTypes/*.yaml ontology/intentTypes/*.yaml`
