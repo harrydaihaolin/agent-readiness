@@ -78,11 +78,101 @@ def test_no_manifest_low_confidence_and_marker(dogfood_workspace: Path):
 
 
 def test_unsupported_object_type_raises(dogfood_workspace: Path):
-    with pytest.raises(NotImplementedError, match="M1.4"):
-        propose_object_instances(workspace=dogfood_workspace, object_type="Library")
+    with pytest.raises(NotImplementedError, match="not yet supported"):
+        propose_object_instances(workspace=dogfood_workspace, object_type="Service")
 
 
 def test_envelope_skips_non_git_directories(dogfood_workspace: Path):
     env = propose_object_instances(workspace=dogfood_workspace, object_type="Repo")
     ids = {p.id for p in env.proposed}
     assert "not-a-repo" not in ids
+
+
+@pytest.fixture
+def library_workspace(tmp_path: Path) -> Path:
+    """Fixture: one repo with a pyproject.toml that declares a distributable lib."""
+    repo = tmp_path / "mylib"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "mylib"\nversion = "1.2.3"\n'
+    )
+    # Also a published npm package in a separate repo
+    npm_repo = tmp_path / "mynpmpkg"
+    npm_repo.mkdir()
+    (npm_repo / ".git").mkdir()
+    (npm_repo / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (npm_repo / "package.json").write_text(
+        '{"name": "@org/mynpmpkg", "version": "2.0.0"}\n'
+    )
+    return tmp_path
+
+
+def test_proposes_library_from_pyproject(library_workspace: Path):
+    env = propose_object_instances(workspace=library_workspace, object_type="Library")
+    assert env.target_type == "Library"
+    libs = {p.id: p for p in env.proposed}
+    assert "mylib" in libs
+    assert libs["mylib"].properties["version"] == "1.2.3"
+    assert libs["mylib"].properties["registry"] == "pypi"
+    assert libs["mylib"].properties["source_repo"] == {"object_type": "Repo", "id": "mylib"}
+    assert libs["mylib"].lifecycle.confidence >= 0.9
+
+
+def test_proposes_library_from_package_json(library_workspace: Path):
+    env = propose_object_instances(workspace=library_workspace, object_type="Library")
+    libs = {p.id: p for p in env.proposed}
+    assert "@org/mynpmpkg" in libs
+    assert libs["@org/mynpmpkg"].properties["registry"] == "npm"
+
+
+@pytest.fixture
+def protocol_workspace(tmp_path: Path) -> Path:
+    for name in ("foo-protocol", "foo", "bar-with-schema"):
+        d = tmp_path / name
+        d.mkdir()
+        (d / ".git").mkdir()
+        (d / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    # bar-with-schema has an inline protocol/schema.json (alternative signal)
+    (tmp_path / "bar-with-schema" / "protocol").mkdir()
+    (tmp_path / "bar-with-schema" / "protocol" / "schema.json").write_text("{}")
+    # foo-protocol gets a version in pyproject.toml so the proposed atom has one
+    (tmp_path / "foo-protocol" / "pyproject.toml").write_text(
+        '[project]\nname = "foo-protocol"\nversion = "0.5.0"\n'
+    )
+    return tmp_path
+
+
+def test_proposes_protocol_for_naming_convention(protocol_workspace: Path):
+    env = propose_object_instances(workspace=protocol_workspace, object_type="Protocol")
+    ids = {p.id for p in env.proposed}
+    assert "foo-protocol" in ids
+    assert "bar-with-schema" in ids  # detected via protocol/schema.json
+    assert "foo" not in ids  # no naming match, no schema.json
+
+
+@pytest.fixture
+def rulespack_workspace(tmp_path: Path) -> Path:
+    """Fixture: repo with rules/*.yaml files that each declare rules_version."""
+    repo = tmp_path / "my-rules"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    rules_dir = repo / "rules"
+    rules_dir.mkdir()
+    (rules_dir / "rule1.yaml").write_text("rules_version: 2\nid: test.x\n")
+    (rules_dir / "rule2.yaml").write_text("rules_version: 2\nid: test.y\n")
+    # Also create a non-rules-pack repo to make sure detection is selective
+    non = tmp_path / "not-a-rulespack"
+    non.mkdir()
+    (non / ".git").mkdir()
+    (non / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    return tmp_path
+
+
+def test_proposes_rulespack_from_rules_dir(rulespack_workspace: Path):
+    env = propose_object_instances(workspace=rulespack_workspace, object_type="RulesPack")
+    ids = {p.id for p in env.proposed}
+    assert "my-rules" in ids
+    assert "not-a-rulespack" not in ids
