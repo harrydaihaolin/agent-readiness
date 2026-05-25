@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-readiness"
-version = "3.0.4"
+version = "3.1.0"
 description = "Benchmark how agent-ready a code repository is for LLM coding agents."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,7 +26,7 @@ dependencies = [
     "rich>=13.7",
     "pyyaml>=6",
     "psutil>=5.9",
-    "agent-readiness-insights-protocol>=0.8.0,<0.9.0",
+    "agent-readiness-insights-protocol>=0.8.2,<0.9.0",
 ]
 
 [project.urls]

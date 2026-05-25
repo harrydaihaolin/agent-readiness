@@ -5,6 +5,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-05-25
+
+Minor: ships the progressive workspace scan stack landed under Plan 1
+(`scan-and-view`, live HTTP server, history retention, static render,
+cross-workspace discovery). Also pins the protocol contract to >=0.8.2
+so the new `WorkspaceManifest.spec.repos_source` field is available.
+
+### Added
+
+- **`agent-readiness scan-and-view`** — boots a local HTTP server that
+  serves the analytics dashboard, writes scan envelopes incrementally
+  to `~/.agent-readiness/scans/<workspace-hash>/`, and prints the URL.
+  Detaches as a worker process so agents (Cursor, Claude Desktop, the
+  MCP host) get the URL back immediately rather than blocking on a
+  30-minute scan.
+- **`agent-readiness live-scan`** subcommand tree — `start`, `status`,
+  `stop`, `list`, `render` — for managing the scan history layout
+  documented in `2026-05-24-progressive-workspace-scan-spec.md`.
+- **Scan history retention + rotation** — per-workspace history under
+  `~/.agent-readiness/scans/`, atomic envelope writer, pidfile lifecycle
+  via `psutil`, configurable retention policy.
+- **Static render** — `agent-readiness render <scan-dir>` produces a
+  self-contained `dist/` for GitHub Pages / `file://` viewing.
+- New `live_scan` package: `paths`, `envelope`, `pidfile`, `history`,
+  `eta`, `server`, `worker`, `render_static`, `discovery` modules
+  (each with ≥90% line coverage).
+
+### Changed
+
+- **`agent-readiness-insights-protocol`** pin bumped to `>=0.8.2,<0.9.0`
+  (was `>=0.8.0,<0.9.0`). Enables `WorkspaceManifest.spec.repos_source`
+  for ontology-driven manifests (see protocol PR #18 / `v0.8.2`).
+- Adds `psutil>=5.9` to runtime dependencies (used by `live_scan` for
+  robust pidfile validation).
+
 ## [2.9.0] - 2026-05-23
 
 Minor: closes a recurring false-positive class — *"this is obviously
