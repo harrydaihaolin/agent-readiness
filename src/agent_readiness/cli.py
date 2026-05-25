@@ -1544,5 +1544,223 @@ def ontology_drift_propose_pr(
     _emit_payload(payload, json_output)
 
 
+# ---------- live-scan commands (Plan 1) -------------------------------------
+
+import time as _time  # noqa: E402
+import webbrowser as _webbrowser  # noqa: E402
+
+from agent_readiness.live_scan import discovery as _discovery  # noqa: E402
+from agent_readiness.live_scan import paths as _paths  # noqa: E402
+from agent_readiness.live_scan.pidfile import (  # noqa: E402
+    PidStatus as _PidStatus,
+)
+from agent_readiness.live_scan.pidfile import (  # noqa: E402
+    clear_pidfile as _clear_pidfile,
+)
+from agent_readiness.live_scan.pidfile import (  # noqa: E402
+    verify_pidfile as _verify_pidfile,
+)
+from agent_readiness.live_scan.server import start_server as _start_server  # noqa: E402
+from agent_readiness.live_scan.worker import scan_workspace as _scan_workspace  # noqa: E402
+from agent_readiness.render import export_report as _export_report  # noqa: E402
+
+
+@cli.command(name="scan-and-view")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option(
+    "--children", "children_csv", required=True,
+    help="Comma-separated child paths to scan.",
+)
+@click.option(
+    "--port", "port", type=int, default=0,
+    help="HTTP port (default: ephemeral).",
+)
+@click.option(
+    "--no-open", "no_open", is_flag=True, default=False,
+    help="Don't auto-launch browser.",
+)
+@click.option(
+    "--idle-timeout-s", "idle_timeout_s", type=int, default=600,
+    help="Seconds to keep the server alive after the scan finishes.",
+)
+def scan_and_view(
+    path: Path,
+    children_csv: str,
+    port: int,
+    no_open: bool,
+    idle_timeout_s: int,
+) -> None:
+    """Run a live workspace scan + serve the dashboard locally.
+
+    Atomically writes ``<scan-dir>/server.url`` and ``<scan-dir>/daemon.pid``
+    as soon as the server is listening; MCP/scan-list use those to discover
+    the live scan without parsing stdout.
+    """
+    children = [
+        Path(c.strip()).expanduser().resolve()
+        for c in children_csv.split(",") if c.strip()
+    ]
+    sd = _paths.scan_dir(path)
+    sd.mkdir(parents=True, exist_ok=True)
+    (sd / "archive").mkdir(exist_ok=True)
+    srv = _start_server(host="127.0.0.1", port=port, data_dir=sd)
+    url = f"http://{srv.host}:{srv.port}"
+    (sd / "server.url").write_text(url + "\n")
+    click.echo(url, err=True)
+    if not no_open and sys.stdout.isatty():
+        try:
+            _webbrowser.open(url)
+        except Exception:
+            pass
+    try:
+        _scan_workspace(path, children=children)
+    finally:
+        # Idle timeout: stay up after terminal status for late polls.
+        if idle_timeout_s > 0:
+            try:
+                _time.sleep(idle_timeout_s)
+            except KeyboardInterrupt:
+                pass
+        srv.shutdown()
+        try:
+            (sd / "server.url").unlink()
+        except FileNotFoundError:
+            pass
+
+
+@cli.command(name="scan-status")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+)
+@click.option("--json", "json_output", is_flag=True, default=False)
+def scan_status(path: Path, json_output: bool) -> None:
+    """Print status of a workspace's most recent scan."""
+    import json as _j
+    sd = _paths.scan_dir(path)
+    live = sd / "live.json"
+    latest = sd / "latest.json"
+    target = live if live.exists() else latest if latest.exists() else None
+    if target is None:
+        click.echo("No scan history for this workspace.", err=True)
+        raise click.exceptions.Exit(1)
+    data = _j.loads(target.read_text())
+    if json_output:
+        click.echo(_j.dumps(data, indent=2))
+    else:
+        click.echo(f"status: {data.get('status')}")
+        click.echo(f"progress: {data.get('progress')}")
+        click.echo(f"overall: {data.get('overall_score')}")
+
+
+@cli.command(name="scan-stop")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    required=False,
+)
+@click.option("--all", "all_flag", is_flag=True, default=False)
+def scan_stop(path: Path | None, all_flag: bool) -> None:
+    """Stop a running scan (one workspace, or ``--all``)."""
+    import json as _j
+    import signal as _sig
+    if all_flag:
+        result = _discovery.stop_all()
+        killed = result.get("killed", [])
+        skipped = result.get("skipped", [])
+        click.echo(
+            f"Stopped {len(killed)} scans: {', '.join(killed) or '(none)'}"
+        )
+        for s in skipped:
+            click.echo(f"Skipped {s['scan_id']} ({s['reason']})")
+        return
+    if path is None:
+        raise click.UsageError("provide PATH or --all")
+    sd = _paths.scan_dir(path)
+    pid_path = sd / "daemon.pid"
+    status = _verify_pidfile(pid_path)
+    if status is not _PidStatus.LIVE:
+        click.echo(f"No live scan ({status.value}).", err=True)
+        _clear_pidfile(pid_path)
+        raise click.exceptions.Exit(1)
+    data = _j.loads(pid_path.read_text())
+    os.kill(data["pid"], _sig.SIGTERM)
+    click.echo(f"Sent SIGTERM to {data['pid']}.")
+
+
+@cli.command(name="scan-list")
+@click.option("--json", "json_output", is_flag=True, default=False)
+def scan_list(json_output: bool) -> None:
+    """Enumerate active + recent scans across all workspaces."""
+    import json as _j
+    result = _discovery.list_scans()
+    if json_output:
+        click.echo(_j.dumps(result, indent=2))
+        return
+    active = result.get("active", [])
+    recent = result.get("recent", [])
+    click.echo(f"ACTIVE ({len(active)}):")
+    for s in active:
+        click.echo(
+            f"  {s['scan_id']:20s} "
+            f"{s.get('workspace_path') or '?':40s} "
+            f"{s.get('dashboard_url') or ''}"
+        )
+    click.echo("\nRECENT (last 50, top 10):")
+    for s in recent[:10]:
+        overall = s.get("overall_score")
+        overall_s = f"{overall:.1f}" if isinstance(overall, (int, float)) else "?"
+        click.echo(
+            f"  {s['scan_id']:20s} "
+            f"{s.get('workspace_path') or '?':40s} "
+            f"{overall_s:>6}  {s.get('completed_at') or '?'}"
+        )
+    mb = result.get("total_disk_bytes", 0) / 1024 / 1024
+    click.echo(
+        f"\nTotal disk: {mb:.1f} MB across "
+        f"{len(active) + len(recent)} workspaces"
+    )
+
+
+@cli.command(name="render-report")
+@click.argument(
+    "path",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+)
+@click.option(
+    "--scan-id", "scan_id", default=None,
+    help="Specific scan to render (default: live or latest).",
+)
+@click.option(
+    "--output-dir", "output_dir",
+    type=click.Path(path_type=Path), default=None,
+)
+@click.option("--json", "json_output", is_flag=True, default=False)
+def render_report_cmd(
+    path: Path,
+    scan_id: str | None,
+    output_dir: Path | None,
+    json_output: bool,
+) -> None:
+    """Render a scan as a portable static directory."""
+    import json as _j
+    result = _export_report(path, scan_id=scan_id, output_dir=output_dir)
+    if json_output:
+        click.echo(_j.dumps({
+            "status": "rendered",
+            "index_path": str(result.index_path),
+            "output_dir": str(result.output_dir),
+            "scan_id": result.scan_id,
+            "scan_ts": result.scan_ts,
+            "rendered_at": result.rendered_at,
+            "source_status": result.source_status,
+        }, indent=2))
+    else:
+        click.echo(str(result.index_path))
+
+
 if __name__ == "__main__":
     cli()

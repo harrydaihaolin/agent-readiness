@@ -25,6 +25,7 @@ dependencies = [
     "click>=8.1",
     "rich>=13.7",
     "pyyaml>=6",
+    "psutil>=5.9",
     "agent-readiness-insights-protocol>=0.8.0,<0.9.0",
 ]
 
@@ -58,6 +59,7 @@ include = [
     "src/agent_readiness/rules_pack/manifest.toml",
     "src/agent_readiness/ontology/bootstrap/_starter_template/**/*.yaml",
     "src/agent_readiness/ontology/bootstrap/_starter_template/README.md",
+    "src/agent_readiness/_dashboard_dist/**/*",
 ]
 
 [tool.ruff]

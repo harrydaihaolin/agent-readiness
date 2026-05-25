@@ -39,3 +39,26 @@ PYTHONPATH=src python3 -m agent_readiness.cli scan .   # dogfood the tool on its
 - Feature branches: `feat/<short-description>`
 - Conventional Commits style where reasonable
 - Run `make lint && make test` before committing
+
+## live_scan package — invariants
+
+- **POSIX-only.** Windows support is a deliberate non-goal in v1.
+- **Atomic writes.** Any JSON the dashboard might be polling MUST go through
+  `live_scan.envelope.atomic_write_json`. Direct writes are a bug.
+- **PID stamping.** `daemon.pid` is JSON with `{pid, started_at, scan_id}`.
+  Before any SIGTERM, verify all three via `pidfile.verify_pidfile` →
+  `PidStatus.LIVE`. PID-recycle on dev laptops is a real risk; do not
+  skip this check.
+- **`server.url` file is the MCP wire protocol.** When the HTTP server is
+  ready, the CLI atomically writes `<scan-dir>/server.url`. MCP polls
+  for that file. Stdout is free for normal click output — DO NOT
+  re-introduce a stdout contract.
+- **Hard scan timeout.** 60 minutes default via `AGENT_READINESS_SCAN_TIMEOUT_S`.
+  The worker self-kills past this; no zombie daemons.
+- **Sequential v1.** Spec 2 lifts to parallel. When you add parallelism,
+  the envelope's `progress.in_flight` field (already a list) accommodates
+  N concurrent in-flight paths.
+- **`_dashboard_dist/` is generated.** Don't hand-edit. Refresh with
+  `make dashboard` (which builds the analytics-dashboard repo and copies
+  `dist/`). Wheels never ship without it — see
+  `scripts/check_dashboard_dist.py`.
