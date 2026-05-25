@@ -118,11 +118,18 @@ def propose_pr_for_drift(
         )
 
         if not skip_gh:
+            import sys
+
             push = subprocess.run(
                 ["git", "-C", str(manifest_repo), "push", "-u", "origin", branch_name],
                 capture_output=True, text=True,
             )
             if push.returncode != 0:
+                sys.stderr.write(
+                    f"git push failed (rc={push.returncode}):\n"
+                    f"  stdout: {push.stdout.strip()}\n"
+                    f"  stderr: {push.stderr.strip()}\n"
+                )
                 return PRProposalResult(
                     pr_url=None,
                     branch=branch_name,
