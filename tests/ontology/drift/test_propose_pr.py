@@ -58,3 +58,42 @@ def test_proposed_atoms_carry_proposed_state(fixture_drift_workspace, fake_manif
     assert proposed, "expected at least one proposed instance on drift branch"
     for data in proposed:
         assert data["lifecycle"]["proposed_by"] == "agent-readiness-bot"
+
+
+def test_apply_mode_works_without_preconfigured_git_identity(
+    fixture_drift_workspace, tmp_path: Path
+):
+    """Regression: in CI, the manifest checkout has no user.email/user.name set.
+    propose_pr_for_drift must supply identity inline via `git -c user.x=...`
+    or the commit fails with exit 128."""
+    report = detect_drift(fixture_drift_workspace)
+
+    manifest = tmp_path / "fresh-manifest"
+    manifest.mkdir()
+    (manifest / "ontology" / "instances" / "Repo").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=manifest, check=True)
+    subprocess.run(
+        ["git", "-C", str(manifest), "config", "user.email", "init@init"],
+        check=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(manifest), "config", "user.name", "init"],
+        check=True,
+    )
+    subprocess.run(["git", "-C", str(manifest), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(manifest), "commit", "--allow-empty", "-m", "init"], check=True)
+    subprocess.run(["git", "-C", str(manifest), "config", "--unset", "user.email"], check=True)
+    subprocess.run(["git", "-C", str(manifest), "config", "--unset", "user.name"], check=True)
+
+    result = propose_pr_for_drift(
+        report=report,
+        manifest_repo=manifest,
+        dry_run=False,
+        skip_gh=True,
+    )
+    assert result.branch is not None
+    log_author = subprocess.check_output(
+        ["git", "-C", str(manifest), "log", "-1", "--format=%an <%ae>"],
+        text=True,
+    ).strip()
+    assert "agent-readiness-bot" in log_author

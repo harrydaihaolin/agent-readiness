@@ -4,6 +4,7 @@ All atoms emitted in proposed state. Never auto-ratifies.
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,6 +14,9 @@ from textwrap import dedent
 import yaml
 
 from agent_readiness_insights_protocol.ontology.drift import DriftKind, DriftReport
+
+_DEFAULT_BOT_NAME = "agent-readiness-bot[bot]"
+_DEFAULT_BOT_EMAIL = "agent-readiness-bot[bot]@users.noreply.github.com"
 
 
 @dataclass
@@ -90,36 +94,69 @@ def propose_pr_for_drift(
     pr_url = None
     if not dry_run:
         branch_name = f"drift/scan-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
-        subprocess.run(["git", "-C", str(manifest_repo), "checkout", "-b", branch_name], check=True)
+
+        bot_name = os.environ.get("AR_BOT_GIT_NAME", _DEFAULT_BOT_NAME)
+        bot_email = os.environ.get("AR_BOT_GIT_EMAIL", _DEFAULT_BOT_EMAIL)
+        git_identity_args = [
+            "-c", f"user.name={bot_name}",
+            "-c", f"user.email={bot_email}",
+        ]
+
+        subprocess.run(
+            ["git", "-C", str(manifest_repo), "checkout", "-b", branch_name],
+            check=True,
+        )
         subprocess.run(["git", "-C", str(manifest_repo), "add", "-A"], check=True)
         subprocess.run(
             [
-                "git",
-                "-C",
-                str(manifest_repo),
-                "commit",
-                "-m",
+                "git", "-C", str(manifest_repo),
+                *git_identity_args,
+                "commit", "-m",
                 f"chore(drift): auto-PR from ontology scan ({len(report.deltas)} deltas)",
             ],
             check=True,
         )
+
         if not skip_gh:
+            push = subprocess.run(
+                ["git", "-C", str(manifest_repo), "push", "-u", "origin", branch_name],
+                capture_output=True, text=True,
+            )
+            if push.returncode != 0:
+                return PRProposalResult(
+                    pr_url=None,
+                    branch=branch_name,
+                    yaml_diff=yaml_diff,
+                    files_created=files_created,
+                    files_modified=files_modified,
+                    files_deleted=files_deleted,
+                )
+
             pr_body = _render_pr_body(report)
-            result = subprocess.run([
-                "gh", "pr", "create",
-                "--title", f"drift: {len(report.deltas)} ontology deltas (severity={report.severity_level})",
-                "--body", pr_body,
-                "--label", "ontology-drift",
-            ], cwd=manifest_repo, capture_output=True, text=True)
+            result = subprocess.run(
+                [
+                    "gh", "pr", "create",
+                    "--title",
+                    f"drift: {len(report.deltas)} ontology deltas (severity={report.severity_level})",
+                    "--body", pr_body,
+                    "--head", branch_name,
+                    "--label", "ontology-drift",
+                ],
+                cwd=manifest_repo, capture_output=True, text=True,
+            )
             if result.returncode == 0:
                 pr_url = result.stdout.strip()
             else:
-                issue_result = subprocess.run([
-                    "gh", "issue", "create",
-                    "--title", f"drift: {len(report.deltas)} ontology deltas (PR-create denied)",
-                    "--body", pr_body,
-                    "--label", "ontology-drift",
-                ], cwd=manifest_repo, capture_output=True, text=True)
+                issue_result = subprocess.run(
+                    [
+                        "gh", "issue", "create",
+                        "--title",
+                        f"drift: {len(report.deltas)} ontology deltas (PR-create denied)",
+                        "--body", pr_body,
+                        "--label", "ontology-drift",
+                    ],
+                    cwd=manifest_repo, capture_output=True, text=True,
+                )
                 pr_url = issue_result.stdout.strip() if issue_result.returncode == 0 else None
 
     return PRProposalResult(
