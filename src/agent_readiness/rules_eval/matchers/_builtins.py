@@ -146,10 +146,13 @@ def match_manifest_field(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[st
 
 
 def match_regex_in_files(ctx: RepoContext, cfg: dict[str, Any]) -> list[tuple[str | None, int | None, str]]:
-    pattern = re.compile(
-        str(cfg["pattern"]),
-        re.IGNORECASE if cfg.get("case_insensitive") else 0,
-    )
+    # MULTILINE so `^` and `$` anchor on every line — matches the grep
+    # semantics rule authors expect (and the line-oriented `verify:`
+    # commands the same rules ship). Mirrored in agent-readiness-insights.
+    flags = re.MULTILINE
+    if cfg.get("case_insensitive"):
+        flags |= re.IGNORECASE
+    pattern = re.compile(str(cfg["pattern"]), flags)
     file_globs = list(cfg.get("file_globs", ["**/*"]))
     fire_when = cfg.get("fire_when", "match")
     findings: list[tuple[str | None, int | None, str]] = []
