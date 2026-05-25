@@ -154,6 +154,11 @@ def propose_pr_for_drift(
             if result.returncode == 0:
                 pr_url = result.stdout.strip()
             else:
+                sys.stderr.write(
+                    f"gh pr create failed (rc={result.returncode}):\n"
+                    f"  stdout: {result.stdout.strip()}\n"
+                    f"  stderr: {result.stderr.strip()}\n"
+                )
                 issue_result = subprocess.run(
                     [
                         "gh", "issue", "create",
@@ -164,7 +169,15 @@ def propose_pr_for_drift(
                     ],
                     cwd=manifest_repo, capture_output=True, text=True,
                 )
-                pr_url = issue_result.stdout.strip() if issue_result.returncode == 0 else None
+                if issue_result.returncode == 0:
+                    pr_url = issue_result.stdout.strip()
+                else:
+                    sys.stderr.write(
+                        f"gh issue create also failed (rc={issue_result.returncode}):\n"
+                        f"  stdout: {issue_result.stdout.strip()}\n"
+                        f"  stderr: {issue_result.stderr.strip()}\n"
+                    )
+                    pr_url = None
 
     return PRProposalResult(
         pr_url=pr_url,
