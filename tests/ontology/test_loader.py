@@ -1,11 +1,39 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pytest
 
-from agent_readiness.ontology.loader import Ontology, load_ontology
+from agent_readiness.ontology.loader import Ontology, get_id_template, load_ontology
 from agent_readiness_insights_protocol.ontology.types import ObjectType
+
+
+def _object_type_with(identity: dict) -> ObjectType:
+    return ObjectType.model_validate({
+        "apiVersion": "agent-readiness.io/v1",
+        "kind": "ObjectType",
+        "metadata": {"name": "X"},
+        "spec": {"identity": identity, "properties": []},
+    })
+
+
+def test_get_id_template_prefers_id_template():
+    ot = _object_type_with({"id_template": "{{ name }}"})
+    assert get_id_template(ot) == "{{ name }}"
+
+
+def test_get_id_template_falls_back_to_pk_expression_with_warning():
+    ot = _object_type_with({"pk_expression": "{{ name }}"})
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        assert get_id_template(ot) == "{{ name }}"
+    assert any("pk_expression" in str(w.message) for w in caught)
+
+
+def test_get_id_template_returns_none_when_neither_set():
+    ot = _object_type_with({})
+    assert get_id_template(ot) is None
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "ontology_minimal"
 

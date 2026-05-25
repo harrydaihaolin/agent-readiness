@@ -113,18 +113,21 @@ def test_proposes_library_from_pyproject(library_workspace: Path):
     env = propose_object_instances(workspace=library_workspace, object_type="Library")
     assert env.target_type == "Library"
     libs = {p.id: p for p in env.proposed}
-    assert "mylib" in libs
-    assert libs["mylib"].properties["version"] == "1.2.3"
-    assert libs["mylib"].properties["registry"] == "pypi"
-    assert libs["mylib"].properties["source_repo"] == {"object_type": "Repo", "id": "mylib"}
-    assert libs["mylib"].lifecycle.confidence >= 0.9
+    # IDs render Library.id_template = "{{ registry }}#{{ name }}"
+    assert "pypi#mylib" in libs
+    assert libs["pypi#mylib"].properties["name"] == "mylib"
+    assert libs["pypi#mylib"].properties["version"] == "1.2.3"
+    assert libs["pypi#mylib"].properties["registry"] == "pypi"
+    assert libs["pypi#mylib"].properties["source_repo"] == {"object_type": "Repo", "id": "mylib"}
+    assert libs["pypi#mylib"].lifecycle.confidence >= 0.9
 
 
 def test_proposes_library_from_package_json(library_workspace: Path):
     env = propose_object_instances(workspace=library_workspace, object_type="Library")
     libs = {p.id: p for p in env.proposed}
-    assert "@org/mynpmpkg" in libs
-    assert libs["@org/mynpmpkg"].properties["registry"] == "npm"
+    assert "npm#@org/mynpmpkg" in libs
+    assert libs["npm#@org/mynpmpkg"].properties["registry"] == "npm"
+    assert libs["npm#@org/mynpmpkg"].properties["name"] == "@org/mynpmpkg"
 
 
 @pytest.fixture
@@ -147,9 +150,18 @@ def protocol_workspace(tmp_path: Path) -> Path:
 def test_proposes_protocol_for_naming_convention(protocol_workspace: Path):
     env = propose_object_instances(workspace=protocol_workspace, object_type="Protocol")
     ids = {p.id for p in env.proposed}
-    assert "foo-protocol" in ids
-    assert "bar-with-schema" in ids  # detected via protocol/schema.json
-    assert "foo" not in ids  # no naming match, no schema.json
+    # IDs render Protocol.id_template = "{{ name }}@{{ version }}";
+    # bar-with-schema has no pyproject so version is '???' + marker.
+    assert "foo-protocol@0.5.0" in ids
+    assert "bar-with-schema@???" in ids
+    assert not any(_id.startswith("foo@") and "protocol" not in _id for _id in ids)
+
+
+def test_propose_protocols_marker_when_version_missing(protocol_workspace: Path):
+    env = propose_object_instances(workspace=protocol_workspace, object_type="Protocol")
+    bar = next(p for p in env.proposed if p.id.startswith("bar-with-schema@"))
+    assert bar.properties["version"] == "???"
+    assert "spec.properties.version" in bar.lifecycle.markers
 
 
 @pytest.fixture
@@ -174,5 +186,21 @@ def rulespack_workspace(tmp_path: Path) -> Path:
 def test_proposes_rulespack_from_rules_dir(rulespack_workspace: Path):
     env = propose_object_instances(workspace=rulespack_workspace, object_type="RulesPack")
     ids = {p.id for p in env.proposed}
-    assert "my-rules" in ids
-    assert "not-a-rulespack" not in ids
+    # IDs render RulesPack.id_template = "{{ name }}@{{ version }}"; no
+    # pyproject in this fixture so version is '???' + marker.
+    assert "my-rules@???" in ids
+    assert not any(_id.startswith("not-a-rulespack@") for _id in ids)
+
+
+def test_proposes_rulespack_versioned_id_when_pyproject_present(tmp_path: Path):
+    repo = tmp_path / "my-rules"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    (repo / "rules").mkdir()
+    (repo / "rules" / "001-foo.yaml").write_text("rules_version: 1\n")
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "my-rules"\nversion = "2.0.0"\n'
+    )
+    env = propose_object_instances(workspace=tmp_path, object_type="RulesPack")
+    assert {p.id for p in env.proposed} == {"my-rules@2.0.0"}
