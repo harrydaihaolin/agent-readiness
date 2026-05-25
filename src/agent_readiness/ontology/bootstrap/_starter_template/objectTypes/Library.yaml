@@ -7,7 +7,7 @@ metadata:
 spec:
   identity:
     fields: [registry, name]
-    pk_expression: "{{ registry }}#{{ name }}"
+    id_template: "{{ registry }}#{{ name }}"
   properties:
     - { name: name,         type: string, required: true }
     - { name: version,      type: semver }

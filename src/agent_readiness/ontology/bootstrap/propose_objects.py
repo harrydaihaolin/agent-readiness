@@ -150,7 +150,7 @@ def _propose_libraries(workspace: Path) -> ProposalEnvelope:
                         markers.append("spec.properties.version")
                     proposed.append(
                         Proposal(
-                            id=str(name),
+                            id=f"pypi#{name}",
                             properties={
                                 "name": str(name),
                                 "version": version or "???",
@@ -184,7 +184,7 @@ def _propose_libraries(workspace: Path) -> ProposalEnvelope:
                         markers.append("spec.properties.version")
                     proposed.append(
                         Proposal(
-                            id=str(name),
+                            id=f"npm#{name}",
                             properties={
                                 "name": str(name),
                                 "version": version or "???",
@@ -250,7 +250,7 @@ def _propose_protocols(workspace: Path) -> ProposalEnvelope:
 
         proposed.append(
             Proposal(
-                id=repo_id,
+                id=f"{repo_id}@{version or '???'}",
                 properties=properties,
                 lifecycle=Lifecycle(
                     state=LifecycleState.PROPOSED,
@@ -339,7 +339,7 @@ def _propose_rulespacks(workspace: Path) -> ProposalEnvelope:
 
         proposed.append(
             Proposal(
-                id=repo_id,
+                id=f"{repo_id}@{version or '???'}",
                 properties=properties,
                 lifecycle=Lifecycle(
                     state=LifecycleState.PROPOSED,

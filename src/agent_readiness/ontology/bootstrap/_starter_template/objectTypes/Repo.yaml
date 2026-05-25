@@ -6,8 +6,8 @@ metadata:
   description: A git repository participating in the workspace.
 spec:
   identity:
-    fields: [remote_url, path]
-    pk_expression: "{{ remote_url }}#{{ path }}"
+    fields: [name]
+    id_template: "{{ name }}"
   properties:
     - { name: name,             type: string, required: true }
     - { name: languages,        type: "list[string]" }

@@ -5,6 +5,7 @@ Rejects malformed YAML via wrapped Pydantic validation errors.
 """
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -21,6 +22,30 @@ from agent_readiness_insights_protocol.ontology.types import (
     ObjectInstance,
     ObjectType,
 )
+
+
+def get_id_template(ot: ObjectType) -> str | None:
+    """Return the identity template for an ObjectType.
+
+    Reads ``spec.identity.id_template`` (new) or ``spec.identity.pk_expression``
+    (legacy, with deprecation warning). Returns ``None`` when neither is set —
+    which the validator treats as "this type opts out of id_template
+    enforcement" (see §1.1 of the 2026-05-25 ontology improvement plan).
+    """
+    spec = ot.spec or {}
+    identity = spec.get("identity") or {}
+    if "id_template" in identity:
+        return str(identity["id_template"])
+    if "pk_expression" in identity:
+        name = ot.metadata.get("name") if isinstance(ot.metadata, dict) else None
+        warnings.warn(
+            f"ObjectType {name!r} uses deprecated spec.identity.pk_expression; "
+            "rename to id_template.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return str(identity["pk_expression"])
+    return None
 
 
 @dataclass
