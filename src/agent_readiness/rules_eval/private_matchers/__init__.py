@@ -27,6 +27,7 @@ from __future__ import annotations
 from . import (  # noqa: F401  -- import for side effect (registration)
     ast_complexity,
     cross_file_consistency,
+    gaps_jsonl_unresolved,
     gh_cli_query,
     git_log_query,
     gitignore_coverage,

@@ -59,6 +59,23 @@ class LoadedRule:
     2026-05-26 ontology-driven-agent design) and the ontology
     inference reasoner (Bundle C). Other pillars may opt in later;
     ``None`` means the rule sits at pillar level only.
+
+    ``confidence`` is the per-rule confidence level the rule author
+    declares for the auto-fix. It drives the engine's
+    ``apply_top_action`` branching:
+
+    * ``high``   — apply the fix immediately (the v3.1 behaviour).
+    * ``medium`` — refuse to apply; return a ``confirm_required``
+      envelope so the MCP layer's ``confirm_apply`` tool can finish
+      the round-trip with the user in the loop. This is the default
+      so rule authors must opt in to ``high`` deliberately.
+    * ``low``    — refuse to apply; return a ``gap_payload`` envelope
+      so the MCP layer can record a Gap and surface it on the next
+      scan via ``ontology.gaps_unresolved``.
+
+    The engine propagates this value onto every ``Finding`` the rule
+    produces (see ``Finding.confidence``). Added in agent-readiness
+    v3.2.0 / protocol v0.9.0.
     """
 
     rule_id: str
@@ -77,6 +94,7 @@ class LoadedRule:
     fix_prompt: str | None = None
     applies_when: dict[str, Any] | None = None
     namespace: str | None = None
+    confidence: str = "medium"
 
     @property
     def match_type(self) -> str:
@@ -88,6 +106,12 @@ class LoadedRule:
 # so the engine still loads when the optional protocol dep isn't
 # installed — same pattern as the rest of this loader.
 _VALID_NAMESPACES: frozenset[str] = frozenset({"schema", "validation"})
+
+# Closed set of accepted ``confidence`` values, mirroring the protocol's
+# ``Rule.confidence`` Literal. Same rationale as ``_VALID_NAMESPACES``:
+# enforce the closed-world contract even when the optional protocol
+# dependency isn't installed in the consumer's environment.
+_VALID_CONFIDENCES: frozenset[str] = frozenset({"high", "medium", "low"})
 
 
 def _load_yaml(text: str) -> dict[str, Any]:
@@ -180,6 +204,13 @@ def load_rule_file(path: Path) -> LoadedRule | None:
             f"or null; got {namespace!r}"
         )
 
+    confidence = data.get("confidence", "medium")
+    if confidence not in _VALID_CONFIDENCES:
+        raise RuleLoadError(
+            f"{path}: 'confidence' must be one of {sorted(_VALID_CONFIDENCES)}; "
+            f"got {confidence!r}"
+        )
+
     return LoadedRule(
         rule_id=str(data["id"]),
         pillar=str(data["pillar"]),
@@ -197,6 +228,7 @@ def load_rule_file(path: Path) -> LoadedRule | None:
         fix_prompt=fix_prompt,
         applies_when=applies_when,
         namespace=namespace,
+        confidence=confidence,
     )
 
 

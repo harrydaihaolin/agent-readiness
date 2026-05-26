@@ -93,19 +93,43 @@ class ApplyResult:
     verify: dict[str, Any] | None = None
     skipped_reason: str | None = None
     error: str | None = None
+    confirm_required: bool = False
+    """Set when the top action's rule has ``confidence == "medium"``.
+
+    The engine refuses to mutate; the MCP layer's ``confirm_apply``
+    tool is meant to pick up from this envelope, ask the user, and
+    either re-invoke ``apply_top_action`` with the rule confidence
+    overridden to ``high`` (approved) or record a Gap (rejected).
+    Added in agent-readiness v3.2.0.
+    """
+    gap_payload: dict[str, Any] | None = None
+    """Set when the top action's rule has ``confidence == "low"``.
+
+    The engine refuses to mutate and returns enough context for the
+    caller to ``record_gap()`` so the unresolved ambiguity surfaces on
+    the next ``agent-readiness scan`` via ``ontology.gaps_unresolved``.
+    The shape mirrors the protocol's :class:`Gap` model's serialisable
+    fields (``kind``, ``detail``, ``candidate_resolutions``, and a
+    ``check_id``/``severity`` cross-reference so the caller can
+    attribute the gap back to the originating finding). Added in
+    agent-readiness v3.2.0.
+    """
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly dict.
 
-        Strips keys whose values are ``None`` or empty lists so the
-        emitted JSON matches the convention used by ``report.to_dict``
-        (only carry fields that carry information).
+        Strips keys whose values are ``None``, ``False``, or empty
+        lists so the emitted JSON matches the convention used by
+        ``report.to_dict`` (only carry fields that carry information).
         """
         out: dict[str, Any] = {}
         for k, v in asdict(self).items():
             if v is None:
                 continue
             if isinstance(v, list) and not v:
+                continue
+            if k in ("confirm_required",) and v is False:
+                # Default False is uninformative for v0.5 consumers.
                 continue
             out[k] = v
         return out
@@ -159,6 +183,41 @@ def apply_top_action(
                 "(v1 rule with fix_hint only)"
             ),
         )
+
+    # Confidence gating (Bundle B / B2). Branches BEFORE handler lookup
+    # so even a perfectly-structured action is refused when the rule
+    # author hasn't opted in to ``high``. A missing ``confidence`` key
+    # is treated as ``medium`` to match the protocol default — never
+    # silently fall through to apply.
+    confidence = top_action.get("confidence", "medium")
+    if confidence == "low":
+        return ApplyResult(
+            applied=False,
+            skipped_reason="low_confidence_record_gap",
+            gap_payload={
+                "kind": "low_confidence_top_action",
+                "detail": (
+                    f"Top action {top_action.get('check_id')!r} has "
+                    "confidence=low; refusing to mutate. The MCP layer "
+                    "should record_gap() with this payload so the "
+                    "ambiguity surfaces on the next scan."
+                ),
+                "check_id": top_action.get("check_id"),
+                "severity": top_action.get("severity"),
+                "candidate_resolutions": (
+                    [top_action.get("fix_hint")]
+                    if top_action.get("fix_hint")
+                    else []
+                ),
+            },
+        )
+    if confidence == "medium":
+        return ApplyResult(
+            applied=False,
+            skipped_reason="confirm_required",
+            confirm_required=True,
+        )
+    # confidence == "high" falls through to the existing apply path.
 
     kind = action.get("kind")
     handler = _ACTION_HANDLERS.get(kind)

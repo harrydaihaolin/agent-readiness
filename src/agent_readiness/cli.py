@@ -554,6 +554,118 @@ def workspace_scan(path: Path, children_csv: str, json_output: bool) -> None:
                    f"(scope={d['top_action']['scope']})")
 
 
+@cli.group(name="gap")
+def gap_group() -> None:
+    """Manage gaps, clarifications, and assumptions recorded by agents.
+
+    Reads/writes ``.agent-readiness/gaps.jsonl`` in the current
+    working directory (the workspace root). Append-only JSONL with
+    one record per line, written by:
+
+    * the MCP server's ``record_gap_tool`` / ``ask_clarification_tool`` /
+      ``log_assumption_tool`` (the typical path — agents call these
+      during a session when they recognise they can't confidently
+      proceed),
+    * ``agent-readiness gap record`` (this subcommand, for manual
+      capture and for tests).
+
+    Unresolved Gap rows surface as findings on the next
+    ``agent-readiness scan`` via the ``ontology.gaps_unresolved``
+    rule and cost workspace score until a human reviewer runs
+    ``agent-readiness gap resolve <id>``. Clarification and
+    Assumption rows never cost score (they're informational).
+    """
+
+
+@gap_group.command(name="record")
+@click.option(
+    "--kind",
+    required=True,
+    help=(
+        "Agent's classification of what was ambiguous "
+        "(e.g. 'ambiguous_object_type', 'missing_manifest_field')."
+    ),
+)
+@click.option(
+    "--detail",
+    required=True,
+    help="One-paragraph human-readable description of the gap.",
+)
+@click.option(
+    "--severity",
+    type=click.Choice(["low", "medium", "high"]),
+    default="medium",
+    show_default=True,
+    help="Agent's self-assessed urgency. Maps to the emitted finding's severity.",
+)
+@click.option(
+    "--candidate",
+    "candidates",
+    multiple=True,
+    help="Candidate resolution the agent considered. Repeatable.",
+)
+@click.option(
+    "--agent-session",
+    default=None,
+    help="Optional opaque session id from the recording agent.",
+)
+def gap_record(
+    kind: str,
+    detail: str,
+    severity: str,
+    candidates: tuple[str, ...],
+    agent_session: str | None,
+) -> None:
+    """Record a new gap in ``.agent-readiness/gaps.jsonl``."""
+    from agent_readiness.gaps import record_gap
+
+    new_id = record_gap(
+        kind=kind,
+        detail=detail,
+        severity=severity,
+        candidate_resolutions=list(candidates),
+        agent_session=agent_session,
+    )
+    click.echo(f"recorded gap {new_id}")
+
+
+@gap_group.command(name="list")
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show resolved gaps too (default: unresolved only).",
+)
+def gap_list(show_all: bool) -> None:
+    """List gaps from ``.agent-readiness/gaps.jsonl``."""
+    from agent_readiness.gaps import list_gaps
+
+    gaps = list_gaps(include_resolved=show_all)
+    if not gaps:
+        click.echo(
+            "no unresolved gaps." if not show_all else "no gaps recorded."
+        )
+        return
+    for g in gaps:
+        marker = "x" if g.get("resolved") else " "
+        gap_kind = g.get("gap_kind", "<no-kind>")
+        detail = g.get("detail", "<no detail>")
+        click.echo(f"[{marker}] {g['id']}  {gap_kind}  {detail}")
+
+
+@gap_group.command(name="resolve")
+@click.argument("gap_id")
+def gap_resolve(gap_id: str) -> None:
+    """Mark a gap as resolved."""
+    from agent_readiness.gaps import resolve_gap
+
+    if resolve_gap(gap_id):
+        click.echo(f"resolved {gap_id}")
+    else:
+        click.echo(f"no such gap: {gap_id}", err=True)
+        raise click.exceptions.Exit(1)
+
+
 @cli.group(name="manifest")
 def manifest_group() -> None:
     """Inspect and validate workspace-starter manifest directories.

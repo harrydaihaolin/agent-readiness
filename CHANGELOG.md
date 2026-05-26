@@ -5,6 +5,48 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-05-26
+
+Minor: implements Bundle B of the 2026-05-26 ontology-driven-agent
+design — gap-aware tools, per-rule confidence, and apply-path
+branching that refuses to mutate when the rule isn't confident.
+Pins the protocol contract to >=0.9.0 for the new
+`Gap` / `Clarification` / `Assumption` models + `Rule.confidence`
+and `Finding.confidence` fields.
+
+### Added
+
+- **Per-rule `confidence` propagated to findings.** `LoadedRule`
+  surfaces an optional `confidence: str` (default `"medium"`, accepted
+  values `"high" | "medium" | "low"`); the evaluator copies the value
+  onto every `Finding` it emits and the scorer surfaces it in the
+  `top_action` payload.
+- **`apply_top_action` confidence gating.** Before the handler runs:
+  `high` falls through to apply (the v3.1 behaviour); `medium`
+  short-circuits to `ApplyResult(confirm_required=True,
+  skipped_reason="confirm_required")` so the MCP layer's
+  `confirm_apply` tool can finish the round-trip with a user;
+  `low` short-circuits to `ApplyResult(gap_payload=...,
+  skipped_reason="low_confidence_record_gap")` so the MCP layer can
+  record a Gap. New optional `ApplyResult` fields:
+  `confirm_required: bool`, `gap_payload: dict | None`.
+- **`gaps_jsonl_unresolved` private matcher.** Reads
+  `.agent-readiness/gaps.jsonl` from the repo root and emits one
+  finding per unresolved Gap row; tolerates malformed JSON, ignores
+  Clarification / Assumption rows.
+- **`agent_readiness.gaps` module.** Workspace-local Gap /
+  Clarification / Assumption storage backed by an append-only,
+  `fcntl.flock`-protected JSONL at `.agent-readiness/gaps.jsonl`.
+  Public API: `record_gap`, `record_clarification`,
+  `record_assumption`, `list_gaps`, `resolve_gap`.
+- **`agent-readiness gap` CLI subcommand group.** `record`, `list`,
+  and `resolve` subcommands surface the gaps module to the CLI for
+  manual capture and operator review.
+
+### Changed
+
+- Protocol pin bumped from `>=0.8.2,<0.9.0` to `>=0.9.0,<0.10.0`.
+
 ## [3.1.0] - 2026-05-25
 
 Minor: ships the progressive workspace scan stack landed under Plan 1
