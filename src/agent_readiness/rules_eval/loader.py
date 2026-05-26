@@ -42,6 +42,23 @@ class LoadedRule:
     populated dicts (matching the protocol's ``Action`` and
     ``VerifyStep`` shapes). For v1 rules they are ``None`` and
     consumers fall back to ``fix_hint`` text only.
+
+    ``namespace`` is an optional sub-pillar register. Today it is used
+    only by the Ontology pillar, which splits its rules into two
+    registers:
+
+    * ``schema``     — declaration-presence assertions ("does the
+      workspace declare X?"). Usually satisfied by adding a file or
+      a manifest field.
+    * ``validation`` — runtime invariants over the typed graph
+      ("do the declarations hold together?"). Usually needs
+      cross-instance evaluation, not a single-file fix.
+
+    Pass-through metadata; nothing in the evaluator branches on it
+    yet. Future consumers: gap-aware MCP tools (Bundle B of the
+    2026-05-26 ontology-driven-agent design) and the ontology
+    inference reasoner (Bundle C). Other pillars may opt in later;
+    ``None`` means the rule sits at pillar level only.
     """
 
     rule_id: str
@@ -59,10 +76,18 @@ class LoadedRule:
     verify: dict[str, Any] | None = None
     fix_prompt: str | None = None
     applies_when: dict[str, Any] | None = None
+    namespace: str | None = None
 
     @property
     def match_type(self) -> str:
         return str(self.match.get("type", ""))
+
+
+# Closed set of accepted ``namespace`` values, mirroring the protocol's
+# ``Rule.namespace`` Literal. Kept here (not imported from the protocol)
+# so the engine still loads when the optional protocol dep isn't
+# installed — same pattern as the rest of this loader.
+_VALID_NAMESPACES: frozenset[str] = frozenset({"schema", "validation"})
 
 
 def _load_yaml(text: str) -> dict[str, Any]:
@@ -148,6 +173,13 @@ def load_rule_file(path: Path) -> LoadedRule | None:
     if applies_when is not None and not isinstance(applies_when, dict):
         raise RuleLoadError(f"{path}: 'applies_when' must be a mapping or null")
 
+    namespace = data.get("namespace")
+    if namespace is not None and namespace not in _VALID_NAMESPACES:
+        raise RuleLoadError(
+            f"{path}: 'namespace' must be one of {sorted(_VALID_NAMESPACES)} "
+            f"or null; got {namespace!r}"
+        )
+
     return LoadedRule(
         rule_id=str(data["id"]),
         pillar=str(data["pillar"]),
@@ -164,6 +196,7 @@ def load_rule_file(path: Path) -> LoadedRule | None:
         verify=verify,
         fix_prompt=fix_prompt,
         applies_when=applies_when,
+        namespace=namespace,
     )
 
 
