@@ -5,6 +5,59 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-05-26
+
+Minor: implements Bundle C of the 2026-05-26 ontology-driven-agent
+design — a deterministic forward-chaining reasoner over the
+workspace ontology graph, exposed as a CLI subcommand and as a new
+private matcher that surfaces derived violations as scan findings.
+Pins the protocol contract to `>=0.10.0` for the new `inference`
+value on `Rule.namespace`.
+
+### Added
+
+- **`agent_readiness.ontology.reasoning` module.** Hand-rolled
+  forward chainer (no new dependency) over the loaded `Ontology`
+  dataclass. Each inference rule is implemented as a small evaluator
+  function registered with `@register("ontology.inference.<name>")`;
+  the engine's `run_inference(ont, rule_filter=None)` iterates the
+  REGISTRY and returns a flat list of `DerivedViolation` records.
+- **Six v1 inference evaluators** under
+  `agent_readiness.ontology.reasoning.evaluators`:
+  `acyclic_dependsOn`, `irreflexive_dependsOn`,
+  `provider_must_be_documented`,
+  `protocol_provider_must_be_releasable`,
+  `consumer_must_pin_protocol_version`, and
+  `coupled_consumers_must_agree_on_major` — that last one being the
+  value-prop demo (catches transitive Protocol-pin disagreement that
+  no per-file scan can see).
+- **`ontology_inference` private matcher.** Bridges YAML rules in
+  `agent-readiness-rules` under `rules/ontology/inference/` to the
+  chainer. Resolves the ontology root from `cfg["ontology_root"]`,
+  `<repo>/ontology`, then `<repo>/agent-readiness-manifest/ontology`,
+  and silently emits zero findings when none resolve (matches the
+  `gaps_jsonl_unresolved` contract).
+- **`agent-readiness ontology reason` CLI subcommand.** 1:1 with the
+  `reason_over_ontology` MCP tool shipping in
+  `agent-readiness-ontology-mcp` v0.2.0. Default emits JSON for the
+  full registry; `--rule <id>` restricts to one evaluator;
+  `--ontology-root <path>` overrides discovery. Always exits 0 —
+  CLI surfaces, `scan` scores.
+
+### Changed
+
+- **Protocol pin bumped** from `agent-readiness-insights-protocol>=0.9.0,<0.10.0`
+  to `>=0.10.0,<0.11.0` (transparent to consumers; required to
+  recognise `Rule.namespace="inference"` from `agent-readiness-rules`
+  on the next PROTOCOL_TAG bump).
+- **`__version__` and `pyproject.toml` version** bumped from `3.2.0`
+  to `3.3.0`.
+
+### Plan / design refs
+
+Plan: `agent-readiness-research/docs/superpowers/plans/2026-05-26-bundle-c-ontology-reasoning.md`.
+Design: `docs/design/2026-05-26-ontology-driven-design.md` (Bundle C).
+
 ## [3.2.0] - 2026-05-26
 
 Minor: implements Bundle B of the 2026-05-26 ontology-driven-agent

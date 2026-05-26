@@ -33,6 +33,7 @@ from . import (  # noqa: F401  -- import for side effect (registration)
     gitignore_coverage,
     manifest_introspection,
     naming_search,
+    ontology_inference,
     prompt_scan,
     regex_secret_scan,
     secret_scanning_config,
