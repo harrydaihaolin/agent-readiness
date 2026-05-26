@@ -60,6 +60,16 @@ class Finding:
     action: dict[str, Any] | None = None
     verify: dict[str, Any] | None = None
     fix_prompt: str | None = None
+    confidence: str | None = None
+    """Per-finding confidence propagated from the rule that produced it.
+
+    Set by the evaluator from ``LoadedRule.confidence`` on every
+    finding. ``None`` means the finding came from an older code path
+    that didn't propagate the value — callers should treat ``None`` as
+    equivalent to ``"medium"`` for branching purposes (matching the
+    protocol's ``Finding.confidence`` semantics). Drives
+    ``apply_top_action`` branching; see ``apply_action.py``.
+    """
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -75,6 +85,8 @@ class Finding:
             d.pop("verify", None)
         if d.get("fix_prompt") is None:
             d.pop("fix_prompt", None)
+        if d.get("confidence") is None:
+            d.pop("confidence", None)
         return d
 
 

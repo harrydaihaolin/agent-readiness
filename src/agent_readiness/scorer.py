@@ -230,4 +230,8 @@ def compute_top_action(report: Report) -> dict[str, Any] | None:
         payload["action"] = finding.action
     if finding.verify is not None:
         payload["verify"] = finding.verify
+    if finding.confidence is not None:
+        # Surfaced to ``apply_top_action`` which branches on it
+        # (high → apply, medium → confirm_required, low → record gap).
+        payload["confidence"] = finding.confidence
     return payload

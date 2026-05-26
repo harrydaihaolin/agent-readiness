@@ -105,6 +105,7 @@ def evaluate_rule(rule: LoadedRule, ctx: RepoContext) -> CheckResult:
                 action=rendered_action,
                 verify=rule.verify,
                 fix_prompt=rendered_fix_prompt,
+                confidence=rule.confidence,
             )
         )
 

@@ -23,8 +23,18 @@ def _top_action(
     action: dict | None = None,
     verify: dict | None = None,
     check_id: str = "test.check",
+    confidence: str = "high",
 ) -> dict:
-    """Minimal valid top_action shape (cf. scorer.compute_top_action)."""
+    """Minimal valid top_action shape (cf. scorer.compute_top_action).
+
+    ``confidence`` defaults to ``"high"`` here because every test in
+    this module is asserting the *apply* path — they want
+    ``apply_top_action`` to actually run the handler. With the v3.2.0
+    confidence-gating change, an unset confidence (or ``"medium"``)
+    would return a ``confirm_required`` envelope instead of mutating
+    the working copy. Tests for the medium / low branches live in
+    ``test_apply_action_confidence.py``.
+    """
     payload: dict = {
         "check_id": check_id,
         "pillar": "flow",
@@ -32,6 +42,7 @@ def _top_action(
         "message": "test finding",
         "weight": 1.0,
         "rationale": "test",
+        "confidence": confidence,
     }
     if action is not None:
         payload["action"] = action

@@ -120,3 +120,114 @@ def test_loader_rejects_unknown_namespace_value(tmp_path: Path) -> None:
     )
     with pytest.raises(RuleLoadError, match="namespace"):
         load_rule_file(rule)
+
+
+# ---------------------------------------------------------------------------
+# Per-rule confidence (Bundle B / protocol v0.9.0)
+# ---------------------------------------------------------------------------
+
+
+def test_loader_confidence_defaults_to_medium(tmp_path: Path) -> None:
+    """Mirrors protocol default — unannotated rules behave like medium.
+
+    With ``confidence: medium`` the engine's ``apply_top_action`` will
+    return a ``confirm_required`` envelope instead of mutating, which
+    is the safe default for the existing rule set until each rule is
+    explicitly audited up to ``high`` (PR B-4).
+    """
+    rule = _write(
+        tmp_path / "rule.yaml",
+        """\
+        rules_version: 2
+        id: cognitive_load.fake_for_test
+        provenance: agent-readiness/cognitive_load.fake_for_test
+        pillar: cognitive_load
+        title: fake
+        match:
+          type: file_size
+        action:
+          kind: create_file
+          path: x
+          template: "x"
+        verify:
+          command: "true"
+        """,
+    )
+    loaded = load_rule_file(rule)
+    assert loaded is not None
+    assert loaded.confidence == "medium"
+
+
+def test_loader_confidence_accepts_high(tmp_path: Path) -> None:
+    rule = _write(
+        tmp_path / "rule.yaml",
+        """\
+        rules_version: 2
+        id: cognitive_load.fake_high
+        provenance: agent-readiness/cognitive_load.fake_high
+        pillar: cognitive_load
+        confidence: high
+        title: fake
+        match:
+          type: file_size
+        action:
+          kind: create_file
+          path: x
+          template: "x"
+        verify:
+          command: "true"
+        """,
+    )
+    loaded = load_rule_file(rule)
+    assert loaded is not None
+    assert loaded.confidence == "high"
+
+
+def test_loader_confidence_accepts_low(tmp_path: Path) -> None:
+    rule = _write(
+        tmp_path / "rule.yaml",
+        """\
+        rules_version: 2
+        id: ontology.fake_low
+        provenance: agent-readiness/ontology.fake_low
+        pillar: ontology
+        confidence: low
+        title: fake
+        match:
+          type: file_size
+        action:
+          kind: create_file
+          path: x
+          template: "x"
+        verify:
+          command: "true"
+        """,
+    )
+    loaded = load_rule_file(rule)
+    assert loaded is not None
+    assert loaded.confidence == "low"
+
+
+def test_loader_rejects_unknown_confidence_value(tmp_path: Path) -> None:
+    """Closed-world contract: typos must fail loudly, not coerce to default."""
+    rule = _write(
+        tmp_path / "rule.yaml",
+        """\
+        rules_version: 2
+        id: ontology.fake_bad_confidence
+        provenance: agent-readiness/ontology.fake_bad_confidence
+        pillar: ontology
+        confidence: certain
+        title: fake
+        match:
+          type: file_size
+        action:
+          kind: create_file
+          path: x
+          template: "x"
+        verify:
+          command: "true"
+        """,
+    )
+    with pytest.raises(RuleLoadError, match="confidence"):
+        load_rule_file(rule)
