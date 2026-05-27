@@ -1762,7 +1762,9 @@ from agent_readiness.live_scan.pidfile import (  # noqa: E402
     write_pidfile as _write_pidfile,
 )
 from agent_readiness.live_scan.paths import workspace_hash as _workspace_hash  # noqa: E402
+from agent_readiness.live_scan.events import EventLog as _EventLog  # noqa: E402
 from agent_readiness.live_scan.server import start_server as _start_server  # noqa: E402
+from agent_readiness.live_scan.worker import ScanOptions as _ScanOptions  # noqa: E402
 from agent_readiness.live_scan.worker import scan_workspace as _scan_workspace  # noqa: E402
 from agent_readiness.render import export_report as _export_report  # noqa: E402
 
@@ -1812,7 +1814,12 @@ def scan_and_view(
     # server.url existing finds a valid daemon.pid alongside it. The worker
     # rewrites this file with the same pid + start time once it begins.
     _write_pidfile(sd / "daemon.pid", scan_id=_workspace_hash(path))
-    srv = _start_server(host="127.0.0.1", port=port, data_dir=sd)
+    srv = _start_server(
+        host="127.0.0.1",
+        port=port,
+        data_dir=sd,
+        workspace_path=path.expanduser().resolve(),
+    )
     url = f"http://{srv.host}:{srv.port}"
     (sd / "server.url").write_text(url + "\n")
     click.echo(url, err=True)
@@ -1821,8 +1828,16 @@ def scan_and_view(
             _webbrowser.open(url)
         except Exception:
             pass
+    # Bundle D: SSE event bus shared with the bundled server's
+    # /sse/scans/<id> handler (the handler reads events.jsonl directly,
+    # so there is no in-memory coupling — the bus is on-disk).
+    event_bus = _EventLog(sd)
     try:
-        _scan_workspace(path, children=children)
+        _scan_workspace(
+            path,
+            children=children,
+            options=_ScanOptions(event_log=event_bus),
+        )
     finally:
         # Idle timeout: stay up after terminal status for late polls.
         if idle_timeout_s > 0:

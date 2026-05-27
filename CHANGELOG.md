@@ -5,6 +5,84 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-05-26
+
+Minor: implements Bundle D / PR D-2 of the 2026-05-26 dashboard-mode
+design — the live-dashboard transport (SSE event log + interactive
+prompt state machine + JSON API) that lets the `agent-readiness` skill
+hand its scan over to the browser dashboard for live progress and
+inline answers instead of blocking the chat for minutes.
+
+### Added — `agent_readiness.live_scan` extensions
+
+- **`live_scan.events.EventLog`** — append-only SSE event log backed by
+  `<scan_dir>/events.jsonl`. Monotonic per-scan `seq`, crash-safe
+  recovery (torn-tail line silently skipped), throttle helper for
+  `≤ 5/s/repo` events. Single-writer contract (the scan worker).
+- **`live_scan.prompts.PromptLog`** — append-only prompt state machine
+  backed by `<scan_dir>/prompts.jsonl`. State transitions
+  `pending → answered | default_applied → superseded`, with
+  `wait_for_answer(timeout_s)` and `apply_default_immediately()` for
+  blocking and non-blocking flows. Every transition also fans out the
+  matching SSE event through the bus so the dashboard stays in sync.
+- **`live_scan.snapshot.build_snapshot`** — replays `events.jsonl`
+  into a `WorkspaceScanSnapshot` Pydantic model. Lets a reconnecting
+  browser paint without re-consuming the SSE stream — read the
+  snapshot, then open SSE at `last_seq + 1`.
+- **`live_scan.sse.handle_sse_request`** — text/event-stream handler.
+  Honours the standard `Last-Event-ID` header (and a `?since=<seq>`
+  query override), terminates on `scan.exited`, hard ceiling at 30 min
+  so zombie threads can't pile up. EventSource auto-reconnects on the
+  browser side cover the close.
+- **`live_scan.api`** — JSON API handlers + path routing for
+  ```
+  GET  /api/scans/<id>/snapshot                  (WorkspaceScanSnapshot)
+  GET  /api/scans/<id>/topaction/diff            (501 — deferred per spec § 15)
+  POST /api/scans/<id>/prompts/<pid>/answer      (validates via PromptAnswer)
+  POST /api/scans/<id>/exit                      (button | chat; idempotent)
+  POST /api/scans/<id>/topaction/apply           (rate-limited 1/scan)
+  ```
+- **`live_scan.topaction_adapter.apply_top_action_to_path`** — thin
+  bridge from the new `/topaction/apply` endpoint to the existing
+  `agent_readiness.apply_action.apply_top_action`; reads `live.json`
+  or `latest.json` from the scan_dir to find the pinned action.
+
+### Changed
+
+- **`live_scan.server.start_server`** now accepts `workspace_path`
+  (optional, additive). When supplied, dispatches the new SSE and JSON
+  API routes; when omitted, behaves exactly as in v3.3.0 so existing
+  callers (tests, older callers) see no behaviour change.
+- **`live_scan.worker.scan_workspace`** now takes
+  `ScanOptions(event_log=...)` (optional, additive). When supplied the
+  worker emits the lifecycle, per-repo, and rollup SSE events the
+  dashboard contract expects (`scan.queued`, `repo.scan.started`,
+  `repo.scan.completed`, `workspace.score.tick`, `scan.completed`).
+  Without the bus the worker behaves identically to v3.3.0.
+- **`cli.scan-and-view`** wires the `EventLog` between the server and
+  the worker so live dashboard mode is on by default for the bundled
+  CLI; existing CLI flags unchanged.
+
+### Pinned
+
+- `agent-readiness-insights-protocol>=0.11.0,<0.12.0` — protocol must
+  ship the new SSE + prompt wire models (Bundle D / PR D-1).
+
+### Compatibility
+
+- Strictly additive. No behaviour change for callers that don't pass
+  `workspace_path` to `start_server` or `event_log` to `ScanOptions`.
+- Six new module files, one CLI wire-up edit; existing modules are
+  unchanged except for `server.py` (rewritten to dispatch new routes
+  while preserving every old route verbatim).
+
+### Tests
+
+- 71 live_scan tests pass (61 new across events / prompts / snapshot /
+  SSE / API + 10 existing pre-existing server / worker / scan-and-view
+  tests verified unchanged).
+- Full engine suite: 658 passed, 1 skipped.
+
 ## [3.3.0] - 2026-05-26
 
 Minor: implements Bundle C of the 2026-05-26 ontology-driven-agent
