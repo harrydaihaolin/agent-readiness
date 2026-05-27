@@ -47,11 +47,15 @@ def test_enumeration_report_to_dict_round_trip() -> None:
     )
     d = rep.to_dict()
     assert d["kind"] == "enumeration"
-    assert d["schema"] == 1
+    assert d["schema"] == 2
     assert d["root"]["has_agents_md"] is True
     assert d["children"][0]["language_hint"] == ["python"]
     assert d["manifest_signals"]["pnpm_workspace"] is False
     assert d["stats"]["scan_truncated"] is False
+    # classification_hint is absent when the model is constructed
+    # directly (no hint passed) — only present when produced by
+    # ``enumerate.enumerate_workspace``. Confirms additive behaviour.
+    assert "classification_hint" not in d
 
 
 def test_workspace_report_to_dict_shape() -> None:

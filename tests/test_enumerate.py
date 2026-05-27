@@ -117,3 +117,147 @@ def test_language_hint_from_pyproject(tmp_path: Path) -> None:
     _write(tmp_path / "child" / "pyproject.toml", "[project]\nname = 'x'\n")
     result = enumerate_workspace(tmp_path)
     assert "python" in result.children[0].language_hint
+
+
+# --- classification_hint (v3.4.3) --------------------------------------
+#
+# Each rule in the rubric gets a test. The contract the skill follows is
+# ``recommended_action`` — we assert that field directly so a future
+# rename / refactor of the rule body that breaks the user-visible
+# behaviour fails loudly.
+
+
+def test_classification_hint_envelope_present(tmp_path: Path) -> None:
+    """Every enumeration ships a classification_hint (schema 2)."""
+    _make_git(tmp_path)
+    _write(tmp_path / "README.md")
+    result = enumerate_workspace(tmp_path)
+    assert result.classification_hint is not None
+    assert result.schema == 2
+    d = result.to_dict()
+    assert "classification_hint" in d
+    assert d["classification_hint"]["recommended_action"] in (
+        "scan_repo",
+        "scan_workspace_async",
+        "ask_user",
+        "exit",
+    )
+
+
+def test_classification_monorepo_via_manifest(tmp_path: Path) -> None:
+    """pnpm-workspace.yaml at root → monorepo, recommend scan_repo."""
+    _make_git(tmp_path)
+    _write(tmp_path / "pnpm-workspace.yaml", "packages:\n  - 'apps/*'\n")
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "monorepo"
+    assert h.confidence == "high"
+    assert h.recommended_action == "scan_repo"
+    assert "pnpm_workspace" in h.rationale
+
+
+def test_classification_workspace_of_independents(tmp_path: Path) -> None:
+    """Root no .git, ≥ 2 children with .git → dashboard async scan."""
+    _make_git(tmp_path / "a")
+    _write(tmp_path / "a" / "README.md")
+    _make_git(tmp_path / "b")
+    _write(tmp_path / "b" / "README.md")
+    _make_git(tmp_path / "c")
+    _write(tmp_path / "c" / "README.md")
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "workspace_of_independents"
+    assert h.confidence == "high"
+    assert h.recommended_action == "scan_workspace_async"
+    assert "3 children" in h.rationale
+
+
+def test_classification_single_repo(tmp_path: Path) -> None:
+    """Root has .git, no nested .git → single repo, scan_repo."""
+    _make_git(tmp_path)
+    _write(tmp_path / "README.md")
+    _write(tmp_path / "src" / "app.py")
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "single_repo"
+    assert h.confidence == "high"
+    assert h.recommended_action == "scan_repo"
+
+
+def test_classification_not_a_code_repo(tmp_path: Path) -> None:
+    """No .git, no README, no children → exit."""
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "not_a_code_repo"
+    assert h.recommended_action == "exit"
+
+
+def test_classification_ambiguous_root_and_children_have_git(
+    tmp_path: Path,
+) -> None:
+    """Root .git AND child .git → ambiguous, ask user with three options.
+
+    This is the user-reported dogfood case: signals do not disambiguate
+    workspace-with-meta-repo vs. monorepo-with-submodules vs. single
+    repo with unrelated checkouts. The skill MUST ask.
+    """
+    _make_git(tmp_path)
+    _write(tmp_path / "README.md")
+    _make_git(tmp_path / "child")
+    _write(tmp_path / "child" / "README.md")
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "ambiguous"
+    assert h.confidence == "ambiguous"
+    assert h.recommended_action == "ask_user"
+    assert h.ambiguity_reason is not None
+    assert h.ambiguity_options is not None
+    option_ids = {o["id"] for o in h.ambiguity_options}
+    assert option_ids == {"workspace", "monorepo", "single_repo"}
+    for opt in h.ambiguity_options:
+        assert opt["route"] in ("scan_repo", "scan_workspace_async")
+        assert "hint" in opt
+
+
+def test_classification_ambiguous_one_child_with_git(tmp_path: Path) -> None:
+    """Root no .git, exactly 1 child with .git → ask user."""
+    _make_git(tmp_path / "only")
+    _write(tmp_path / "only" / "README.md")
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "ambiguous"
+    assert h.recommended_action == "ask_user"
+    assert h.ambiguity_options is not None
+    option_ids = {o["id"] for o in h.ambiguity_options}
+    assert option_ids == {"workspace", "single_repo"}
+
+
+def test_classification_ambiguous_no_git_anywhere(tmp_path: Path) -> None:
+    """No .git at root or any child, but children exist → ask user (low conf)."""
+    _write(tmp_path / "README.md", "# project")
+    _write(tmp_path / "child_a" / "README.md")
+    _write(tmp_path / "child_b" / "README.md")
+    h = enumerate_workspace(tmp_path).classification_hint
+    assert h is not None
+    assert h.classification == "ambiguous"
+    assert h.recommended_action == "ask_user"
+    assert h.confidence == "low"
+    assert h.ambiguity_options is not None
+    option_ids = {o["id"] for o in h.ambiguity_options}
+    assert option_ids == {"skip", "single_repo"}
+
+
+def test_classification_hint_serializes_in_envelope(tmp_path: Path) -> None:
+    """The hint round-trips through to_dict so MCP / CLI consumers see it."""
+    _make_git(tmp_path / "a")
+    _write(tmp_path / "a" / "README.md")
+    _make_git(tmp_path / "b")
+    _write(tmp_path / "b" / "README.md")
+    d = enumerate_workspace(tmp_path).to_dict()
+    assert d["schema"] == 2
+    hint = d["classification_hint"]
+    assert hint["classification"] == "workspace_of_independents"
+    assert hint["recommended_action"] == "scan_workspace_async"
+    # ambiguity_reason / ambiguity_options are absent for non-ask cases
+    assert "ambiguity_reason" not in hint
+    assert "ambiguity_options" not in hint

@@ -21,9 +21,28 @@ def test_enumerate_json_emits_envelope(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.output
     envelope = json.loads(result.output)
     assert envelope["kind"] == "enumeration"
-    assert envelope["schema"] == 1
+    assert envelope["schema"] == 2
     assert envelope["root"]["has_git"] is False
     assert {c["path"].split("/")[-1] for c in envelope["children"]} == {"a"}
+
+
+def test_enumerate_json_carries_classification_hint(tmp_path: Path) -> None:
+    """v3.4.3: --json envelope must surface ``classification_hint``
+    so non-Python callers (skills, MCP, shell scripts) can route on
+    ``recommended_action`` without re-implementing the rubric."""
+    _make_git(tmp_path / "a")
+    (tmp_path / "a" / "README.md").write_text("# a")
+    _make_git(tmp_path / "b")
+    (tmp_path / "b" / "README.md").write_text("# b")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["enumerate", str(tmp_path), "--json"])
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    hint = envelope.get("classification_hint")
+    assert hint is not None, "missing classification_hint in JSON envelope"
+    assert hint["classification"] == "workspace_of_independents"
+    assert hint["recommended_action"] == "scan_workspace_async"
+    assert hint["confidence"] == "high"
 
 
 def test_enumerate_human_default(tmp_path: Path) -> None:

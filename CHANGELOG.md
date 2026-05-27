@@ -5,6 +5,54 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.4.3] - 2026-05-27
+
+Minor: `enumerate_workspace` now returns a deterministic
+**classification hint** with the envelope, ending the "the skill spent
+five minutes deliberating over an ambiguous classification" UX
+regression reported on the dogfood workspace (root has `.git` AND
+children also have `.git` — three valid interpretations, zero signal
+to choose between them).
+
+### Added
+
+- New `ClassificationHint` model on `EnumerationReport` carrying
+  `classification` (`single_repo` / `monorepo` /
+  `workspace_of_independents` / `not_a_code_repo` / `ambiguous`),
+  `confidence` (`high` / `low` / `ambiguous`), and a strict
+  `recommended_action` contract (`scan_repo`,
+  `scan_workspace_async`, `ask_user`, or `exit`) that the skill
+  follows verbatim.
+- For `recommended_action == "ask_user"` cases, the envelope also
+  carries `ambiguity_reason` (pre-rendered one-paragraph
+  explanation of *why* the signals don't resolve) and
+  `ambiguity_options` (pre-rendered `{id, label, route, hint}`
+  cards the skill paints straight into a chat prompt — no LLM
+  improvisation required).
+- `EnumerationReport.schema` bumped to `2` to signal the new field
+  to consumers; the field is additive and absent on older payloads
+  (consumers should treat `classification_hint is None` as
+  "old scanner, fall back to manual rubric").
+
+### Why
+
+User report mid-session, on a 17-repo dogfood workspace that
+happens to also have `.git` at the root:
+
+> *"this is weird because a workspace can have git, but it does
+> not mean it's a monorepo, I think we are taking a lot of time
+> just to classify whether it's a workspace, monorepo or single
+> repo, I think once we captured some signals then we should
+> immediately jump to prompt and let user select…"*
+
+The skill's classification rubric is a five-row table the LLM has
+to apply — for the (root has `.git` AND children also have `.git`)
+case it doesn't match any clean rule and the model falls back to
+extended-thinking its way to a guess ("single monorepo, low
+confidence"), then runs `scan_repo` and produces wrong findings.
+Computing the hint in pure Python here ends the deliberation: the
+skill reads one field and either scans or asks.
+
 ## [3.4.2] - 2026-05-27
 
 Patch: fixes the **`scan-and-view` CLI opens the wrong dashboard URL**
