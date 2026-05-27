@@ -5,6 +5,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-05-27
+
+Patch: rebundles `_dashboard_dist/` with the Bundle D dashboard build
+(PR D-4 of the 2026-05-26 dashboard-mode design) so the bundled
+scan-and-view server now actually serves the live `LivePage` SPA
+(SSE-backed progress + `PromptsQueue` + `ExitDashboardButton`)
+instead of the v3.4.0 stub.
+
+### Changed
+
+- `src/agent_readiness/_dashboard_dist/` — replaces the
+  "Dashboard stub" placeholder with the production Vite build of
+  `agent-readiness-analytics-dashboard` (`index.html`, `404.html`,
+  `assets/`, `data/`). 8 files / ~625 kB JS gzipped to ~176 kB.
+
+### Notes
+
+- No source-code changes — every other module in `agent-readiness`
+  is byte-identical to v3.4.0. The bump is purely to ship the
+  rebuilt static assets via PyPI so downstream installs of
+  `agent-readiness-mcp >= 0.7.0` don't have to rebuild the
+  dashboard themselves.
+- The static-bundle contract is unchanged: `_dashboard_dist/` is
+  generated, not hand-edited; refreshed via `make dashboard`;
+  `scripts/check_dashboard_dist.py` enforces presence.
+
 ## [3.4.0] - 2026-05-26
 
 Minor: implements Bundle D / PR D-2 of the 2026-05-26 dashboard-mode
