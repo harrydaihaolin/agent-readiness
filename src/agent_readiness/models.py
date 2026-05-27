@@ -204,16 +204,71 @@ class ChildEnumeration:
 
 
 @dataclass
+class ClassificationHint:
+    """Deterministic, signal-derived recommendation for the caller.
+
+    ``recommended_action`` is the contract the skill follows verbatim:
+
+    * ``"scan_repo"`` — single repo / monorepo, route to ``scan_repo``.
+    * ``"scan_workspace_async"`` — multi-repo workspace, launch the
+      dashboard via ``scan_workspace_async`` (NOT the synchronous
+      ``check_workspace_readiness``).
+    * ``"ask_user"`` — signals are ambiguous from data alone; the
+      skill MUST stop and ask the user to disambiguate before scanning.
+      ``ambiguity_reason`` and ``ambiguity_options`` carry the
+      pre-rendered question payload so the skill doesn't have to
+      improvise wording.
+    * ``"exit"`` — not a code repo; tell the user, do not scan.
+
+    The hint is computed from the same EnumerationReport that wraps it
+    — pure function of signals, no LLM judgment. The skill is free to
+    override (e.g. user says "treat this as a monorepo") but should not
+    silently ignore ``ask_user`` cases.
+    """
+    classification: str            # one of: single_repo, monorepo,
+                                   #   workspace_of_independents,
+                                   #   not_a_code_repo, ambiguous
+    confidence: str                # one of: high, low, ambiguous
+    recommended_action: str        # one of: scan_repo,
+                                   #   scan_workspace_async, ask_user, exit
+    rationale: str                 # short, signal-quoting explanation
+    ambiguity_reason: str | None = None
+    ambiguity_options: list[dict[str, str]] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "classification": self.classification,
+            "confidence": self.confidence,
+            "recommended_action": self.recommended_action,
+            "rationale": self.rationale,
+        }
+        if self.ambiguity_reason is not None:
+            d["ambiguity_reason"] = self.ambiguity_reason
+        if self.ambiguity_options is not None:
+            d["ambiguity_options"] = self.ambiguity_options
+        return d
+
+
+@dataclass
 class EnumerationReport:
-    """Output of enumerate_workspace(). No scoring, no rule evaluation."""
+    """Output of enumerate_workspace(). No scoring, no rule evaluation.
+
+    ``classification_hint`` (added in v3.4.3 / schema 2) is a
+    deterministic, signal-derived recommendation: ``scan_repo``,
+    ``scan_workspace_async``, ``ask_user``, or ``exit``. The skill
+    follows it verbatim so multi-repo workspaces auto-route to dashboard
+    mode and genuinely ambiguous trees auto-route to a chat prompt
+    instead of LLM deliberation.
+    """
     root: ChildEnumeration
     children: list[ChildEnumeration]
     manifest_signals: dict[str, bool]
     stats: dict[str, Any]
-    schema: int = 1
+    classification_hint: ClassificationHint | None = None
+    schema: int = 2
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "kind": "enumeration",
             "schema": self.schema,
             "root": self.root.to_dict(),
@@ -221,6 +276,9 @@ class EnumerationReport:
             "manifest_signals": self.manifest_signals,
             "stats": self.stats,
         }
+        if self.classification_hint is not None:
+            d["classification_hint"] = self.classification_hint.to_dict()
+        return d
 
 
 # --- Workspace readiness -----------------------------------------------
