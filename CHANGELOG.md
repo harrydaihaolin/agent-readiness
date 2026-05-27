@@ -5,6 +5,33 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
 ## [Unreleased]
 
+## [3.4.2] - 2026-05-27
+
+Patch: fixes the **`scan-and-view` CLI opens the wrong dashboard URL**
+bug reported on first end-to-end use of Bundle D dashboard mode. The
+browser was landing on `http://host:port/` (which renders the old
+WorkspacesPage that polls a `/data/index.json` not present in a live
+scan dir, getting stuck on `"Loading workspaces…"` forever) instead of
+`http://host:port/#/live/<scan_id>` (the new Bundle D LivePage that
+mounts the SSE provider and renders the repo grid + prompts queue).
+
+### Fixed
+
+- `agent-readiness scan-and-view` now opens the live `LivePage` URL
+  directly (`<base>/#/live/<scan_id>` — the dashboard SPA uses
+  HashRouter, so the live route is a fragment). The same URL is
+  echoed to stderr so users running headless without `--no-open` see
+  the right URL to share.
+
+### Unchanged on purpose
+
+- `<scan_dir>/server.url` continues to hold the *bare* base URL
+  (`http://host:port`). The SSE / JSON-API URL builders in
+  `agent-readiness-mcp` (`f"{url}/sse/scans/{scan_id}"`,
+  `f"{url}/api/scans/{scan_id}/snapshot"`) append paths to it — they
+  must not include the `#/live/<scan_id>` fragment, or those URLs
+  would break.
+
 ## [3.4.1] - 2026-05-27
 
 Patch: rebundles `_dashboard_dist/` with the Bundle D dashboard build

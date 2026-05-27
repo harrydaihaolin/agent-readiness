@@ -1822,10 +1822,12 @@ def scan_and_view(
     )
     url = f"http://{srv.host}:{srv.port}"
     (sd / "server.url").write_text(url + "\n")
-    click.echo(url, err=True)
+    scan_id = _workspace_hash(path)
+    dashboard_url = f"{url}/#/live/{scan_id}"
+    click.echo(dashboard_url, err=True)
     if not no_open and sys.stdout.isatty():
         try:
-            _webbrowser.open(url)
+            _webbrowser.open(dashboard_url)
         except Exception:
             pass
     # Bundle D: SSE event bus shared with the bundled server's
