@@ -96,6 +96,35 @@ def test_loader_namespace_defaults_to_none(tmp_path: Path) -> None:
     assert loaded.namespace is None
 
 
+def test_loader_accepts_inference_namespace(tmp_path: Path) -> None:
+    """Bundle C added `inference` as the third register on the ontology
+    pillar — rules whose findings are derived from the workspace
+    ontology graph rather than direct file scans. Engine v3.3.0 onward
+    must load them."""
+    rule = _write(
+        tmp_path / "rule.yaml",
+        """\
+        rules_version: 2
+        id: ontology.inference.fake
+        provenance: agent-readiness/ontology.inference.fake
+        pillar: ontology
+        namespace: inference
+        title: fake
+        match:
+          type: ontology_inference
+          rule_id: ontology.inference.fake
+        action:
+          kind: run_command
+          command: agent-readiness ontology reason --rule ontology.inference.fake
+        verify:
+          command: "true"
+        """,
+    )
+    loaded = load_rule_file(rule)
+    assert loaded is not None
+    assert loaded.namespace == "inference"
+
+
 def test_loader_rejects_unknown_namespace_value(tmp_path: Path) -> None:
     """Loader fails fast on typos so they don't silently fall through to None."""
     rule = _write(
@@ -105,7 +134,7 @@ def test_loader_rejects_unknown_namespace_value(tmp_path: Path) -> None:
         id: ontology.fake_bad_namespace
         provenance: agent-readiness/ontology.fake_bad_namespace
         pillar: ontology
-        namespace: inference
+        namespace: reasoning
         title: fake
         match:
           type: path_glob

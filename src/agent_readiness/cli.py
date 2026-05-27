@@ -1656,6 +1656,92 @@ def ontology_drift_propose_pr(
     _emit_payload(payload, json_output)
 
 
+@ontology.command("reason")
+@click.argument(
+    "workspace",
+    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
+    default=Path("."),
+)
+@click.option(
+    "--rule",
+    "rule_id",
+    default=None,
+    help=(
+        "Run only the named inference rule "
+        "(e.g. ontology.inference.acyclic_dependsOn). "
+        "Default: run all registered evaluators."
+    ),
+)
+@click.option(
+    "--ontology-root",
+    "ontology_root",
+    type=click.Path(file_okay=False, dir_okay=True, path_type=Path),
+    default=None,
+    help=(
+        "Override the ontology/ directory. Default: <workspace>/ontology, "
+        "falling back to <workspace>/agent-readiness-manifest/ontology."
+    ),
+)
+@click.option("--json", "json_output", is_flag=True, default=True, show_default=True)
+def ontology_reason(
+    workspace: Path,
+    rule_id: str | None,
+    ontology_root: Path | None,
+    json_output: bool,
+) -> None:
+    """Run the ontology forward chainer; emit derived violations.
+
+    Loads the workspace ontology, runs every registered inference
+    evaluator (or just the one named via ``--rule``), and prints the
+    list of :class:`DerivedViolation` records as JSON. Designed for
+    headless consumption: 1:1 with the
+    ``reason_over_ontology`` MCP tool shipped by
+    ``agent-readiness-ontology-mcp`` v0.2.0+.
+
+    Exits 0 even when violations are present — the CLI's job is to
+    surface them, not gate on them. ``agent-readiness scan`` is the
+    path that turns these into scored findings via the
+    ``ontology.inference.*`` rules.
+    """
+
+    from agent_readiness.ontology import load_ontology
+    from agent_readiness.ontology.reasoning import (
+        REGISTRY,
+        run_inference,
+        violation_to_dict,
+    )
+
+    if ontology_root is None:
+        candidate_in_repo = workspace / "ontology"
+        candidate_umbrella = workspace / "agent-readiness-manifest" / "ontology"
+        if candidate_in_repo.is_dir():
+            ontology_root = candidate_in_repo
+        elif candidate_umbrella.is_dir():
+            ontology_root = candidate_umbrella
+        else:
+            payload: dict[str, Any] = {
+                "violations": [],
+                "rule_filter": rule_id,
+                "registered_rules": sorted(REGISTRY.evaluators.keys()),
+                "warning": (
+                    f"no ontology/ found at {candidate_in_repo} or "
+                    f"{candidate_umbrella}; nothing to reason over"
+                ),
+            }
+            _emit_payload(payload, json_output)
+            return
+
+    ont = load_ontology(ontology_root)
+    violations = run_inference(ont, rule_filter=rule_id)
+    payload = {
+        "ontology_root": str(ontology_root),
+        "rule_filter": rule_id,
+        "registered_rules": sorted(REGISTRY.evaluators.keys()),
+        "violations": [violation_to_dict(v) for v in violations],
+    }
+    _emit_payload(payload, json_output)
+
+
 # ---------- live-scan commands (Plan 1) -------------------------------------
 
 import time as _time  # noqa: E402

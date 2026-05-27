@@ -105,7 +105,7 @@ class LoadedRule:
 # ``Rule.namespace`` Literal. Kept here (not imported from the protocol)
 # so the engine still loads when the optional protocol dep isn't
 # installed — same pattern as the rest of this loader.
-_VALID_NAMESPACES: frozenset[str] = frozenset({"schema", "validation"})
+_VALID_NAMESPACES: frozenset[str] = frozenset({"schema", "validation", "inference"})
 
 # Closed set of accepted ``confidence`` values, mirroring the protocol's
 # ``Rule.confidence`` Literal. Same rationale as ``_VALID_NAMESPACES``:
