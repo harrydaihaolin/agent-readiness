@@ -487,6 +487,35 @@ def enumerate_cmd(path: Path, json_output: bool) -> None:
         click.echo("warning: enumeration truncated at 200 children", err=True)
 
 
+@cli.command("inspect")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="Emit InspectResult as JSON.")
+def inspect_cmd(path: Path, json_output: bool) -> None:
+    """Enumerate ``PATH`` and suggest a workspace type.
+
+    Fast pre-flight for the skill / agent before calling one of the
+    typed scan subcommands (``scan-repo``, ``scan-monorepo``,
+    ``scan-workspace``).
+    """
+    from agent_readiness.enumerate_git import inspect as do_inspect
+
+    result = do_inspect(path)
+    if json_output:
+        click.echo(result.model_dump_json(indent=2))
+        return
+    enum = result.enumeration
+    cls = result.classification
+    click.echo(f"Path:                {enum.root}")
+    click.echo(f"Git repos found:     {len(enum.repos)}")
+    click.echo(f"Root has .git:       {enum.root_has_git}")
+    click.echo(f"Directories walked:  {enum.directories_walked}")
+    click.echo(f"Elapsed:             {enum.elapsed_ms}ms")
+    click.echo()
+    click.echo(f"Suggested type:      {cls.suggested_type}")
+    click.echo(f"Confidence:          {cls.confidence}")
+    click.echo(f"Rationale:           {cls.rationale}")
+
+
 @cli.command(name="workspace-scan")
 @click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
                                         exists=True, path_type=Path))
