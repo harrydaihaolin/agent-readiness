@@ -27,6 +27,7 @@ from pathlib import Path
 
 from agent_readiness_insights_protocol import (
     EnumerationResult,
+    InspectResult,
     OnboardingClassification,
     RepoCandidate,
 )
@@ -249,3 +250,15 @@ def classify(
         confidence="low",
         rationale="No .git anywhere; will scan as a single directory.",
     )
+
+
+def inspect(root: Path) -> InspectResult:
+    """One-shot: enumerate then classify. Used by the `inspect` CLI and
+    MCP tool. Cheap enough to call every time — no caching."""
+    enumeration = enumerate_git_repos(root)
+    classification = classify(
+        root_has_git=enumeration.root_has_git,
+        repos_found=len(enumeration.repos),
+        children_with_git=sum(1 for r in enumeration.repos if r.has_git),
+    )
+    return InspectResult(enumeration=enumeration, classification=classification)

@@ -192,3 +192,13 @@ def test_classify_no_git_anywhere_is_single_repo_low_confidence():
     cls = classify(root_has_git=False, repos_found=0, children_with_git=0)
     assert cls.suggested_type == "single_repo"
     assert cls.confidence == "low"
+
+
+def test_inspect_composes_enumeration_and_classification(mle_like_workspace: Path):
+    from agent_readiness.enumerate_git import inspect
+
+    result = inspect(mle_like_workspace)
+    assert result.enumeration.root_has_git is False
+    assert len(result.enumeration.repos) == 7
+    assert result.classification.suggested_type == "workspace"
+    assert result.classification.confidence == "medium"
