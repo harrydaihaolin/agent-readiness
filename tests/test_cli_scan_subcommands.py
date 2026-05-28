@@ -25,9 +25,15 @@ def workspace_with_two_repos(tmp_path: Path) -> Path:
 
 
 def _run_cli(args: list[str]) -> subprocess.CompletedProcess:
+    import sys
+
     env = dict(os.environ)
     src = str(Path(__file__).resolve().parents[1] / "src")
-    env["PYTHONPATH"] = src + os.pathsep + env.get("PYTHONPATH", "")
+    # Preserve the runner's full import path (editable deps, user-site) when
+    # tests redirect HOME for onboarding path_for().
+    env["PYTHONPATH"] = os.pathsep.join(
+        dict.fromkeys([src, *sys.path, env.get("PYTHONPATH", "")])
+    )
     return subprocess.run(
         [sys.executable, "-m", "agent_readiness.cli", *args],
         capture_output=True,
@@ -93,3 +99,17 @@ def test_launch_dashboard_writes_onboarding_json(tmp_path: Path, monkeypatch):
     assert state.committed_type == "single_repo"
     assert state.classification.suggested_type == "single_repo"
     assert state.selection is None  # not committed yet
+
+
+def test_scan_repo_prints_onboarding_url_in_json(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / ".git").mkdir()
+
+    proc = _run_cli(["scan-repo", str(target), "--json", "--no-open"])
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["status"] == "onboarding_required"
+    assert payload["type"] == "single_repo"
+    assert "/onboarding/" in payload["dashboard_url"]

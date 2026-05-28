@@ -581,6 +581,32 @@ def inspect_cmd(path: Path, json_output: bool) -> None:
     click.echo(f"Rationale:           {cls.rationale}")
 
 
+@cli.command("scan-repo")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True, help="Emit started envelope as JSON.")
+@click.option("--no-open", is_flag=True, help="Do not auto-open the browser.")
+def scan_repo_cmd(path: Path, json_output: bool, no_open: bool) -> None:
+    """Score ``PATH`` as a single repository.
+
+    Opens the dashboard at ``/onboarding/<scan_id>`` so the user can
+    confirm and hit Start. The wizard for single_repo is 2 steps
+    (Detected → Start) — no picker."""
+    import json
+    from datetime import datetime, timezone
+
+    result = _launch_dashboard_with_onboarding(
+        path=path,
+        committed_type="single_repo",
+        now=datetime.now(timezone.utc),
+        no_open=no_open,
+    )
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"Onboarding wizard: {result['dashboard_url']}")
+        click.echo("Confirm the suggestion and hit Start to begin scanning.")
+
+
 @cli.command(name="workspace-scan")
 @click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
                                         exists=True, path_type=Path))
