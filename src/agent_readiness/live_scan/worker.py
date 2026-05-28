@@ -97,6 +97,28 @@ def emit_onboarding_events(
     return start_seq + 2
 
 
+def emit_onboarding_committed(
+    scan_dir: Path,
+    *,
+    type: str,
+    selected_paths: list[str],
+    revision: int,
+    start_seq: int,
+) -> int:
+    """Append onboarding.committed to events.jsonl. Returns start_seq + 1."""
+    from agent_readiness_insights_protocol import OnboardingCommittedEvent
+
+    ev = OnboardingCommittedEvent(
+        seq=start_seq,
+        at=_now_utc(),
+        type=type,
+        selected_paths=selected_paths,
+        revision=revision,
+    )
+    (scan_dir / "events.jsonl").open("a").write(ev.model_dump_json() + "\n")
+    return start_seq + 1
+
+
 @dataclass
 class ScanOptions:
     hard_timeout_s: int = HARD_TIMEOUT_S_DEFAULT
