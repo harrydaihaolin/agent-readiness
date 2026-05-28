@@ -142,3 +142,20 @@ def test_scan_workspace_emits_committed_type_workspace(tmp_path: Path, monkeypat
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
     assert payload["type"] == "workspace"
+
+
+def test_scan_and_view_prints_deprecation_warning(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / "alpha").mkdir()
+    (target / "alpha" / ".git").mkdir()
+
+    proc = _run_cli(["scan-and-view", str(target), "--json", "--no-open"])
+    # Should still succeed.
+    assert proc.returncode == 0, proc.stderr
+    # Warning must mention the replacement.
+    assert "deprecated" in proc.stderr.lower()
+    assert "scan-workspace" in proc.stderr or "scan-repo" in proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["status"] == "onboarding_required"

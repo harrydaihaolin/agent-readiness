@@ -1940,88 +1940,42 @@ from agent_readiness.render import export_report as _export_report  # noqa: E402
 
 
 @cli.command(name="scan-and-view")
-@click.argument(
-    "path",
-    type=click.Path(file_okay=False, dir_okay=True, exists=True, path_type=Path),
-)
-@click.option(
-    "--children", "children_csv", required=True,
-    help="Comma-separated child paths to scan.",
-)
-@click.option(
-    "--port", "port", type=int, default=0,
-    help="HTTP port (default: ephemeral).",
-)
-@click.option(
-    "--no-open", "no_open", is_flag=True, default=False,
-    help="Don't auto-launch browser.",
-)
-@click.option(
-    "--idle-timeout-s", "idle_timeout_s", type=int, default=600,
-    help="Seconds to keep the server alive after the scan finishes.",
-)
-def scan_and_view(
-    path: Path,
-    children_csv: str,
-    port: int,
-    no_open: bool,
-    idle_timeout_s: int,
-) -> None:
-    """Run a live workspace scan + serve the dashboard locally.
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True)
+@click.option("--no-open", is_flag=True)
+@click.option("--children", default=None, help="Deprecated; ignored.")
+def scan_and_view_cmd(path: Path, json_output: bool, no_open: bool, children: str | None) -> None:
+    """[DEPRECATED] Use `scan-repo`, `scan-monorepo`, or `scan-workspace`.
 
-    Atomically writes ``<scan-dir>/server.url`` and ``<scan-dir>/daemon.pid``
-    as soon as the server is listening; MCP/scan-list use those to discover
-    the live scan without parsing stdout.
+    Kept for backward compat for one release. Dispatches to
+    `scan-workspace` (the closest historical behavior — multi-repo scan
+    with grid layout). Will be removed in v5.0.0.
     """
-    children = [
-        Path(c.strip()).expanduser().resolve()
-        for c in children_csv.split(",") if c.strip()
-    ]
-    sd = _paths.scan_dir(path)
-    sd.mkdir(parents=True, exist_ok=True)
-    (sd / "archive").mkdir(exist_ok=True)
-    # Write the pidfile BEFORE the server URL so any consumer that races on
-    # server.url existing finds a valid daemon.pid alongside it. The worker
-    # rewrites this file with the same pid + start time once it begins.
-    _write_pidfile(sd / "daemon.pid", scan_id=_workspace_hash(path))
-    srv = _start_server(
-        host="127.0.0.1",
-        port=port,
-        data_dir=sd,
-        workspace_path=path.expanduser().resolve(),
+    import json
+    from datetime import datetime, timezone
+
+    click.echo(
+        "DEPRECATED: `scan-and-view` is replaced by `scan-repo`, "
+        "`scan-monorepo`, or `scan-workspace` (plan 2 / v4.0.0). "
+        "Dispatching to `scan-workspace` for compatibility.",
+        err=True,
     )
-    url = f"http://{srv.host}:{srv.port}"
-    (sd / "server.url").write_text(url + "\n")
-    scan_id = _workspace_hash(path)
-    dashboard_url = f"{url}/#/live/{scan_id}"
-    click.echo(dashboard_url, err=True)
-    if not no_open and sys.stdout.isatty():
-        try:
-            _webbrowser.open(dashboard_url)
-        except Exception:
-            pass
-    # Bundle D: SSE event bus shared with the bundled server's
-    # /sse/scans/<id> handler (the handler reads events.jsonl directly,
-    # so there is no in-memory coupling — the bus is on-disk).
-    event_bus = _EventLog(sd)
-    try:
-        _scan_workspace(
-            path,
-            children=children,
-            options=_ScanOptions(event_log=event_bus),
+    if children is not None:
+        click.echo(
+            "NOTE: --children is ignored. Use the wizard's Pick step in "
+            "the browser to choose repos.",
+            err=True,
         )
-    finally:
-        # Idle timeout: stay up after terminal status for late polls.
-        if idle_timeout_s > 0:
-            try:
-                _time.sleep(idle_timeout_s)
-            except KeyboardInterrupt:
-                pass
-        srv.shutdown()
-        try:
-            (sd / "server.url").unlink()
-        except FileNotFoundError:
-            pass
+    result = _launch_dashboard_with_onboarding(
+        path=path,
+        committed_type="workspace",
+        now=datetime.now(timezone.utc),
+        no_open=no_open,
+    )
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"Onboarding wizard: {result['dashboard_url']}")
 
 
 @cli.command(name="scan-status")
