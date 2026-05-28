@@ -607,6 +607,31 @@ def scan_repo_cmd(path: Path, json_output: bool, no_open: bool) -> None:
         click.echo("Confirm the suggestion and hit Start to begin scanning.")
 
 
+@cli.command("scan-monorepo")
+@click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--json", "json_output", is_flag=True)
+@click.option("--no-open", is_flag=True)
+def scan_monorepo_cmd(path: Path, json_output: bool, no_open: bool) -> None:
+    """Score ``PATH`` as a monorepo (one .git at root, many packages inside).
+
+    Opens the wizard with Detected → Pick (grouped by parent folder) → Start.
+    All detected packages pre-selected by default."""
+    import json
+    from datetime import datetime, timezone
+
+    result = _launch_dashboard_with_onboarding(
+        path=path,
+        committed_type="monorepo",
+        now=datetime.now(timezone.utc),
+        no_open=no_open,
+    )
+    if json_output:
+        click.echo(json.dumps(result, indent=2))
+    else:
+        click.echo(f"Onboarding wizard: {result['dashboard_url']}")
+        click.echo("Pick which packages to score, then hit Start.")
+
+
 @cli.command(name="workspace-scan")
 @click.argument("path", type=click.Path(file_okay=False, dir_okay=True,
                                         exists=True, path_type=Path))

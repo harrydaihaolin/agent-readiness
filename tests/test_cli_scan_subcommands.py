@@ -113,3 +113,17 @@ def test_scan_repo_prints_onboarding_url_in_json(tmp_path: Path, monkeypatch):
     assert payload["status"] == "onboarding_required"
     assert payload["type"] == "single_repo"
     assert "/onboarding/" in payload["dashboard_url"]
+
+
+def test_scan_monorepo_emits_committed_type_monorepo(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / ".git").mkdir()
+    (target / "pkg-a").mkdir()
+    (target / "pkg-a" / ".git").mkdir()
+
+    proc = _run_cli(["scan-monorepo", str(target), "--json", "--no-open"])
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["type"] == "monorepo"
