@@ -123,6 +123,34 @@ def emit_onboarding_committed(
 class ScanOptions:
     hard_timeout_s: int = HARD_TIMEOUT_S_DEFAULT
     event_log: Optional[EventLog] = None  # Bundle D: SSE wire
+    scan_data_dir: Optional[Path] = None  # onboarding: override scan dir
+
+
+def start_worker_pool(scan_dir: Path, *, paths: list[str]) -> None:
+    """Start the scan worker pool for ``paths`` in a background thread."""
+    import threading
+
+    from agent_readiness.onboarding import load
+
+    state = load(scan_dir)
+    if state is None:
+        raise FileNotFoundError(f"no onboarding.json in {scan_dir}")
+    workspace = Path(state.enumeration.root)
+    children = [Path(p) for p in paths]
+    event_log = EventLog(scan_dir)
+
+    events_file = scan_dir / "events.jsonl"
+    if not events_file.is_file() or not events_file.read_text().strip():
+        emit_onboarding_events(scan_dir, state, start_seq=0)
+
+    def _run() -> None:
+        scan_workspace(
+            workspace,
+            children,
+            ScanOptions(event_log=event_log, scan_data_dir=scan_dir),
+        )
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def scan_workspace(
@@ -137,7 +165,7 @@ def scan_workspace(
     by marking ``status=cancelled`` and exiting cleanly between children.
     """
     options = options or ScanOptions()
-    sd = scan_dir(workspace_path)
+    sd = options.scan_data_dir or scan_dir(workspace_path)
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "archive").mkdir(exist_ok=True)
     wh = workspace_hash(workspace_path)
