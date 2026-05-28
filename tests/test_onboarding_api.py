@@ -194,3 +194,41 @@ def test_list_scans_returns_empty_list_when_dir_missing(tmp_path: Path, monkeypa
     body, status = list_scans()
     assert status == 200
     assert body["scans"] == []
+
+
+def test_routes_are_registered_in_router(tmp_path: Path, monkeypatch):
+    """End-to-end: start the server, hit each new route, verify 2xx /
+    correct shape."""
+    from urllib.request import urlopen
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    scans_root = tmp_path / ".agent-readiness" / "scans"
+    scans_root.mkdir(parents=True)
+    scan_dir = scans_root / "scan-y"
+    scan_dir.mkdir()
+    _seed_onboarding(scan_dir, scan_id="scan-y")
+
+    from agent_readiness.live_scan.server import start_server
+
+    srv = start_server(
+        host="127.0.0.1",
+        port=0,
+        data_dir=scan_dir,
+        workspace_path=Path("/x"),
+    )
+    try:
+        base = f"http://{srv.host}:{srv.port}"
+
+        # GET /api/scans
+        with urlopen(f"{base}/api/scans") as resp:
+            assert resp.status == 200
+            body = json.loads(resp.read())
+            assert "scans" in body
+
+        # GET /api/scans/<id>/onboarding
+        with urlopen(f"{base}/api/scans/scan-y/onboarding") as resp:
+            assert resp.status == 200
+            body = json.loads(resp.read())
+            assert body["scan_id"] == "scan-y"
+    finally:
+        srv.shutdown()
