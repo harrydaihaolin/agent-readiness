@@ -326,3 +326,37 @@ def _finalize_aggregate(envelope: dict, workspace_path: Path) -> None:
     ontology = _score_ontology_at_root(Path(workspace_path).resolve())
     envelope["pillar_scores"] = _aggregate_pillar_scores(children_typed, ontology)
     envelope["overall_score"] = _overall_score(envelope["pillar_scores"])
+
+
+def reconfigure_scan(
+    scan_dir: Path,
+    *,
+    previous_revision: int,
+    start_seq: int,
+) -> int:
+    """Cancel-and-clean for the Reconfigure flow.
+
+    Deletes ``live.json`` and ``results/*``. Leaves ``onboarding.json``
+    (so the wizard can resume) and ``events.jsonl`` (the SSE backlog,
+    needed for Last-Event-ID resume). Emits ``onboarding.reconfigured``.
+
+    The caller (the /reconfigure HTTP endpoint) is responsible for
+    killing any running worker subprocesses BEFORE calling this."""
+    import shutil
+
+    from agent_readiness_insights_protocol import OnboardingReconfiguredEvent
+
+    live = scan_dir / "live.json"
+    if live.exists():
+        live.unlink()
+    results = scan_dir / "results"
+    if results.exists():
+        shutil.rmtree(results)
+
+    ev = OnboardingReconfiguredEvent(
+        seq=start_seq,
+        at=_now_utc(),
+        previous_revision=previous_revision,
+    )
+    (scan_dir / "events.jsonl").open("a").write(ev.model_dump_json() + "\n")
+    return start_seq + 1
