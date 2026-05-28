@@ -52,6 +52,51 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def emit_onboarding_events(
+    scan_dir: Path,
+    state,
+    start_seq: int,
+) -> int:
+    """Append two events to ``<scan_dir>/events.jsonl``:
+    ``onboarding.enumerated`` then ``onboarding.classified``.
+
+    Returns the next free seq (start_seq + 2). Called from the worker
+    before the scan pool boots so the wizard's Detected page can paint
+    from SSE alone."""
+    from agent_readiness_insights_protocol import (
+        OnboardingClassifiedEvent,
+        OnboardingEnumeratedEvent,
+    )
+
+    now = _now_utc()
+    enum = state.enumeration
+    cls = state.classification
+
+    enumerated = OnboardingEnumeratedEvent(
+        seq=start_seq,
+        at=now,
+        directories_walked=enum.directories_walked,
+        git_repos_found=len(enum.repos),
+        root_has_git=enum.root_has_git,
+        repos=enum.repos,
+        elapsed_ms=enum.elapsed_ms,
+    )
+    classified = OnboardingClassifiedEvent(
+        seq=start_seq + 1,
+        at=now,
+        suggested_type=cls.suggested_type,
+        confidence=cls.confidence,
+        rationale=cls.rationale,
+    )
+
+    events_file = scan_dir / "events.jsonl"
+    with events_file.open("a") as f:
+        f.write(enumerated.model_dump_json() + "\n")
+        f.write(classified.model_dump_json() + "\n")
+
+    return start_seq + 2
+
+
 @dataclass
 class ScanOptions:
     hard_timeout_s: int = HARD_TIMEOUT_S_DEFAULT
