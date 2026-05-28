@@ -21,6 +21,11 @@ from agent_readiness.onboarding import (
     load,
     path_for,
 )
+from agent_readiness.live_scan.worker import (
+    emit_onboarding_committed,
+    reconfigure_scan,
+    start_worker_pool,
+)
 
 
 def path_for_scan(scan_id: str) -> Path:
@@ -34,9 +39,6 @@ def get_onboarding(scan_dir: Path) -> tuple[dict, int]:
     if state is None:
         return {"error": "no onboarding.json for this scan"}, 404
     return json.loads(state.model_dump_json()), 200
-
-
-from agent_readiness.live_scan.worker import emit_onboarding_committed
 
 
 _VALID_TYPES = {"single_repo", "monorepo", "workspace"}
@@ -110,12 +112,7 @@ def _start_worker_pool(
     revision: int,
 ) -> None:
     """Start the scan worker pool for `selected_paths`."""
-    from agent_readiness.live_scan.worker import start_worker_pool
-
     start_worker_pool(scan_dir, paths=selected_paths)
-
-
-from agent_readiness.live_scan.worker import reconfigure_scan
 
 
 def reconfigure_onboarding(scan_dir: Path) -> tuple[dict, int]:

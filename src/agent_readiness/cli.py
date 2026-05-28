@@ -1914,9 +1914,6 @@ def ontology_reason(
 
 # ---------- live-scan commands (Plan 1) -------------------------------------
 
-import time as _time  # noqa: E402
-import webbrowser as _webbrowser  # noqa: E402
-
 from agent_readiness.live_scan import discovery as _discovery  # noqa: E402
 from agent_readiness.live_scan import paths as _paths  # noqa: E402
 from agent_readiness.live_scan.pidfile import (  # noqa: E402
@@ -1928,14 +1925,6 @@ from agent_readiness.live_scan.pidfile import (  # noqa: E402
 from agent_readiness.live_scan.pidfile import (  # noqa: E402
     verify_pidfile as _verify_pidfile,
 )
-from agent_readiness.live_scan.pidfile import (  # noqa: E402
-    write_pidfile as _write_pidfile,
-)
-from agent_readiness.live_scan.paths import workspace_hash as _workspace_hash  # noqa: E402
-from agent_readiness.live_scan.events import EventLog as _EventLog  # noqa: E402
-from agent_readiness.live_scan.server import start_server as _start_server  # noqa: E402
-from agent_readiness.live_scan.worker import ScanOptions as _ScanOptions  # noqa: E402
-from agent_readiness.live_scan.worker import scan_workspace as _scan_workspace  # noqa: E402
 from agent_readiness.render import export_report as _export_report  # noqa: E402
 
 

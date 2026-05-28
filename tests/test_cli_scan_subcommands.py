@@ -25,8 +25,6 @@ def workspace_with_two_repos(tmp_path: Path) -> Path:
 
 
 def _run_cli(args: list[str]) -> subprocess.CompletedProcess:
-    import sys
-
     env = dict(os.environ)
     src = str(Path(__file__).resolve().parents[1] / "src")
     # Preserve the runner's full import path (editable deps, user-site) when
