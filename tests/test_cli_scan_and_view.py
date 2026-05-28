@@ -1,8 +1,8 @@
+import json
 import os
 import site
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 
@@ -12,6 +12,7 @@ def _make_workspace(root: Path, *, repos: list[str]) -> Path:
     for r in repos:
         d = ws / r
         d.mkdir()
+        (d / ".git").mkdir()
         (d / "AGENTS.md").write_text(f"# {r}\n")
     return ws
 
@@ -25,88 +26,57 @@ def _subprocess_env(tmp_home: Path) -> dict[str, str]:
         **os.environ,
         "HOME": str(tmp_home),
         "PYTHONUSERBASE": user_base,
-        "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src"),
+        "PYTHONPATH": os.pathsep.join(
+            dict.fromkeys([
+                str(Path(__file__).resolve().parents[1] / "src"),
+                *sys.path,
+            ])
+        ),
     }
 
 
-def test_cli_scan_and_view_writes_server_url_and_pidfile(tmp_path, monkeypatch):
+def test_cli_scan_and_view_writes_onboarding_json(tmp_path, monkeypatch):
+    """v4.0.0: scan-and-view is a deprecation shim that opens onboarding."""
     monkeypatch.setenv("HOME", str(tmp_path))
-    ws = _make_workspace(tmp_path, repos=["a", "b", "c"])
-    proc = subprocess.Popen(
+    ws = _make_workspace(tmp_path, repos=["a", "b"])
+    proc = subprocess.run(
         [
             sys.executable, "-m", "agent_readiness.cli", "scan-and-view",
             str(ws),
-            "--children", f"{ws / 'a'},{ws / 'b'},{ws / 'c'}",
+            "--json",
             "--no-open",
-            "--idle-timeout-s", "1",
         ],
         env=_subprocess_env(tmp_path),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    from agent_readiness.live_scan.paths import scan_dir
-    sd = scan_dir(ws)
-    url_file = sd / "server.url"
-    deadline = time.monotonic() + 10
-    while time.monotonic() < deadline:
-        if url_file.exists():
-            break
-        time.sleep(0.1)
-    try:
-        assert url_file.exists()
-        assert url_file.read_text().strip().startswith("http://")
-        assert (sd / "daemon.pid").exists()
-    finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["status"] == "onboarding_required"
+    from agent_readiness.onboarding import load, path_for
+    state = load(path_for(payload["scan_id"]))
+    assert state is not None
+    assert state.committed_type == "workspace"
 
 
-def test_cli_scan_and_view_echoes_live_dashboard_url(tmp_path, monkeypatch):
-    """Regression: scan-and-view must echo `/#/live/<scan_id>` (not the
-    bare base URL), otherwise the browser lands on the old
-    WorkspacesPage and gets stuck on "Loading workspaces…" forever.
-
-    Bug repro filed 2026-05-27: see CHANGELOG entry for v3.4.2.
-    """
+def test_cli_scan_and_view_echoes_onboarding_dashboard_url(tmp_path, monkeypatch):
+    """Regression: deprecation shim must return /#/onboarding/<scan_id> URL."""
     monkeypatch.setenv("HOME", str(tmp_path))
     ws = _make_workspace(tmp_path, repos=["a"])
-    proc = subprocess.Popen(
+    proc = subprocess.run(
         [
             sys.executable, "-m", "agent_readiness.cli", "scan-and-view",
             str(ws),
-            "--children", f"{ws / 'a'}",
+            "--json",
             "--no-open",
-            "--idle-timeout-s", "1",
         ],
         env=_subprocess_env(tmp_path),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    try:
-        from agent_readiness.live_scan.paths import scan_dir, workspace_hash
-        sd = scan_dir(ws)
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            if (sd / "server.url").exists():
-                break
-            time.sleep(0.1)
-        proc.terminate()
-        try:
-            _, stderr = proc.communicate(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            _, stderr = proc.communicate()
-        text = stderr.decode("utf-8", errors="replace") if stderr else ""
-        expected_fragment = f"/#/live/{workspace_hash(ws)}"
-        assert expected_fragment in text, (
-            "expected stderr to contain the live dashboard URL fragment "
-            f"{expected_fragment!r}, got: {text!r}"
-        )
-    finally:
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert "/#/onboarding/" in payload["dashboard_url"]
+    assert "deprecated" in proc.stderr.lower()

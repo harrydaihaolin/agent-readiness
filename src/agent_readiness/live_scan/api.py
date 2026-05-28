@@ -265,16 +265,26 @@ def parse_api_path(path: str) -> Optional[dict]:
         path = path.split("?", 1)[0]
     if "#" in path:
         path = path.split("#", 1)[0]
+    if path == "/api/scans":
+        return {"kind": "scans_list"}
     if not path.startswith("/api/scans/"):
         return None
     parts = path[len("/api/scans/"):].strip("/").split("/")
-    if len(parts) < 2:
+    if len(parts) < 1 or not parts[0]:
         return None
     scan_id = parts[0]
+    if len(parts) == 1:
+        return None
     if parts[1] == "snapshot" and len(parts) == 2:
         return {"kind": "snapshot", "scan_id": scan_id}
     if parts[1] == "exit" and len(parts) == 2:
         return {"kind": "exit", "scan_id": scan_id}
+    if parts[1] == "onboarding" and len(parts) == 2:
+        return {"kind": "onboarding_get", "scan_id": scan_id}
+    if parts[1] == "onboarding" and len(parts) == 3 and parts[2] == "commit":
+        return {"kind": "onboarding_commit", "scan_id": scan_id}
+    if parts[1] == "reconfigure" and len(parts) == 2:
+        return {"kind": "reconfigure", "scan_id": scan_id}
     if parts[1] == "prompts" and len(parts) == 4 and parts[3] == "answer":
         return {"kind": "prompt_answer", "scan_id": scan_id, "prompt_id": parts[2]}
     if parts[1] == "topaction" and len(parts) == 3:

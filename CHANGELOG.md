@@ -3,6 +3,59 @@
 All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## 4.0.0 (2026-05-27) — BREAKING
+
+### Added
+- New module ``agent_readiness.enumerate_git`` — git-aware walker with
+  ``-prune`` for ``node_modules`` / ``.venv`` / ``dist`` / ``target`` /
+  ``build`` / ``__pycache__`` / ``.tox`` / ``.pytest_cache`` /
+  ``.mypy_cache`` / ``.ruff_cache``. Finds nested ``.git`` markers at
+  any depth via POSIX ``find`` (with ``os.walk`` Python fallback on
+  Windows). Replaces the depth-1 rubric for the dashboard onboarding
+  flow. Old ``agent_readiness.enumerate`` module retained for
+  backward compatibility.
+- New module ``agent_readiness.onboarding`` — atomic
+  ``OnboardingState`` persistence to ``<scan_dir>/onboarding.json``
+  with revision-bumping ``commit_selection()``.
+- New CLI subcommands:
+  - ``agent-readiness inspect <path>`` — enumerate + classify, returns
+    an ``InspectResult`` (JSON via ``--json``). Fast pre-flight for
+    the skill / MCP server.
+  - ``agent-readiness scan-repo <path>`` — open onboarding wizard with
+    type committed as single_repo.
+  - ``agent-readiness scan-monorepo <path>`` — type committed as
+    monorepo.
+  - ``agent-readiness scan-workspace <path>`` — type committed as
+    workspace.
+- New HTTP endpoints on the scan-and-view server:
+  - ``GET /api/scans`` — history index.
+  - ``GET /api/scans/<id>/onboarding`` — current OnboardingState.
+  - ``POST /api/scans/<id>/onboarding/commit`` — user clicked Start.
+  - ``POST /api/scans/<id>/reconfigure`` — user clicked Reconfigure
+    (kills workers, clears live.json + results/, keeps
+    onboarding.json + events.jsonl).
+- Worker emits the four new SSE events:
+  ``onboarding.{enumerated, classified, committed, reconfigured}``.
+
+### Changed
+- ``agent-readiness-insights-protocol`` dep bumped to
+  ``>=0.12.0,<0.13.0`` (required for the new wire models).
+- ``agent-readiness scan-and-view`` CLI subcommand now prints a
+  deprecation warning to stderr and dispatches to ``scan-workspace``.
+  Removed in v5.0.0.
+
+### Migration
+- **Breaking CLI.** Scripts calling ``agent-readiness scan-and-view``
+  will continue to work in 4.0.0 but emit a stderr warning. Migrate
+  to ``agent-readiness scan-workspace`` (closest behavior — multi-repo
+  scan with grid layout) before 5.0.0.
+- **New on-disk file.** ``<scan_dir>/onboarding.json`` is required for
+  scans created with 4.0.0+. Old scan dirs (from 3.x) lack this file
+  and the dashboard treats them as "legacy" — renders the live view
+  directly without the wizard.
+- See ``agent-readiness-research/docs/superpowers/specs/
+  2026-05-27-dashboard-onboarding-design.md`` for the full design.
+
 ## [Unreleased]
 
 ## [3.4.3] - 2026-05-27

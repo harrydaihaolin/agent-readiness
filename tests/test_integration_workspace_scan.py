@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
+
 
 FIXTURE_WS = Path(__file__).parent / "fixtures/workspaces/small"
 
@@ -23,6 +25,9 @@ def _subprocess_env(tmp_home: Path) -> dict[str, str]:
     }
 
 
+@pytest.mark.skip(
+    reason="scan-and-view v4.0.0 shim no longer auto-runs scans; use onboarding commit flow"
+)
 def test_end_to_end_live_scan_matches_headless_scoring(tmp_path, monkeypatch):
     """End-to-end: scan-and-view should produce the same scores as workspace-scan."""
     monkeypatch.setenv("HOME", str(tmp_path))

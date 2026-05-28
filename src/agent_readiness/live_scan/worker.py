@@ -52,10 +52,116 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def emit_onboarding_events(
+    scan_dir: Path,
+    state,
+    start_seq: int,
+) -> int:
+    """Append two events to ``<scan_dir>/events.jsonl``:
+    ``onboarding.enumerated`` then ``onboarding.classified``.
+
+    Returns the next free seq (start_seq + 2). Called from the worker
+    before the scan pool boots so the wizard's Detected page can paint
+    from SSE alone."""
+    from agent_readiness_insights_protocol import (
+        OnboardingClassifiedEvent,
+        OnboardingEnumeratedEvent,
+    )
+
+    now = _now_utc()
+    enum = state.enumeration
+    cls = state.classification
+
+    enumerated = OnboardingEnumeratedEvent(
+        seq=start_seq,
+        at=now,
+        directories_walked=enum.directories_walked,
+        git_repos_found=len(enum.repos),
+        root_has_git=enum.root_has_git,
+        repos=enum.repos,
+        elapsed_ms=enum.elapsed_ms,
+    )
+    classified = OnboardingClassifiedEvent(
+        seq=start_seq + 1,
+        at=now,
+        suggested_type=cls.suggested_type,
+        confidence=cls.confidence,
+        rationale=cls.rationale,
+    )
+
+    events_file = scan_dir / "events.jsonl"
+    with events_file.open("a") as f:
+        f.write(enumerated.model_dump_json() + "\n")
+        f.write(classified.model_dump_json() + "\n")
+
+    return start_seq + 2
+
+
+def emit_onboarding_committed(
+    scan_dir: Path,
+    *,
+    type: str,
+    selected_paths: list[str],
+    revision: int,
+    start_seq: int,
+) -> int:
+    """Append onboarding.committed to events.jsonl. Returns start_seq + 1."""
+    from agent_readiness_insights_protocol import OnboardingCommittedEvent
+
+    ev = OnboardingCommittedEvent(
+        seq=start_seq,
+        at=_now_utc(),
+        type=type,
+        selected_paths=selected_paths,
+        revision=revision,
+    )
+    (scan_dir / "events.jsonl").open("a").write(ev.model_dump_json() + "\n")
+    return start_seq + 1
+
+
 @dataclass
 class ScanOptions:
     hard_timeout_s: int = HARD_TIMEOUT_S_DEFAULT
     event_log: Optional[EventLog] = None  # Bundle D: SSE wire
+    scan_data_dir: Optional[Path] = None  # onboarding: override scan dir
+
+
+def start_worker_pool(scan_dir: Path, *, paths: list[str]) -> None:
+    """Start the scan worker pool for ``paths`` in a subprocess."""
+    import json
+    import subprocess
+    import sys
+
+    from agent_readiness.onboarding import load
+
+    state = load(scan_dir)
+    if state is None:
+        raise FileNotFoundError(f"no onboarding.json in {scan_dir}")
+    workspace = Path(state.enumeration.root)
+    children = [str(Path(p).resolve()) for p in paths]
+
+    job_path = scan_dir / ".worker-job.json"
+    job_path.write_text(json.dumps({
+        "workspace": str(workspace.resolve()),
+        "scan_data_dir": str(scan_dir.resolve()),
+        "children": children,
+    }))
+
+    src_root = str(Path(__file__).resolve().parents[2])
+    runner = (
+        "import json, sys; from pathlib import Path; "
+        f"sys.path.insert(0, {src_root!r}); "
+        "from agent_readiness.live_scan.worker import ScanOptions, scan_workspace; "
+        "from agent_readiness.live_scan.events import EventLog; "
+        "spec = json.loads(Path(sys.argv[1]).read_text()); "
+        "sd = Path(spec['scan_data_dir']); "
+        "scan_workspace(Path(spec['workspace']), [Path(c) for c in spec['children']], "
+        "ScanOptions(event_log=EventLog(sd), scan_data_dir=sd))"
+    )
+    subprocess.Popen(
+        [sys.executable, "-c", runner, str(job_path)],
+        start_new_session=True,
+    )
 
 
 def scan_workspace(
@@ -70,7 +176,7 @@ def scan_workspace(
     by marking ``status=cancelled`` and exiting cleanly between children.
     """
     options = options or ScanOptions()
-    sd = scan_dir(workspace_path)
+    sd = options.scan_data_dir or scan_dir(workspace_path)
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "archive").mkdir(exist_ok=True)
     wh = workspace_hash(workspace_path)
@@ -259,3 +365,37 @@ def _finalize_aggregate(envelope: dict, workspace_path: Path) -> None:
     ontology = _score_ontology_at_root(Path(workspace_path).resolve())
     envelope["pillar_scores"] = _aggregate_pillar_scores(children_typed, ontology)
     envelope["overall_score"] = _overall_score(envelope["pillar_scores"])
+
+
+def reconfigure_scan(
+    scan_dir: Path,
+    *,
+    previous_revision: int,
+    start_seq: int,
+) -> int:
+    """Cancel-and-clean for the Reconfigure flow.
+
+    Deletes ``live.json`` and ``results/*``. Leaves ``onboarding.json``
+    (so the wizard can resume) and ``events.jsonl`` (the SSE backlog,
+    needed for Last-Event-ID resume). Emits ``onboarding.reconfigured``.
+
+    The caller (the /reconfigure HTTP endpoint) is responsible for
+    killing any running worker subprocesses BEFORE calling this."""
+    import shutil
+
+    from agent_readiness_insights_protocol import OnboardingReconfiguredEvent
+
+    live = scan_dir / "live.json"
+    if live.exists():
+        live.unlink()
+    results = scan_dir / "results"
+    if results.exists():
+        shutil.rmtree(results)
+
+    ev = OnboardingReconfiguredEvent(
+        seq=start_seq,
+        at=_now_utc(),
+        previous_revision=previous_revision,
+    )
+    (scan_dir / "events.jsonl").open("a").write(ev.model_dump_json() + "\n")
+    return start_seq + 1

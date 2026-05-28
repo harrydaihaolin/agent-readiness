@@ -78,6 +78,19 @@ def _make_handler(
             # 2) JSON GET API
             api = api_handlers.parse_api_path(self.path)
             if api is not None:
+                if api["kind"] == "scans_list":
+                    from agent_readiness.live_scan.onboarding_api import list_scans
+                    body, status = list_scans()
+                    api_handlers._send_json(self, status, body)
+                    return
+                if api["kind"] == "onboarding_get":
+                    from agent_readiness.live_scan.onboarding_api import (
+                        get_onboarding,
+                        path_for_scan,
+                    )
+                    body, status = get_onboarding(path_for_scan(api["scan_id"]))
+                    api_handlers._send_json(self, status, body)
+                    return
                 if api["kind"] == "snapshot":
                     if workspace_path is None:
                         self.send_error(503, "workspace_path not bound")
@@ -107,6 +120,25 @@ def _make_handler(
                 self.send_error(404, "not found")
                 return
             kind = api["kind"]
+            if kind == "onboarding_commit":
+                from agent_readiness.live_scan.onboarding_api import (
+                    commit_onboarding,
+                    path_for_scan,
+                )
+                body, status = commit_onboarding(
+                    path_for_scan(api["scan_id"]),
+                    request_body=api_handlers._read_json_body(self),
+                )
+                api_handlers._send_json(self, status, body)
+                return
+            if kind == "reconfigure":
+                from agent_readiness.live_scan.onboarding_api import (
+                    path_for_scan,
+                    reconfigure_onboarding,
+                )
+                body, status = reconfigure_onboarding(path_for_scan(api["scan_id"]))
+                api_handlers._send_json(self, status, body)
+                return
             if kind == "exit":
                 api_handlers.handle_exit_post(self, data_dir)
                 return
