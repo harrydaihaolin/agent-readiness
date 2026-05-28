@@ -99,6 +99,46 @@ def test_launch_dashboard_writes_onboarding_json(tmp_path: Path, monkeypatch):
     assert state.selection is None  # not committed yet
 
 
+def test_launch_dashboard_emits_enumerated_and_classified_to_events_jsonl(tmp_path, monkeypatch):
+    """The CLI launch path must write onboarding.enumerated + .classified
+    to events.jsonl BEFORE the server starts, so the wizard's Detected
+    page can paint from the SSE backlog on first connect."""
+    import json
+    from datetime import datetime, timezone
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from agent_readiness import cli as cli_mod
+    from agent_readiness.onboarding import path_for
+
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / "alpha").mkdir()
+    (target / "alpha" / ".git").mkdir()
+    (target / "beta").mkdir()
+    (target / "beta" / ".git").mkdir()
+
+    result = cli_mod._launch_dashboard_with_onboarding(
+        path=target,
+        committed_type="workspace",
+        now=datetime(2026, 5, 27, 15, 0, 0, tzinfo=timezone.utc),
+        no_open=True,
+    )
+
+    scan_dir = path_for(result["scan_id"])
+    events_file = scan_dir / "events.jsonl"
+    assert events_file.is_file(), "events.jsonl must exist after launch"
+
+    lines = events_file.read_text().splitlines()
+    # First two lines must be enumerated then classified.
+    assert len(lines) >= 2
+    e0 = json.loads(lines[0])
+    e1 = json.loads(lines[1])
+    assert e0["event"] == "onboarding.enumerated"
+    assert e0["seq"] == 0
+    assert e1["event"] == "onboarding.classified"
+    assert e1["seq"] == 1
+
+
 def test_scan_repo_prints_onboarding_url_in_json(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     target = tmp_path / "demo"

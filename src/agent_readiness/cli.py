@@ -503,6 +503,7 @@ def _launch_dashboard_with_onboarding(
 
     from agent_readiness.enumerate_git import inspect as do_inspect
     from agent_readiness.live_scan.server import start_server
+    from agent_readiness.live_scan.worker import emit_onboarding_events
     from agent_readiness.onboarding import (
         OnboardingState,
         path_for,
@@ -528,6 +529,8 @@ def _launch_dashboard_with_onboarding(
         created_at=now,
     )
     save(scan_dir, state)
+
+    emit_onboarding_events(scan_dir, state, start_seq=0)
 
     # Start the HTTP server (idempotent — returns existing port if up).
     srv = start_server(
