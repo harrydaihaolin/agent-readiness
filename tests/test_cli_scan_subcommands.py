@@ -127,3 +127,18 @@ def test_scan_monorepo_emits_committed_type_monorepo(tmp_path: Path, monkeypatch
     assert proc.returncode == 0, proc.stderr
     payload = json.loads(proc.stdout)
     assert payload["type"] == "monorepo"
+
+
+def test_scan_workspace_emits_committed_type_workspace(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / "alpha").mkdir()
+    (target / "alpha" / ".git").mkdir()
+    (target / "beta").mkdir()
+    (target / "beta" / ".git").mkdir()
+
+    proc = _run_cli(["scan-workspace", str(target), "--json", "--no-open"])
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["type"] == "workspace"
