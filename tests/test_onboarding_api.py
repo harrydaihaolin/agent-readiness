@@ -106,3 +106,92 @@ def test_commit_onboarding_validates_type_in_request_body(tmp_path: Path):
     })
     assert status == 400
     assert "error" in body
+
+
+def test_reconfigure_kills_workers_and_clears_results(tmp_path: Path, monkeypatch):
+    from agent_readiness.live_scan.onboarding_api import reconfigure_onboarding
+    from agent_readiness.onboarding import (
+        OnboardingSelection,
+        load,
+        save,
+    )
+
+    _seed_onboarding(tmp_path)
+
+    # Add a selection (so revision = 1) and some results.
+    state = load(tmp_path)
+    state = state.model_copy(update={
+        "selection": OnboardingSelection(
+            type="workspace",
+            selected_paths=["a"],
+            revision=1,
+            committed_at=NOW,
+        ),
+    })
+    save(tmp_path, state)
+    (tmp_path / "live.json").write_text("{}")
+    (tmp_path / "results").mkdir()
+    (tmp_path / "results" / "x").mkdir()
+
+    killed = []
+    monkeypatch.setattr(
+        "agent_readiness.live_scan.onboarding_api._kill_worker_pool",
+        lambda d: killed.append(d),
+    )
+
+    body, status = reconfigure_onboarding(tmp_path)
+    assert status == 200
+    assert body["status"] == "reconfigured"
+    assert body["next_url"].endswith("/#/onboarding/scan-x")
+    assert killed == [tmp_path]
+    assert not (tmp_path / "live.json").exists()
+    assert not (tmp_path / "results").exists()
+    # onboarding.json preserved.
+    assert (tmp_path / "onboarding.json").exists()
+
+
+def test_reconfigure_404_when_no_prior_selection(tmp_path: Path):
+    """Can only reconfigure a committed scan."""
+    from agent_readiness.live_scan.onboarding_api import reconfigure_onboarding
+
+    _seed_onboarding(tmp_path)
+    body, status = reconfigure_onboarding(tmp_path)
+    assert status == 400
+    assert "no prior selection" in body["error"]
+
+
+def test_list_scans_returns_committed_scans_newest_first(tmp_path: Path, monkeypatch):
+    from agent_readiness.live_scan.onboarding_api import list_scans
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    home_scans = tmp_path / ".agent-readiness" / "scans"
+    home_scans.mkdir(parents=True)
+
+    # Two scans: scan-old, scan-new.
+    for sid, ts in [("scan-old", datetime(2026, 1, 1, tzinfo=timezone.utc)),
+                    ("scan-new", datetime(2026, 5, 27, tzinfo=timezone.utc))]:
+        d = home_scans / sid
+        d.mkdir()
+        _seed_onboarding(d, scan_id=sid)
+        # Patch created_at on the disk file.
+        s = (d / "onboarding.json").read_text()
+        s = s.replace(NOW.isoformat(), ts.isoformat())
+        (d / "onboarding.json").write_text(s)
+
+    body, status = list_scans()
+    assert status == 200
+    assert len(body["scans"]) == 2
+    # Newest first.
+    assert body["scans"][0]["scan_id"] == "scan-new"
+    assert body["scans"][1]["scan_id"] == "scan-old"
+    # Each row carries the basics.
+    assert body["scans"][0]["type"] == "workspace"
+
+
+def test_list_scans_returns_empty_list_when_dir_missing(tmp_path: Path, monkeypatch):
+    from agent_readiness.live_scan.onboarding_api import list_scans
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    body, status = list_scans()
+    assert status == 200
+    assert body["scans"] == []

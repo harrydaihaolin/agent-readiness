@@ -113,3 +113,48 @@ def _start_worker_pool(
     from agent_readiness.live_scan.worker import start_worker_pool
 
     start_worker_pool(scan_dir, paths=selected_paths)
+
+
+from agent_readiness.live_scan.worker import reconfigure_scan
+
+
+def reconfigure_onboarding(scan_dir: Path) -> tuple[dict, int]:
+    """``POST /api/scans/<id>/reconfigure`` — user clicked Reconfigure.
+
+    Kills the running worker pool, deletes live.json + results/*, emits
+    ``onboarding.reconfigured``. Wizard resumes from the persisted
+    selection at the Pick step (frontend handles routing)."""
+    state = load(scan_dir)
+    if state is None:
+        return {"error": "no onboarding.json for this scan"}, 404
+    if state.selection is None:
+        return {"error": "no prior selection — cannot reconfigure a scan that never started"}, 400
+
+    previous_revision = state.selection.revision
+
+    _kill_worker_pool(scan_dir)
+    reconfigure_scan(
+        scan_dir,
+        previous_revision=previous_revision,
+        start_seq=_next_seq(scan_dir),
+    )
+
+    return {
+        "status": "reconfigured",
+        "previous_revision": previous_revision,
+        "next_url": f"/#/onboarding/{state.scan_id}",
+    }, 200
+
+
+def _kill_worker_pool(scan_dir: Path) -> None:
+    """Send SIGTERM to the worker subprocess associated with this scan."""
+    from agent_readiness.live_scan.pidfile import PidStatus, verify_pidfile
+
+    pidfile = scan_dir / "daemon.pid"
+    if verify_pidfile(pidfile) != PidStatus.LIVE:
+        return
+    try:
+        data = json.loads(pidfile.read_text())
+        os.kill(data["pid"], signal.SIGTERM)
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        pass
