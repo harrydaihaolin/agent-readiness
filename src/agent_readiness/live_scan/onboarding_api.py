@@ -158,3 +158,45 @@ def _kill_worker_pool(scan_dir: Path) -> None:
         os.kill(data["pid"], signal.SIGTERM)
     except (OSError, json.JSONDecodeError, KeyError, TypeError):
         pass
+
+
+def list_scans() -> tuple[dict, int]:
+    """``GET /api/scans`` — list every scan under ~/.agent-readiness/scans/.
+
+    Newest first by ``created_at``. Each row carries scan_id, type,
+    repo count, status, and timestamps. Used by the dashboard's
+    /workspaces history page."""
+    scans_root = Path.home() / ".agent-readiness" / "scans"
+    if not scans_root.is_dir():
+        return {"scans": []}, 200
+
+    rows: list[dict] = []
+    for scan_dir in scans_root.iterdir():
+        if not scan_dir.is_dir():
+            continue
+        state = load(scan_dir)
+        if state is None:
+            continue
+        status = "onboarding" if state.selection is None else "running"
+        if (scan_dir / "live.json").exists():
+            try:
+                live = json.loads((scan_dir / "live.json").read_text())
+                if live.get("status") == "completed":
+                    status = "completed"
+                elif live.get("status") == "failed":
+                    status = "failed"
+            except (json.JSONDecodeError, OSError):
+                pass
+        rows.append({
+            "scan_id": state.scan_id,
+            "type": state.committed_type,
+            "created_at": state.created_at.isoformat(),
+            "status": status,
+            "repos_total": len(state.enumeration.repos),
+            "repos_selected": (
+                len(state.selection.selected_paths) if state.selection else 0
+            ),
+        })
+
+    rows.sort(key=lambda r: r["created_at"], reverse=True)
+    return {"scans": rows}, 200

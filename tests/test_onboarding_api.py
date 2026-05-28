@@ -173,10 +173,9 @@ def test_list_scans_returns_committed_scans_newest_first(tmp_path: Path, monkeyp
         d = home_scans / sid
         d.mkdir()
         _seed_onboarding(d, scan_id=sid)
-        # Patch created_at on the disk file.
-        s = (d / "onboarding.json").read_text()
-        s = s.replace(NOW.isoformat(), ts.isoformat())
-        (d / "onboarding.json").write_text(s)
+        from agent_readiness.onboarding import load, save
+        patched = load(d).model_copy(update={"created_at": ts})
+        save(d, patched)
 
     body, status = list_scans()
     assert status == 200
