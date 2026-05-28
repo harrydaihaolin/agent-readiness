@@ -127,8 +127,10 @@ class ScanOptions:
 
 
 def start_worker_pool(scan_dir: Path, *, paths: list[str]) -> None:
-    """Start the scan worker pool for ``paths`` in a background thread."""
-    import threading
+    """Start the scan worker pool for ``paths`` in a subprocess."""
+    import json
+    import subprocess
+    import sys
 
     from agent_readiness.onboarding import load
 
@@ -136,21 +138,30 @@ def start_worker_pool(scan_dir: Path, *, paths: list[str]) -> None:
     if state is None:
         raise FileNotFoundError(f"no onboarding.json in {scan_dir}")
     workspace = Path(state.enumeration.root)
-    children = [Path(p) for p in paths]
-    event_log = EventLog(scan_dir)
+    children = [str(Path(p).resolve()) for p in paths]
 
-    events_file = scan_dir / "events.jsonl"
-    if not events_file.is_file() or not events_file.read_text().strip():
-        emit_onboarding_events(scan_dir, state, start_seq=0)
+    job_path = scan_dir / ".worker-job.json"
+    job_path.write_text(json.dumps({
+        "workspace": str(workspace.resolve()),
+        "scan_data_dir": str(scan_dir.resolve()),
+        "children": children,
+    }))
 
-    def _run() -> None:
-        scan_workspace(
-            workspace,
-            children,
-            ScanOptions(event_log=event_log, scan_data_dir=scan_dir),
-        )
-
-    threading.Thread(target=_run, daemon=True).start()
+    src_root = str(Path(__file__).resolve().parents[2])
+    runner = (
+        "import json, sys; from pathlib import Path; "
+        f"sys.path.insert(0, {src_root!r}); "
+        "from agent_readiness.live_scan.worker import ScanOptions, scan_workspace; "
+        "from agent_readiness.live_scan.events import EventLog; "
+        "spec = json.loads(Path(sys.argv[1]).read_text()); "
+        "sd = Path(spec['scan_data_dir']); "
+        "scan_workspace(Path(spec['workspace']), [Path(c) for c in spec['children']], "
+        "ScanOptions(event_log=EventLog(sd), scan_data_dir=sd))"
+    )
+    subprocess.Popen(
+        [sys.executable, "-c", runner, str(job_path)],
+        start_new_session=True,
+    )
 
 
 def scan_workspace(
