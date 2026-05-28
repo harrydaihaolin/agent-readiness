@@ -27,6 +27,7 @@ from pathlib import Path
 
 from agent_readiness_insights_protocol import (
     EnumerationResult,
+    OnboardingClassification,
     RepoCandidate,
 )
 
@@ -202,3 +203,49 @@ def _last_commit_relative(p: Path) -> str | None:
     )
     out = proc.stdout.strip()
     return out or None
+
+
+def classify(
+    root_has_git: bool,
+    repos_found: int,
+    children_with_git: int,
+) -> OnboardingClassification:
+    """Five-branch counting rubric. Returns the suggested workspace type
+    plus a confidence label and one-line rationale.
+
+    Branches:
+        root has .git, no nested  -> single_repo / high
+        root has .git, ≥1 nested  -> monorepo / medium
+        no root .git, exactly 1   -> single_repo / high  (nested-in-wrapper)
+        no root .git, ≥2 nested   -> workspace / medium
+        no .git anywhere          -> single_repo / low   (will scan as dir)
+    """
+    if root_has_git and children_with_git == 0:
+        return OnboardingClassification(
+            suggested_type="single_repo",
+            confidence="high",
+            rationale="Root has .git, no nested repos.",
+        )
+    if root_has_git and children_with_git >= 1:
+        return OnboardingClassification(
+            suggested_type="monorepo",
+            confidence="medium",
+            rationale=f"Root has .git AND {children_with_git} nested .git — likely monorepo with vendored submodules or workspaces.",
+        )
+    if not root_has_git and repos_found == 1:
+        return OnboardingClassification(
+            suggested_type="single_repo",
+            confidence="high",
+            rationale="Root has no .git but exactly one nested .git — single repo nested in a wrapper.",
+        )
+    if not root_has_git and repos_found >= 2:
+        return OnboardingClassification(
+            suggested_type="workspace",
+            confidence="medium",
+            rationale=f"Root has no .git, {repos_found} nested .git — looks like a workspace of independent repos.",
+        )
+    return OnboardingClassification(
+        suggested_type="single_repo",
+        confidence="low",
+        rationale="No .git anywhere; will scan as a single directory.",
+    )

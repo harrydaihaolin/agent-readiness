@@ -144,3 +144,51 @@ def test_returns_directories_walked_and_elapsed_ms(tmp_path: Path):
     result = enumerate_git_repos(tmp_path)
     assert result.directories_walked > 0
     assert result.elapsed_ms >= 0
+
+
+# ---------------------------------------------------------------------------
+# Classifier
+# ---------------------------------------------------------------------------
+
+
+def test_classify_root_has_git_no_children_is_single_repo():
+    from agent_readiness.enumerate_git import classify
+
+    cls = classify(root_has_git=True, repos_found=0, children_with_git=0)
+    assert cls.suggested_type == "single_repo"
+    assert cls.confidence == "high"
+    assert "no nested" in cls.rationale.lower()
+
+
+def test_classify_root_has_git_with_nested_is_monorepo():
+    from agent_readiness.enumerate_git import classify
+
+    cls = classify(root_has_git=True, repos_found=4, children_with_git=4)
+    assert cls.suggested_type == "monorepo"
+    assert cls.confidence == "medium"
+
+
+def test_classify_no_root_git_one_child_is_single_repo_nested():
+    from agent_readiness.enumerate_git import classify
+
+    cls = classify(root_has_git=False, repos_found=1, children_with_git=1)
+    assert cls.suggested_type == "single_repo"
+    assert cls.confidence == "high"
+    assert "nested" in cls.rationale.lower()
+
+
+def test_classify_no_root_git_multi_children_is_workspace():
+    from agent_readiness.enumerate_git import classify
+
+    cls = classify(root_has_git=False, repos_found=7, children_with_git=7)
+    assert cls.suggested_type == "workspace"
+    assert cls.confidence == "medium"
+    assert "workspace" in cls.rationale.lower()
+
+
+def test_classify_no_git_anywhere_is_single_repo_low_confidence():
+    from agent_readiness.enumerate_git import classify
+
+    cls = classify(root_has_git=False, repos_found=0, children_with_git=0)
+    assert cls.suggested_type == "single_repo"
+    assert cls.confidence == "low"
