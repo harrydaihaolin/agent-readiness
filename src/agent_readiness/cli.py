@@ -487,6 +487,71 @@ def enumerate_cmd(path: Path, json_output: bool) -> None:
         click.echo("warning: enumeration truncated at 200 children", err=True)
 
 
+def _launch_dashboard_with_onboarding(
+    path: Path,
+    committed_type: str,  # WorkspaceType literal
+    now,  # datetime; injectable for tests
+    no_open: bool = False,
+) -> dict:
+    """Create a scan_id, write onboarding.json, start the HTTP server,
+    return the dashboard URL pointing at /onboarding/<scan_id>.
+
+    Shared by `scan-repo`, `scan-monorepo`, `scan-workspace`. The wizard
+    in the dashboard reads onboarding.json and renders the appropriate
+    step strip based on `committed_type`."""
+    import uuid
+
+    from agent_readiness.enumerate_git import inspect as do_inspect
+    from agent_readiness.live_scan.server import start_server
+    from agent_readiness.onboarding import (
+        OnboardingState,
+        path_for,
+        save,
+    )
+
+    # Stable scan_id: <basename>-<6 hex chars>.
+    suffix = uuid.uuid4().hex[:6]
+    scan_id = f"{path.resolve().name}-{suffix}"
+    scan_dir = path_for(scan_id)
+    scan_dir.mkdir(parents=True, exist_ok=True)
+
+    # Run enumeration + classification synchronously (fast, ≤200ms target).
+    inspect_result = do_inspect(path)
+
+    # Persist OnboardingState with committed_type from the subcommand.
+    state = OnboardingState(
+        scan_id=scan_id,
+        committed_type=committed_type,
+        enumeration=inspect_result.enumeration,
+        classification=inspect_result.classification,
+        selection=None,
+        created_at=now,
+    )
+    save(scan_dir, state)
+
+    # Start the HTTP server (idempotent — returns existing port if up).
+    srv = start_server(
+        host="127.0.0.1",
+        port=0,
+        data_dir=scan_dir,
+        workspace_path=path.expanduser().resolve(),
+    )
+    base = f"http://{srv.host}:{srv.port}"
+    dashboard_url = f"{base}/#/onboarding/{scan_id}"
+
+    if not no_open:
+        import webbrowser
+        webbrowser.open(dashboard_url)
+
+    return {
+        "status": "onboarding_required",
+        "scan_id": scan_id,
+        "dashboard_url": dashboard_url,
+        "type": committed_type,
+        "message": "Onboarding wizard opened. Pick repos and confirm to start scan.",
+    }
+
+
 @cli.command("inspect")
 @click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--json", "json_output", is_flag=True, help="Emit InspectResult as JSON.")

@@ -61,3 +61,35 @@ def test_inspect_nonexistent_path_exits_nonzero(tmp_path: Path):
     proc = _run_cli(["inspect", str(tmp_path / "missing")])
     assert proc.returncode != 0
     assert "not" in proc.stderr.lower() or "no" in proc.stderr.lower()
+
+
+def test_launch_dashboard_writes_onboarding_json(tmp_path: Path, monkeypatch):
+    """The shared helper must persist OnboardingState with committed_type
+    set from the caller, before returning the URL."""
+    from datetime import datetime, timezone
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    # Import inside the test so monkeypatch takes effect.
+    from agent_readiness import cli as cli_mod
+    from agent_readiness.onboarding import load, path_for
+
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / ".git").mkdir()
+
+    result = cli_mod._launch_dashboard_with_onboarding(
+        path=target,
+        committed_type="single_repo",
+        now=datetime(2026, 5, 27, 15, 0, 0, tzinfo=timezone.utc),
+        no_open=True,
+    )
+    assert result["status"] == "onboarding_required"
+    assert result["dashboard_url"].endswith(f"/#/onboarding/{result['scan_id']}")
+    assert result["type"] == "single_repo"
+
+    state = load(path_for(result["scan_id"]))
+    assert state is not None
+    assert state.committed_type == "single_repo"
+    assert state.classification.suggested_type == "single_repo"
+    assert state.selection is None  # not committed yet
