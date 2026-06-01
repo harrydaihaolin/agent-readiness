@@ -185,6 +185,9 @@ def test_list_scans_returns_committed_scans_newest_first(tmp_path: Path, monkeyp
     assert body["scans"][1]["scan_id"] == "scan-old"
     # Each row carries the basics.
     assert body["scans"][0]["type"] == "workspace"
+    # ...and the workspace path, so the dashboard can filter by workspace.
+    assert body["scans"][0]["workspace_path"] == "/x"
+    assert body["scans"][1]["workspace_path"] == "/x"
 
 
 def test_list_scans_returns_empty_list_when_dir_missing(tmp_path: Path, monkeypatch):
