@@ -187,6 +187,7 @@ def list_scans() -> tuple[dict, int]:
         rows.append({
             "scan_id": state.scan_id,
             "type": state.committed_type,
+            "workspace_path": state.enumeration.root,
             "created_at": state.created_at.isoformat(),
             "status": status,
             "repos_total": len(state.enumeration.repos),
