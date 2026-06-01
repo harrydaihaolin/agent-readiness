@@ -54,6 +54,10 @@ NOW = datetime(2026, 5, 26, 22, 30, 0, tzinfo=timezone.utc)
      {"kind": "topaction_diff", "scan_id": "abc"}),
     ("/api/workspaces", {"kind": "workspaces_index"}),
     ("/api/workspaces?x=1", {"kind": "workspaces_index"}),
+    ("/api/intents", {"kind": "intents_list"}),
+    ("/api/intents?status=pending", {"kind": "intents_list"}),
+    ("/api/intents/int-7f3a9c/claim", {"kind": "intent_claim", "intent_id": "int-7f3a9c"}),
+    ("/api/intents/int-7f3a9c/ack", {"kind": "intent_ack", "intent_id": "int-7f3a9c"}),
 ])
 def test_parse_api_path_recognizes(path, expected):
     assert parse_api_path(path) == expected

@@ -269,6 +269,16 @@ def parse_api_path(path: str) -> Optional[dict]:
         return {"kind": "scans_list"}
     if path == "/api/workspaces":
         return {"kind": "workspaces_index"}
+    if path == "/api/intents":
+        return {"kind": "intents_list"}
+    if path.startswith("/api/intents/"):
+        iparts = path[len("/api/intents/"):].strip("/").split("/")
+        if len(iparts) == 2 and iparts[0]:
+            if iparts[1] == "claim":
+                return {"kind": "intent_claim", "intent_id": iparts[0]}
+            if iparts[1] == "ack":
+                return {"kind": "intent_ack", "intent_id": iparts[0]}
+        return None
     if not path.startswith("/api/scans/"):
         return None
     parts = path[len("/api/scans/"):].strip("/").split("/")
