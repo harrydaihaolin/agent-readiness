@@ -3,6 +3,36 @@
 All notable changes to this project will be documented in this file.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## 4.1.0 (2026-06-01)
+
+### Added
+- ``live_scan.server.start_detached_server`` — starts the dashboard HTTP
+  server as a detached, session-leader subprocess that outlives the CLI
+  invocation, writing ``server.pid`` and publishing ``server.url`` atomically
+  once bound. ``_launch_dashboard_with_onboarding`` now uses it.
+- ``GET /api/workspaces`` — live-mode workspace index
+  (``discovery.build_workspace_index``): groups completed scans by
+  ``workspace_path`` into per-workspace score ``trend_points`` (oldest-first,
+  last 10), newest-first. The dashboard History view sources from this instead
+  of the static-export ``index.json``.
+- ``agent_readiness.dashboard_dist_check.find_dist_problems`` — a freshness
+  guard asserting the bundled ``_dashboard_dist`` contains every route the
+  engine hands out (run in CI via the test suite and by
+  ``scripts/check_dashboard_dist.py``).
+- New scan-intent store (``live_scan.intents``) + endpoints
+  (``POST/GET /api/intents``, ``POST /api/intents/<id>/claim``,
+  ``POST /api/intents/<id>/ack``): a global per-file intent queue under
+  ``~/.agent-readiness/intents/`` with create/list/claim (stale-claim TTL) /
+  ack / retention prune. Foundation for dashboard scan-control buttons.
+
+### Fixed
+- The dashboard server no longer dies the instant the CLI process exits (it
+  ran on an in-process daemon thread); detached-server std streams are
+  redirected to ``DEVNULL`` so a parent reading with
+  ``subprocess.run(capture_output=True)`` no longer blocks until timeout.
+- ``GET /api/scans`` rows now include ``workspace_path`` (enables the
+  dashboard's workspace filter).
+
 ## 4.0.0 (2026-05-27) — BREAKING
 
 ### Added
