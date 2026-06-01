@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import os
+import signal
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,6 +17,25 @@ from agent_readiness_insights_protocol.ontology.types import (
 )
 
 from tests.ontology.bootstrap.conftest import write_ratified_repo_instance
+
+
+@pytest.fixture(autouse=True)
+def _reap_detached_dashboard_servers(tmp_path: Path):
+    """Terminate any detached dashboard servers a test spawned under its
+    own ``tmp_path``.
+
+    Integration tests that drive ``scan-*`` (which now starts a *detached*
+    HTTP server that deliberately outlives the CLI) would otherwise leak a
+    live process per test. Scoped strictly to the test's tmp_path so it can
+    never touch a real server under the developer's home directory.
+    """
+    yield
+    scans = tmp_path / ".agent-readiness" / "scans"
+    for pid_file in scans.glob("*/server.pid"):
+        try:
+            os.kill(json.loads(pid_file.read_text())["pid"], signal.SIGTERM)
+        except (ProcessLookupError, KeyError, ValueError, OSError):
+            pass
 
 
 def _ratified_lifecycle() -> Lifecycle:
