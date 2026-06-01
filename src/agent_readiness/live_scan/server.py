@@ -15,8 +15,13 @@ Routing (in order):
 from __future__ import annotations
 
 import http.server
+import json
+import os
 import socketserver
+import subprocess
+import sys
 import threading
+import time
 from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
@@ -201,3 +206,113 @@ def start_server(
     t = threading.Thread(target=httpd.serve_forever, daemon=True)
     t.start()
     return LiveServer(host=bound_host, port=bound_port, _httpd=httpd, _thread=t)
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Atomically write ``text`` to ``path`` (POSIX ``os.replace`` swap).
+
+    ``server.url`` is the MCP wire-protocol handshake: a reader must never
+    observe a half-written or truncated URL, hence the temp-then-rename.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+
+
+def _run_detached_server(spec_path: str) -> None:
+    """Entrypoint for the detached server subprocess. Blocks forever.
+
+    Binds the HTTP server, stamps ``server.pid`` so the daemon is
+    discoverable/stoppable, then publishes ``server.url`` *last* — only
+    once the socket is actually listening — and blocks so the process (and
+    its socket) outlive the CLI invocation that spawned it.
+    """
+    from agent_readiness.live_scan.pidfile import write_pidfile
+
+    spec = json.loads(Path(spec_path).read_text())
+    data_dir = Path(spec["data_dir"])
+    workspace = Path(spec["workspace"]) if spec.get("workspace") else None
+
+    srv = start_server(
+        host=spec["host"],
+        port=spec["port"],
+        data_dir=data_dir,
+        workspace_path=workspace,
+    )
+    write_pidfile(data_dir / "server.pid", scan_id=data_dir.name)
+    _atomic_write_text(
+        data_dir / "server.url", f"http://{srv.host}:{srv.port}"
+    )
+    # Park the main thread; the server runs on srv's daemon thread.
+    threading.Event().wait()
+
+
+def start_detached_server(
+    *,
+    data_dir: Path,
+    workspace_path: Optional[Path] = None,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    ready_timeout_s: float = 10.0,
+) -> str:
+    """Start a dashboard HTTP server that OUTLIVES the calling process.
+
+    Unlike :func:`start_server` (a daemon thread that dies with the
+    process), this spawns a detached, session-leader subprocess so the
+    advertised ``dashboard_url`` stays reachable after a short-lived CLI
+    invocation returns. Returns the base URL (``http://host:port``) once
+    the child has bound its socket and published ``<data_dir>/server.url``.
+
+    Idempotent: if the scan dir already has a live detached server, its
+    existing base URL is returned instead of spawning a second listener.
+    """
+    from agent_readiness.live_scan.pidfile import PidStatus, verify_pidfile
+
+    data_dir = Path(data_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    url_file = data_dir / "server.url"
+    pid_file = data_dir / "server.pid"
+
+    if url_file.exists() and verify_pidfile(pid_file) is PidStatus.LIVE:
+        return url_file.read_text().strip()
+
+    # Drop any stale handshake so we never read a previous run's URL.
+    url_file.unlink(missing_ok=True)
+
+    spec_path = data_dir / ".server-job.json"
+    spec_path.write_text(json.dumps({
+        "data_dir": str(data_dir.resolve()),
+        "workspace": str(workspace_path.resolve()) if workspace_path else None,
+        "host": host,
+        "port": port,
+    }))
+
+    src_root = str(Path(__file__).resolve().parents[2])
+    runner = (
+        f"import sys; sys.path.insert(0, {src_root!r}); "
+        "from agent_readiness.live_scan.server import _run_detached_server; "
+        "_run_detached_server(sys.argv[1])"
+    )
+    # Detach std streams to DEVNULL. If the child inherited our pipes, a
+    # parent reading with subprocess.run(capture_output=True) — exactly how
+    # the MCP server invokes the CLI — would block until timeout because the
+    # long-lived server keeps the pipe's write end open and EOF never comes.
+    subprocess.Popen(
+        [sys.executable, "-c", runner, str(spec_path)],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    deadline = time.monotonic() + ready_timeout_s
+    while time.monotonic() < deadline:
+        if url_file.exists():
+            return url_file.read_text().strip()
+        time.sleep(0.05)
+    raise TimeoutError(
+        f"detached dashboard server did not publish {url_file} "
+        f"within {ready_timeout_s}s"
+    )

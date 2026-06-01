@@ -87,6 +87,7 @@ def test_launch_dashboard_writes_onboarding_json(tmp_path: Path, monkeypatch):
         committed_type="single_repo",
         now=datetime(2026, 5, 27, 15, 0, 0, tzinfo=timezone.utc),
         no_open=True,
+        serve=lambda **_: "http://127.0.0.1:9999",
     )
     assert result["status"] == "onboarding_required"
     assert result["dashboard_url"].endswith(f"/#/onboarding/{result['scan_id']}")
@@ -122,6 +123,7 @@ def test_launch_dashboard_emits_enumerated_and_classified_to_events_jsonl(tmp_pa
         committed_type="workspace",
         now=datetime(2026, 5, 27, 15, 0, 0, tzinfo=timezone.utc),
         no_open=True,
+        serve=lambda **_: "http://127.0.0.1:9999",
     )
 
     scan_dir = path_for(result["scan_id"])
@@ -151,6 +153,28 @@ def test_scan_repo_prints_onboarding_url_in_json(tmp_path: Path, monkeypatch):
     assert payload["status"] == "onboarding_required"
     assert payload["type"] == "single_repo"
     assert "/onboarding/" in payload["dashboard_url"]
+
+
+def test_scan_repo_returns_promptly_under_capture_output(tmp_path: Path, monkeypatch):
+    """Spawning the detached server must NOT keep the CLI's stdout/stderr
+    pipes open, or a parent reading with ``capture_output=True`` (how the
+    MCP server invokes the CLI) blocks until timeout. Regression guard:
+    the call must finish well within the window."""
+    import time
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "demo"
+    target.mkdir()
+    (target / ".git").mkdir()
+
+    start = time.monotonic()
+    proc = _run_cli(["scan-repo", str(target), "--json", "--no-open"])
+    elapsed = time.monotonic() - start
+
+    assert proc.returncode == 0, proc.stderr
+    # Comfortably under _run_cli's 30s timeout; a held-open pipe would
+    # have hung the whole window.
+    assert elapsed < 15, f"CLI took {elapsed:.1f}s — detached server is holding a pipe"
 
 
 def test_scan_monorepo_emits_committed_type_monorepo(tmp_path: Path, monkeypatch):

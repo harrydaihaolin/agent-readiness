@@ -492,6 +492,7 @@ def _launch_dashboard_with_onboarding(
     committed_type: str,  # WorkspaceType literal
     now,  # datetime; injectable for tests
     no_open: bool = False,
+    serve=None,  # server starter; injectable for tests
 ) -> dict:
     """Create a scan_id, write onboarding.json, start the HTTP server,
     return the dashboard URL pointing at /onboarding/<scan_id>.
@@ -502,7 +503,7 @@ def _launch_dashboard_with_onboarding(
     import uuid
 
     from agent_readiness.enumerate_git import inspect as do_inspect
-    from agent_readiness.live_scan.server import start_server
+    from agent_readiness.live_scan.server import start_detached_server
     from agent_readiness.live_scan.worker import emit_onboarding_events
     from agent_readiness.onboarding import (
         OnboardingState,
@@ -532,14 +533,15 @@ def _launch_dashboard_with_onboarding(
 
     emit_onboarding_events(scan_dir, state, start_seq=0)
 
-    # Start the HTTP server (idempotent — returns existing port if up).
-    srv = start_server(
-        host="127.0.0.1",
-        port=0,
+    # Start the HTTP server as a DETACHED process so it outlives this
+    # short-lived CLI invocation — an in-process daemon thread would die
+    # the instant the CLI exits, leaving the advertised dashboard_url
+    # unreachable. Idempotent: returns the existing URL if one is live.
+    serve = serve or start_detached_server
+    base = serve(
         data_dir=scan_dir,
         workspace_path=path.expanduser().resolve(),
     )
-    base = f"http://{srv.host}:{srv.port}"
     dashboard_url = f"{base}/#/onboarding/{scan_id}"
 
     if not no_open:
