@@ -267,6 +267,8 @@ def parse_api_path(path: str) -> Optional[dict]:
         path = path.split("#", 1)[0]
     if path == "/api/scans":
         return {"kind": "scans_list"}
+    if path == "/api/workspaces":
+        return {"kind": "workspaces_index"}
     if not path.startswith("/api/scans/"):
         return None
     parts = path[len("/api/scans/"):].strip("/").split("/")

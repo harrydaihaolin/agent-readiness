@@ -88,6 +88,12 @@ def _make_handler(
                     body, status = list_scans()
                     api_handlers._send_json(self, status, body)
                     return
+                if api["kind"] == "workspaces_index":
+                    from agent_readiness.live_scan.discovery import (
+                        build_workspace_index,
+                    )
+                    api_handlers._send_json(self, 200, build_workspace_index())
+                    return
                 if api["kind"] == "onboarding_get":
                     from agent_readiness.live_scan.onboarding_api import (
                         get_onboarding,

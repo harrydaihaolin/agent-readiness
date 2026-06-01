@@ -52,6 +52,31 @@ def test_start_server_falls_back_to_latest(tmp_path):
         srv.shutdown()
 
 
+def test_start_server_serves_workspaces_index(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # One completed scan on this machine → one workspace in the index.
+    sd = tmp_path / ".agent-readiness" / "scans" / "ws-zzzzzz"
+    sd.mkdir(parents=True)
+    (sd / "latest.json").write_text(json.dumps({
+        "status": "completed",
+        "overall_score": 91.0,
+        "repo_path": "/abs/demo",
+        "completed_at": "2026-05-27T00:00:00+00:00",
+    }))
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    srv = start_server(host="127.0.0.1", port=0, data_dir=data_dir)
+    try:
+        url = f"http://{srv.host}:{srv.port}/api/workspaces"
+        body = json.loads(urllib.request.urlopen(url, timeout=2).read().decode())
+        assert body["schema"] == 1
+        assert len(body["workspaces"]) == 1
+        assert body["workspaces"][0]["workspace_path"] == "/abs/demo"
+        assert body["workspaces"][0]["trend_points"] == [91.0]
+    finally:
+        srv.shutdown()
+
+
 def test_start_server_404_on_unknown_path(tmp_path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
