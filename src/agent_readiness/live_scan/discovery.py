@@ -5,6 +5,7 @@ import json
 import os
 import signal
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from agent_readiness.live_scan.paths import scans_root
@@ -76,6 +77,54 @@ def list_scans() -> dict:
     recent.sort(key=lambda r: r.get("completed_at") or "", reverse=True)
     recent = recent[:50]
     return {"active": active, "recent": recent, "total_disk_bytes": total_bytes}
+
+
+def build_workspace_index() -> dict:
+    """Build a ``ScanIndex`` for the dashboard's History view (live mode).
+
+    Groups every *completed* scan on this machine by ``workspace_path``
+    into one ``WorkspaceSummary`` carrying the score ``trend_points``
+    (oldest-first, last 10). Workspaces are ordered most-recently-scanned
+    first. This is the live-mode equivalent of the static-export
+    ``index.json`` — and, per the dashboard's no-client-aggregates rule,
+    the grouping/trend math lives here in the scanner, not in the browser.
+    """
+    scans = list_scans()
+
+    # Group completed scans by workspace, preserving newest-first order
+    # (``recent`` is already sorted by completed_at descending).
+    groups: dict[str, list[dict]] = {}
+    for row in scans["recent"]:
+        ws = row.get("workspace_path")
+        if ws is None or row.get("overall_score") is None:
+            continue
+        groups.setdefault(ws, []).append(row)
+
+    workspaces: list[dict] = []
+    for ws, rows in groups.items():
+        scores_newest_first = [r["overall_score"] for r in rows][:10]
+        latest = rows[0]
+        summary = {
+            "scan_id": latest["scan_id"],
+            "workspace_path": ws,
+            "overall_score": latest["overall_score"],
+            "status": "completed",
+            "completed_at": latest.get("completed_at"),
+            "repo_count": None,
+            "trend_points": list(reversed(scores_newest_first)),
+        }
+        if len(scores_newest_first) >= 2:
+            summary["delta"] = scores_newest_first[0] - scores_newest_first[1]
+        workspaces.append(summary)
+
+    workspaces.sort(key=lambda w: w.get("completed_at") or "", reverse=True)
+
+    return {
+        "schema": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "workspaces": workspaces,
+        "active": scans["active"],
+    }
 
 
 def stop_all() -> dict:
