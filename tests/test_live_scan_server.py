@@ -52,6 +52,58 @@ def test_start_server_falls_back_to_latest(tmp_path):
         srv.shutdown()
 
 
+def test_intents_create_list_claim_ack_over_http(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    srv = start_server(host="127.0.0.1", port=0, data_dir=data_dir)
+    base = f"http://{srv.host}:{srv.port}"
+    try:
+        req = urllib.request.Request(
+            f"{base}/api/intents",
+            data=json.dumps({"action": "start", "path": "/abs/ws"}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        created = json.loads(urllib.request.urlopen(req, timeout=2).read())
+        iid = created["id"]
+        assert created["status"] == "pending"
+
+        listed = json.loads(urllib.request.urlopen(f"{base}/api/intents", timeout=2).read())
+        assert any(r["id"] == iid for r in listed["intents"])
+
+        creq = urllib.request.Request(f"{base}/api/intents/{iid}/claim", method="POST")
+        claimed = json.loads(urllib.request.urlopen(creq, timeout=2).read())
+        assert claimed["status"] == "claimed"
+
+        areq = urllib.request.Request(
+            f"{base}/api/intents/{iid}/ack",
+            data=json.dumps({"status": "done", "result": {"dashboard_url": "http://x"}}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        acked = json.loads(urllib.request.urlopen(areq, timeout=2).read())
+        assert acked["status"] == "done"
+    finally:
+        srv.shutdown()
+
+
+def test_intents_create_validation_returns_400(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    srv = start_server(host="127.0.0.1", port=0, data_dir=data_dir)
+    base = f"http://{srv.host}:{srv.port}"
+    try:
+        req = urllib.request.Request(
+            f"{base}/api/intents",
+            data=json.dumps({"action": "start"}).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        try:
+            urllib.request.urlopen(req, timeout=2)
+            raise AssertionError("expected HTTPError 400")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+    finally:
+        srv.shutdown()
+
+
 def test_start_server_serves_workspaces_index(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     # One completed scan on this machine → one workspace in the index.

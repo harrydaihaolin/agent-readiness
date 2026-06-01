@@ -94,6 +94,15 @@ def _make_handler(
                     )
                     api_handlers._send_json(self, 200, build_workspace_index())
                     return
+                if api["kind"] == "intents_list":
+                    import urllib.parse
+                    from agent_readiness.live_scan.intents import list_intents
+                    qs = urllib.parse.urlparse(self.path).query
+                    status = urllib.parse.parse_qs(qs).get("status", [None])[0]
+                    api_handlers._send_json(
+                        self, 200, {"intents": list_intents(status)}
+                    )
+                    return
                 if api["kind"] == "onboarding_get":
                     from agent_readiness.live_scan.onboarding_api import (
                         get_onboarding,
@@ -131,6 +140,44 @@ def _make_handler(
                 self.send_error(404, "not found")
                 return
             kind = api["kind"]
+            if kind == "intents_list":  # POST /api/intents == create
+                from agent_readiness.live_scan.intents import create_intent
+                body_in = api_handlers._read_json_body(self)
+                try:
+                    rec = create_intent(
+                        body_in.get("action"),
+                        path=body_in.get("path"),
+                        scan_id=body_in.get("scan_id"),
+                    )
+                except ValueError as exc:
+                    self.send_error(400, str(exc))
+                    return
+                api_handlers._send_json(self, 201, rec)
+                return
+            if kind == "intent_claim":
+                from agent_readiness.live_scan.intents import claim_intent
+                rec = claim_intent(api["intent_id"])
+                if rec is None:
+                    self.send_error(409, "intent not claimable")
+                    return
+                api_handlers._send_json(self, 200, rec)
+                return
+            if kind == "intent_ack":
+                from agent_readiness.live_scan.intents import ack_intent
+                body_in = api_handlers._read_json_body(self)
+                try:
+                    rec = ack_intent(
+                        api["intent_id"], body_in.get("status"),
+                        result=body_in.get("result"),
+                    )
+                except ValueError as exc:
+                    self.send_error(400, str(exc))
+                    return
+                if rec is None:
+                    self.send_error(404, "intent not found")
+                    return
+                api_handlers._send_json(self, 200, rec)
+                return
             if kind == "onboarding_commit":
                 from agent_readiness.live_scan.onboarding_api import (
                     commit_onboarding,
